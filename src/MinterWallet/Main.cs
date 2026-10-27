@@ -959,6 +959,20 @@ public sealed class SettingsViewModel : ScreenModel
             main.History.Reset();
         }
     }
+    private static readonly string[] Languages = ["system", "ru", "en"];
+    public int LanguageIndex
+    {
+        get => Math.Max(0, Array.IndexOf(Languages, main.Shell.Settings.Language));
+        set
+        {
+            if (value < 0 || Languages[value] == main.Shell.Settings.Language) return;
+            main.Shell.Settings.Language = Languages[value];
+            main.Shell.Settings.Save(main.Shell.DataDirectory);
+            Localization.Use(Languages[value]);
+            Changed();
+            Dispatcher.UIThread.Post(main.Shell.Redraw);
+        }
+    }
     public int ThemeIndex
     {
         get => Math.Max(0, Array.IndexOf(Themes, main.Shell.Settings.Theme));

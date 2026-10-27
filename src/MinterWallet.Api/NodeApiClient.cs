@@ -159,9 +159,10 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
     // The orders among these ids that still exist (filled or cancelled ones are gone).
     public async Task<IReadOnlyList<OrderInfo>> LimitOrdersAsync(IEnumerable<uint> ids, CancellationToken ct = default)
     {
-        var list = string.Join(",", ids.Distinct());
+        // A repeated parameter, as the node's gateway reads a list (ids=1&ids=2; "1,2" is refused).
+        var list = string.Join("&", ids.Distinct().Select(id => $"ids={id}"));
         if (list.Length == 0) return [];
-        var j = await Get($"limit_orders?ids={list}", ct);
+        var j = await Get($"limit_orders?{list}", ct);
         return j.GetProperty("orders").EnumerateArray().Select(o => new OrderInfo((uint)U64(o, "id"), Coin(o.GetProperty("coin_sell")), Coin(o.GetProperty("coin_buy")),
             Big(o, "want_sell"), Big(o, "want_buy"), Address.Parse(Str(o, "owner")), (long)U64(o, "height"))).ToList();
     }

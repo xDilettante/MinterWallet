@@ -7,7 +7,11 @@ namespace MinterWallet;
 
 public partial class App : Application
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        Localization.Attach();
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

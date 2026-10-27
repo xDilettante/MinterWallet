@@ -45,7 +45,7 @@ public sealed class CreateWalletViewModel : ScreenModel
     public string Ask2 => $"Слово № {Ask[1] + 1}";
     public string Ask3 => $"Слово № {Ask[2] + 1}";
     public string CheckHint => $"Введите слова № {Ask[0] + 1}, {Ask[1] + 1} и {Ask[2] + 1} — или вставьте всю фразу в любое поле. " +
-        "Шаг можно пропустить: фраза останется доступна в настройках по паролю.";
+        "Шаг можно пропустить: фраза останется доступна в разделе «Счета» по паролю.";
     public int Step
     {
         get => step;

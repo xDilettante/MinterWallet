@@ -28,6 +28,8 @@ public sealed class WalletSettings
     public int AutoLockMinutes { get; set; } = 10;
     // "system", "dark" or "light".
     public string Theme { get; set; } = "system";
+    // "system" (the OS language: Russian for ru/uk/be/kk, English otherwise), "ru" or "en".
+    public string Language { get; set; } = "system";
     // Older history of mainnet addresses from the Minter explorer, below where a gate's own history begins.
     public bool HistoryFromExplorer { get; set; } = true;
     // Ask GitHub for a newer release at start.

@@ -81,5 +81,5 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           cd dist && sha256sum MinterWallet-* > SHA256SUMS.txt && cd ..
-          sed "s/{version}/$version/g" .github/release-notes.md > notes.md
+          { if [ -f ".github/notes/$version.md" ]; then cat ".github/notes/$version.md"; fi; sed "s/{version}/$version/g" .github/release-notes.md; } > notes.md
           gh release create "$GITHUB_REF_NAME" --title "Minter Wallet $version" --notes-file notes.md dist/*

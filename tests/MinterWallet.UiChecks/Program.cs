@@ -49,8 +49,10 @@ public static class UiScenario
         {
             await FirstRun(url, first);
             await Operations(url, data);
+            await English(url, Directory.CreateTempSubdirectory("minterwallet-ui-").FullName);
             Console.WriteLine($"PASS ui: {step} screens rendered to {output}; create (copy, skip and paste-check), forgot password, restore from a pasted numbered phrase, " +
                 "phrase reveal and copy, next address, new phrase, watch-only, rename, remove; import, balances, send, wrong password, history, swap by ticker with automatic quote, " +
+                "every screen in English with no Cyrillic left, the language switched in place, " +
                 "liquidity added and halved, limit order placed and cancelled, delegation, multisend, check issued and redeemed, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes");
             return 0;
         }
@@ -67,8 +69,85 @@ public static class UiScenario
         }
     }
 
-    private static void Settings(string directory, string url, string theme, string name = "devnet (WSL)") =>
-        File.WriteAllText(Path.Combine(directory, WalletSettings.FileName), $$"""{"Sources":[{"Name":"{{name}}","Url":"{{url}}"}],"SelectedSource":0,"GasPriceCap":10,"AutoLockMinutes":10,"Theme":"{{theme}}","CheckUpdates":false}""");
+    private static void Settings(string directory, string url, string theme, string name = "devnet (WSL)", string language = "ru") =>
+        File.WriteAllText(Path.Combine(directory, WalletSettings.FileName), $$"""{"Sources":[{"Name":"{{name}}","Url":"{{url}}"}],"SelectedSource":0,"GasPriceCap":10,"AutoLockMinutes":10,"Theme":"{{theme}}","CheckUpdates":false,"Language":"{{language}}"}""");
+
+    // The same wallet in English: every screen and mode, a notice, the confirmation and the lock screen; no text of the
+    // interface may stay Cyrillic (only the name of the Russian language in its switch).
+    private static readonly HashSet<string> Untranslated = [];
+
+    private static void Scan(string where, Visual? root = null)
+    {
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        foreach (var block in (root ?? window!).GetVisualDescendants().OfType<TextBlock>())
+            if (block.IsEffectivelyVisible && block.Text is { } text && Localization.HasCyrillic(text) && text != "Русский"
+                && !(block.DataContext is HistoryItem item && text == item.Payload))   // a transaction's own message is data
+                Untranslated.Add($"{where}: {text}");
+    }
+
+    private static async Task English(string url, string data)
+    {
+        Settings(data, url, "dark", "devnet", "en");
+        var shell = new Shell(data) { Confirm = _ => Task.FromResult<string?>(Password) };
+        window = new MainWindow(shell) { Width = 1100, Height = 720 };
+        window.Show();
+        Check(Localization.English, "the language setting chose English");
+        Scan("welcome"); Shot("en-welcome");
+        ((WelcomeViewModel)shell.Page).Create.Execute(null);
+        var create = (CreateWalletViewModel)shell.Page;
+        Scan("create, phrase"); Shot("en-create");
+        create.Next.Execute(null); Scan("create, check");
+        create.Skip.Execute(null); create.Password = "short"; Scan("create, password");
+        create.Back.Execute(null); create.Back.Execute(null); create.Back.Execute(null);
+        ((WelcomeViewModel)shell.Page).ImportKey.Execute(null);
+        var import = (ImportViewModel)shell.Page;
+        import.Secret = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("minterwallet-test-2")));
+        import.Name = "Test B"; import.Password = Password; import.Repeat = Password;
+        Scan("import"); Shot("en-import");
+        import.Finish.Execute(null);
+        var main = await Until(() => shell.Page as MainViewModel, "main screen in English");
+        await Until(() => main.Balances.Count > 0 ? main : null, "balances");
+        main.ShowReceive = true;
+        Scan("overview"); Shot("en-overview");
+        main.ShowReceive = false;
+        main.Section = Section.Send;
+        main.Send.SendNow.Execute(null);
+        await Until(() => main.Send.Tone == Tone.Error ? main : null, "a validation notice");
+        Scan("send"); Shot("en-send");
+        main.Send.ModeIndex = 1; main.Multisend.Lines = "Mx1 2"; Scan("multisend");
+        main.Send.ModeIndex = 2; Scan("send by check");
+        main.Send.ModeIndex = 0;
+        main.Section = Section.Swap; Scan("swap");
+        main.TradeModeIndex = 1; await Until(() => !main.Orders.Load.CanExecute(null) ? null : main, "orders loaded"); Scan("orders");
+        main.TradeModeIndex = 2; await Until(() => !main.Liquidity.Load.CanExecute(null) ? null : main, "liquidity loaded"); Scan("liquidity"); Shot("en-liquidity");
+        main.TradeModeIndex = 0;
+        main.Section = Section.Staking;
+        await Until(() => main.Staking.Candidates.Count > 0 ? main : null, "candidates");
+        Scan("staking");
+        main.Section = Section.History;
+        await Until(() => main.History.Items.Count > 0 && !main.History.Loading ? main : null, "history");
+        Scan("history"); Shot("en-history");
+        main.Section = Section.Accounts; Scan("accounts");
+        main.Section = Section.Settings; Scan("settings"); Shot("en-settings");
+        var dialog = new ConfirmWindow(new ConfirmRequest("Перевод",
+            [("Операция", "Перевод 1.5 MNT → Mxf1e0…f8d5"), ("Получатель", "Mx f1e0 f934 a415 d370 18a3 18c7 7944 1143 ba20 f8d5"), ("Комиссия", "0.068 MNT (id 0), gas price 1"), ("Сеть", "minter-devnet (chain ID 2) · devnet")],
+            ["Новый получатель. У адресов Minter нет контрольной суммы: опечатка или подмена в буфере обмена дадут другой действительный адрес. Сверьте все группы символов."]));
+        dialog.Show(); Scan("confirmation", dialog);
+        dialog.CaptureRenderedFrame()?.Save(Path.Combine(output, $"{++step:00}-en-confirm.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        dialog.Close();
+        // Back to Russian in place: the same page redrawn.
+        main.Settings.LanguageIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        Check(!Localization.English && window!.GetVisualDescendants().OfType<TextBlock>().Any(b => b.Text == "Настройки"), "switched to Russian without a restart");
+        main.Settings.LanguageIndex = 2;
+        Dispatcher.UIThread.RunJobs();
+        main.LockNow.Execute(null);
+        Scan("lock screen"); Shot("en-locked");
+        window.Close();
+        Check(Untranslated.Count == 0, "untranslated texts:\n  " + string.Join("\n  ", Untranslated));
+    }
 
     // Read-only on mainnet: a busy public address to watch (it sends multisends), nothing signed.
     public static async Task<int> Mainnet(string url, string outputDirectory)
@@ -235,6 +314,10 @@ public static class UiScenario
 
     private static async Task Operations(string url, string data)
     {
+        // Connection failures name their cause: the date of the certificate, a refused connection (a stale proxy).
+        Check(ScreenModel.Describe(new HttpRequestException("The SSL connection could not be established, see inner exception.",
+            new System.Security.Authentication.AuthenticationException("The remote certificate is invalid because of errors in the certificate chain: NotTimeValid"))).Contains("по дате", StringComparison.Ordinal), "certificate date named");
+        Check(ScreenModel.Describe(new HttpRequestException("No connection", new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused))).Contains("прокси", StringComparison.Ordinal), "refused connection explained");
         Settings(data, url, "dark");
         var confirmations = new List<ConfirmRequest>();
         var answer = Password;
@@ -333,8 +416,9 @@ public static class UiScenario
         await Until(() => main.Orders.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "order placed", 90, () => main.Orders.Status);
         await Until(() => main.Orders.HasMine ? main : null, "order among mine", 30, () => main.Orders.Status);
         Shot("orders");
+        var placed = main.Orders.Mine[0].Order.Id;
         main.Orders.Cancel.Execute(main.Orders.Mine[0]);
-        await Until(() => main.Orders.Status.StartsWith("Готово", StringComparison.Ordinal) && !main.Orders.HasMine ? main : null, "order cancelled", 90, () => main.Orders.Status);
+        await Until(() => main.Orders.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Orders.Mine.All(o => o.Order.Id != placed) ? main : null, "order cancelled", 90, () => main.Orders.Status);
         main.TradeModeIndex = 0;
 
         // Delegate 2 MNT to the devnet validator.
@@ -416,7 +500,8 @@ public static class UiScenario
     {
         Dispatcher.UIThread.RunJobs();
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-        window?.CaptureRenderedFrame()?.Save(Path.Combine(output, $"{++step:00}-{name}.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        try { window?.CaptureRenderedFrame()?.Save(Path.Combine(output, $"{++step:00}-{name}.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions()); }
+        catch (ObjectDisposedException) { }   // the window is already closed
     }
 
     private static void Check(bool condition, string what) { if (!condition) throw new InvalidOperationException(what); }

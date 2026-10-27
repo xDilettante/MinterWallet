@@ -45,6 +45,14 @@ public sealed class Shell : Observable
     public string KeystorePath => Keystore.DefaultPath(DataDirectory);
 
     public void Show(object next) => Page = next;
+
+    // The views of the current page built again (another language): the page's model and its state stay.
+    public void Redraw()
+    {
+        var current = page;
+        Page = new object();
+        Page = current;
+    }
     public void ShowWelcome() => Page = new WelcomeViewModel(this);
 
     // A forgotten password: the key store is set aside under a dated name (never deleted), and the first-run screen

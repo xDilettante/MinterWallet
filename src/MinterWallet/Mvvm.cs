@@ -70,10 +70,34 @@ public abstract class ScreenModel : Observable
 
     public static string Describe(Exception error) => error switch
     {
-        HttpRequestException => $"Источник недоступен: {error.Message}",
-        TaskCanceledException => "Источник не ответил вовремя.",
+        HttpRequestException => $"Источник недоступен: {Cause(error)}",
+        TaskCanceledException => "Источник не ответил вовремя. Возможно, порт источника закрыт в вашей сети или мешает VPN или прокси.",
         MinterWallet.Core.ChainApiException api => $"Источник ответил ошибкой {api.Code}: {api.Message}",
         FormatException => "Проверьте число: цифры и точка, не больше 18 знаков после неё.",
         _ => error.Message
     };
+
+    // What actually went wrong under "The SSL connection could not be established" and the like, with what to do.
+    private static string Cause(Exception error)
+    {
+        var inner = error;
+        while (inner.InnerException != null) inner = inner.InnerException;
+        return inner switch
+        {
+            System.Security.Authentication.AuthenticationException a when a.Message.Contains("NotTimeValid", StringComparison.Ordinal) =>
+                "сертификат источника не подходит по дате. Проверьте дату, время и часовой пояс на компьютере.",
+            System.Security.Authentication.AuthenticationException a when a.Message.Contains("UntrustedRoot", StringComparison.Ordinal) || a.Message.Contains("PartialChain", StringComparison.Ordinal) =>
+                "система не доверяет сертификату источника. Обновите корневые сертификаты (Центр обновления Windows) или отключите проверку HTTPS в антивирусе для кошелька.",
+            System.Security.Authentication.AuthenticationException =>
+                $"защищённое соединение не установлено ({inner.Message}). Проверьте дату и время на компьютере, антивирус с проверкой HTTPS, VPN или прокси.",
+            System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused } =>
+                "соединение отклонено. Если включён системный прокси или VPN-клиент — проверьте, что он работает, или отключите его.",
+            System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut or System.Net.Sockets.SocketError.NetworkUnreachable or System.Net.Sockets.SocketError.HostUnreachable } =>
+                "нет ответа. Возможно, порт источника закрыт в вашей сети (офис, публичный Wi-Fi) — попробуйте другую сеть или VPN.",
+            System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.HostNotFound or System.Net.Sockets.SocketError.NoData } =>
+                "адрес источника не найден. Проверьте подключение к интернету и адрес в настройках.",
+            _ when !ReferenceEquals(inner, error) => $"{error.Message} ({inner.Message})",
+            _ => error.Message
+        };
+    }
 }

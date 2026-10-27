@@ -1,9 +1,10 @@
 # Minter Wallet
 
-Кошелёк для сети [Minter](https://www.minter.network/): Windows и Linux, один файл без установки, на русском.
+Кошелёк для сети [Minter](https://www.minter.network/): Windows и Linux, один файл без установки, на русском и
+английском.
 
 *A desktop wallet for the Minter network (Windows, Linux): one self-contained file, keys stay on the device,
-Russian interface. MIT licence.*
+Russian and English interface (as the system, or chosen in the settings). MIT licence.*
 
 ## Что умеет
 
@@ -27,6 +28,9 @@ Russian interface. MIT licence.*
 - **История:** транзакции расшифровываются самим кошельком из исходных байтов; через MinterGate — с момента запуска
   гейта, а более ранние — из обозревателя Minter (можно отключить).
 - Смена пароля, тёмная и светлая тема, автоблокировка, потолок gas price, сообщение о новой версии.
+- **Языки:** русский и английский — как в системе или на выбор, без перезапуска. Перевод — в
+  `src/MinterWallet/Translations.cs`; `py tools/i18n-missing.py` покажет строки без перевода, а проверка окна —
+  экраны, где осталась кириллица.
 
 ## Откуда кошелёк берёт данные
 

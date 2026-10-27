@@ -12,7 +12,7 @@ public partial class ConfirmWindow : Window
 
     public ConfirmWindow(ConfirmRequest request) : this()
     {
-        Title = request.Title;
+        Title = Localization.Text(request.Title);
         TitleText.Text = request.Title;
         ConfirmButton.Content = request.Action;
         Warnings.ItemsSource = request.Warnings;

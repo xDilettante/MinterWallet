@@ -82,6 +82,15 @@
       </StackPanel>
 
       <StackPanel Spacing="10">
+        <TextBlock Text="Язык" Classes="h2" />
+        <ListBox Classes="segmented" SelectedIndex="{Binding LanguageIndex}" AutomationProperties.Name="Язык">
+          <ListBoxItem Content="Как в системе" />
+          <ListBoxItem Content="Русский" />
+          <ListBoxItem Content="English" />
+        </ListBox>
+      </StackPanel>
+
+      <StackPanel Spacing="10">
         <TextBlock Text="Оформление" Classes="h2" />
         <ListBox Classes="segmented" SelectedIndex="{Binding ThemeIndex}" AutomationProperties.Name="Тема">
           <ListBoxItem Content="Как в системе" />
