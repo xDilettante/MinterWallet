@@ -142,6 +142,30 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         catch (ChainApiException e) when (e.Code is 404 or 400 || e.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)) { return null; }
     }
 
+    public async Task<IReadOnlyList<PoolInfo>> SwapPoolsAsync(CancellationToken ct = default)
+    {
+        var j = await Get("swap_pools", ct);
+        return j.GetProperty("pools").EnumerateArray().Select(p => new PoolInfo((uint)U64(p, "id"), (uint)U64(p, "coin0"), (uint)U64(p, "coin1"),
+            Big(p, "amount0"), Big(p, "amount1"), Big(p, "liquidity"))).ToList();
+    }
+
+    // A provider's part of a pool: its amounts of both coins and its liquidity tokens; null without a pool.
+    public async Task<(BigInteger Amount0, BigInteger Amount1, BigInteger Liquidity)?> ProviderAsync(uint coin0, uint coin1, Address provider, CancellationToken ct = default)
+    {
+        try { var j = await Get($"swap_pool/{coin0}/{coin1}/{provider}", ct); return (Big(j, "amount0"), Big(j, "amount1"), Big(j, "liquidity")); }
+        catch (ChainApiException e) when (e.Code is 404 or 400 || e.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)) { return null; }
+    }
+
+    // The orders among these ids that still exist (filled or cancelled ones are gone).
+    public async Task<IReadOnlyList<OrderInfo>> LimitOrdersAsync(IEnumerable<uint> ids, CancellationToken ct = default)
+    {
+        var list = string.Join(",", ids.Distinct());
+        if (list.Length == 0) return [];
+        var j = await Get($"limit_orders?ids={list}", ct);
+        return j.GetProperty("orders").EnumerateArray().Select(o => new OrderInfo((uint)U64(o, "id"), Coin(o.GetProperty("coin_sell")), Coin(o.GetProperty("coin_buy")),
+            Big(o, "want_sell"), Big(o, "want_buy"), Address.Parse(Str(o, "owner")), (long)U64(o, "height"))).ToList();
+    }
+
     // MinterGate only (/gate/v1/coins): the coins that can be bought, most liquid first; null from a plain node.
     public async Task<IReadOnlyList<CoinListing>?> CoinListAsync(CancellationToken ct = default)
     {

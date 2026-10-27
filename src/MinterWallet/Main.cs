@@ -88,6 +88,8 @@ public sealed class MainViewModel : ScreenModel
         AccountsPage = new AccountsViewModel(this);
         Settings = new SettingsViewModel(this);
         IssueCheck = new CheckIssueViewModel(this);
+        Liquidity = new LiquidityViewModel(this);
+        Orders = new OrdersViewModel(this);
         RedeemCheck = new CheckRedeemViewModel(this);
         LoadAccounts(shell.Settings.LastAccountId);
         autoLock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
@@ -207,6 +209,24 @@ public sealed class MainViewModel : ScreenModel
     public Command AddAddress { get; }
     public AccountsViewModel AccountsPage { get; }
     public CheckIssueViewModel IssueCheck { get; }
+    public LiquidityViewModel Liquidity { get; }
+    public OrdersViewModel Orders { get; }
+    // The trade page: swap now, a limit order, or liquidity.
+    public int TradeModeIndex
+    {
+        get => tradeMode;
+        set
+        {
+            if (value < 0 || !Set(ref tradeMode, value)) return;
+            Changed(nameof(IsSwapNow)); Changed(nameof(IsOrders)); Changed(nameof(IsLiquidity));
+            if (value == 1) Orders.Load.Execute(null);
+            if (value == 2) Liquidity.Load.Execute(null);
+        }
+    }
+    private int tradeMode;
+    public bool IsSwapNow => tradeMode == 0;
+    public bool IsOrders => tradeMode == 1;
+    public bool IsLiquidity => tradeMode == 2;
     public CheckRedeemViewModel RedeemCheck { get; }
     public SendViewModel Send { get; }
     public MultisendViewModel Multisend { get; }
@@ -231,7 +251,7 @@ public sealed class MainViewModel : ScreenModel
         shell.Disconnect();
         catalog = null; catalogFrom = null; catalogSymbols = [];
         Connected = false; SourceName = shell.Settings.Source.Name; NetworkText = "подключение…"; BlockText = "";
-        Staking.Reset(); History.Reset(); Swap.Buy.Selected = null;
+        Staking.Reset(); History.Reset(); Swap.Buy.Selected = null; Liquidity.Reset(); Orders.Reset();
     }
 
     // Coins to offer for a swap: the source's list when it is a MinterGate, otherwise the coins on the account.
@@ -356,7 +376,7 @@ public sealed class MainViewModel : ScreenModel
         foreach (var name in new[] { nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
         if (conflicts.Count > 0) Say("Тикер указывает на другой id монеты, чем раньше: " + string.Join("; ", conflicts) + ". Проверьте монету перед отправкой.", Tone.Warning);
         else if (Tone == Tone.Error) Say("");
-        Send.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); IssueCheck.BalancesChanged();
+        Send.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); IssueCheck.BalancesChanged(); Liquidity.BalancesChanged(); Orders.BalancesChanged();
     }
 
     private static string EstimateDate(ChainStatus s, long height) => s.BlockTime.AddSeconds((height - s.Height) * 5).ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);

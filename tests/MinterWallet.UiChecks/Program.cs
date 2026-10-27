@@ -51,7 +51,7 @@ public static class UiScenario
             await Operations(url, data);
             Console.WriteLine($"PASS ui: {step} screens rendered to {output}; create (copy, skip and paste-check), forgot password, restore from a pasted numbered phrase, " +
                 "phrase reveal and copy, next address, new phrase, watch-only, rename, remove; import, balances, send, wrong password, history, swap by ticker with automatic quote, " +
-                "delegation, multisend, check issued and redeemed, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes");
+                "liquidity added and halved, limit order placed and cancelled, delegation, multisend, check issued and redeemed, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes");
             return 0;
         }
         catch (Exception error)
@@ -305,6 +305,37 @@ public static class UiScenario
         await Until(() => main.Swap.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "swap included", 90, () => main.Swap.Status);
         Check(confirmations[^1].Rows.Any(r => r.Label == "Гарантия" && r.Value.StartsWith("не меньше", StringComparison.Ordinal)), "swap confirmation shows the guaranteed minimum");
         await Until(() => main.Balances.Any(b => b.Coin.Id == 1) ? main : null, "token balance after swap");
+
+        // Liquidity: 1 MNT with the token into their pool, the position seen, half of it taken out.
+        main.TradeModeIndex = 2;
+        main.Liquidity.CoinA = main.Liquidity.Coins.First(c => c.Coin.Id == 0);
+        main.Liquidity.CoinB.Query = token.Symbol;
+        main.Liquidity.CoinB.Selected = await Until(() => main.Liquidity.CoinB.Results.FirstOrDefault(c => c.Id == 1), "token for the pool", 30, () => main.Liquidity.CoinB.EmptyText);
+        main.Liquidity.AmountA = "1";
+        await Until(() => main.Liquidity.NeedText.StartsWith("Вместе", StringComparison.Ordinal) ? main : null, "the pool's second amount", 30, () => main.Liquidity.NeedText);
+        main.Liquidity.Add.Execute(null);
+        await Until(() => main.Liquidity.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "liquidity added", 90, () => main.Liquidity.Status);
+        await Until(() => main.Liquidity.HasPositions ? main : null, "position listed", 30, () => main.Liquidity.Status);
+        var before = main.Liquidity.Positions[0].Liquidity;
+        Shot("liquidity");
+        main.Liquidity.Withdraw.Execute("50");
+        await Until(() => main.Liquidity.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "half withdrawn", 90, () => main.Liquidity.Status);
+        await Until(() => main.Liquidity.Positions.FirstOrDefault()?.Liquidity == before - before / 2 ? main : null, "position halved", 30, () => main.Liquidity.Status);
+
+        // A limit order: sell 1 token for MNT above the pool's price, listed among the account's orders, then cancelled.
+        main.TradeModeIndex = 1;
+        main.Orders.Sell = main.Orders.Coins.First(c => c.Coin.Id == 1);
+        main.Orders.Buy.Query = main.Symbol(0);
+        main.Orders.Buy.Selected = await Until(() => main.Orders.Buy.Results.FirstOrDefault(c => c.Id == 0), "base coin to buy", 30, () => main.Orders.Buy.EmptyText);
+        main.Orders.AmountSell = "1";
+        await Until(() => main.Orders.Range.StartsWith("Пул сейчас", StringComparison.Ordinal) && main.Orders.AmountBuy.Length > 0 ? main : null, "the allowed range", 30, () => main.Orders.Range);
+        main.Orders.Place.Execute(null);
+        await Until(() => main.Orders.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "order placed", 90, () => main.Orders.Status);
+        await Until(() => main.Orders.HasMine ? main : null, "order among mine", 30, () => main.Orders.Status);
+        Shot("orders");
+        main.Orders.Cancel.Execute(main.Orders.Mine[0]);
+        await Until(() => main.Orders.Status.StartsWith("Готово", StringComparison.Ordinal) && !main.Orders.HasMine ? main : null, "order cancelled", 90, () => main.Orders.Status);
+        main.TradeModeIndex = 0;
 
         // Delegate 2 MNT to the devnet validator.
         main.Section = Section.Staking;

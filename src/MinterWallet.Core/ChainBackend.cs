@@ -37,6 +37,10 @@ public sealed record CoinListing(uint Id, string Symbol, string Name, bool Token
 {
     public BigInteger Liquidity => Reserve + PoolBase;
 }
+// A swap pool (/v2/swap_pools) and a limit order (/v2/limit_orders): enough to show a provider's share and the
+// orders of an address.
+public sealed record PoolInfo(uint Id, uint Coin0, uint Coin1, BigInteger Amount0, BigInteger Amount1, BigInteger Liquidity);
+public sealed record OrderInfo(uint Id, CoinRef Sell, CoinRef Buy, BigInteger WantSell, BigInteger WantBuy, Address Owner, long Height);
 public sealed record FrozenFunds(long UnlockHeight, CoinRef Coin, BigInteger Value, Pubkey? Candidate);
 
 public sealed class ChainApiException(int code, string message) : Exception(message)

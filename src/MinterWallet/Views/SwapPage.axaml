@@ -5,11 +5,135 @@
              x:Class="MinterWallet.Views.SwapPage"
              x:DataType="local:MainViewModel">
   <ScrollViewer>
-    <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640" DataContext="{Binding Swap}" x:DataType="local:SwapViewModel">
-      <StackPanel Spacing="4">
-        <TextBlock Text="Обмен" Classes="h1" />
-        <TextBlock Classes="muted prose" Text="Выберите монеты и сумму — цену и маршрут кошелёк найдёт сам. Допустимое проскальзывание задаёт границу цены: дальше неё сеть сделку не проведёт." />
+    <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640">
+      <TextBlock Text="Обмен" Classes="h1" />
+      <ListBox Classes="segmented" SelectedIndex="{Binding TradeModeIndex}" AutomationProperties.Name="Обмен, ордер или ликвидность">
+        <ListBoxItem Content="Обменять сейчас" />
+        <ListBoxItem Content="Лимитный ордер" />
+        <ListBoxItem Content="Ликвидность" />
+      </ListBox>
+
+      <!-- A limit order -->
+      <Panel IsVisible="{Binding IsOrders}">
+      <StackPanel Spacing="18" DataContext="{Binding Orders}" x:DataType="local:OrdersViewModel">
+        <TextBlock Classes="muted prose" Text="Ордер продаёт монету по вашей цене, когда пул до неё дойдёт. Монеты на продажу уходят в ордер сразу; отменить его можно в любой момент — они вернутся." />
+        <Border Classes="card">
+          <StackPanel Spacing="16">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <StackPanel>
+                <TextBlock Text="Продаю" Classes="label" />
+                <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Sell}" HorizontalAlignment="Stretch" AutomationProperties.Name="Продаю">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:BalanceItem">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="Хочу получить" Classes="label" />
+                <views:CoinPicker DataContext="{Binding Buy}" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <StackPanel><TextBlock Text="Сколько продать" Classes="label" /><TextBox Text="{Binding AmountSell}" Classes="mono" PlaceholderText="0.0" /></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Сколько получить" Classes="label" /><TextBox Text="{Binding AmountBuy}" Classes="mono" PlaceholderText="0.0" /></StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding Range}" Classes="caption prose" />
+          </StackPanel>
+        </Border>
+        <Button Content="Выставить ордер" Command="{Binding Place}" Classes="accent" MinWidth="150" HorizontalAlignment="Right" />
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+        <StackPanel Spacing="10">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить ордера"><local:Icon Kind="refresh" Width="16" Height="16" /></Button>
+            <TextBlock Text="Мои ордера" Classes="h2" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock Text="Открытых ордеров нет (ищутся по истории этого счёта)." Classes="caption" IsVisible="{Binding !HasMine}" />
+          <Border Classes="card" Padding="0" IsVisible="{Binding HasMine}">
+            <ItemsControl Classes="rows" ItemsSource="{Binding Mine}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:OrderItem">
+                  <Border Classes="row">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Content="Отменить" VerticalAlignment="Center"
+                              Command="{Binding $parent[ItemsControl].((local:OrdersViewModel)DataContext).Cancel}" CommandParameter="{Binding}" />
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontWeight="Medium" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Caption}" Classes="caption" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Border>
+        </StackPanel>
       </StackPanel>
+      </Panel>
+
+      <!-- Liquidity -->
+      <Panel IsVisible="{Binding IsLiquidity}">
+      <StackPanel Spacing="18" DataContext="{Binding Liquidity}" x:DataType="local:LiquidityViewModel">
+        <TextBlock Classes="muted prose" Text="Добавьте две монеты в пул — и получайте долю комиссий с каждого обмена через него. Выйти можно в любой момент: вернётся ваша доля обеих монет." />
+        <StackPanel Spacing="10">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить позиции"><local:Icon Kind="refresh" Width="16" Height="16" /></Button>
+            <TextBlock Text="Мои позиции" Classes="h2" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock Text="Позиций нет." Classes="caption" IsVisible="{Binding !HasPositions}" />
+          <ListBox Classes="rows" ItemsSource="{Binding Positions}" SelectedItem="{Binding Selected}" IsVisible="{Binding HasPositions}" AutomationProperties.Name="Позиции">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="local:PositionItem">
+                <StackPanel Spacing="1">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding ShareText}" Classes="caption" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                  </DockPanel>
+                  <TextBlock Text="{Binding AmountsText}" Classes="caption" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasPositions}">
+            <TextBlock Text="Вывести из выбранной:" Classes="muted" VerticalAlignment="Center" />
+            <Button Content="25 %" Command="{Binding Withdraw}" CommandParameter="25" />
+            <Button Content="50 %" Command="{Binding Withdraw}" CommandParameter="50" />
+            <Button Content="Всё" Command="{Binding Withdraw}" CommandParameter="100" />
+          </StackPanel>
+        </StackPanel>
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <TextBlock Text="Добавить в пул" Classes="label" Margin="0" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding CoinA}" HorizontalAlignment="Stretch" AutomationProperties.Name="Первая монета">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="local:BalanceItem">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                      <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                    </DockPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <views:CoinPicker Grid.Column="1" DataContext="{Binding CoinB}" />
+            </Grid>
+            <TextBox Text="{Binding AmountA}" Classes="mono" PlaceholderText="Сколько первой монеты" AutomationProperties.Name="Сумма первой монеты" />
+            <TextBlock Text="{Binding NeedText}" Classes="caption prose" />
+            <Button Content="Добавить ликвидность" Command="{Binding Add}" Classes="accent" HorizontalAlignment="Right" />
+          </StackPanel>
+        </Border>
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+      </Panel>
+
+      <!-- Swap now -->
+      <Panel IsVisible="{Binding IsSwapNow}">
+      <StackPanel Spacing="18" DataContext="{Binding Swap}" x:DataType="local:SwapViewModel">
+      <TextBlock Classes="muted prose" Text="Выберите монеты и сумму — цену и маршрут кошелёк найдёт сам. Допустимое проскальзывание задаёт границу цены: дальше неё сеть сделку не проведёт." />
       <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Режим обмена">
         <ListBoxItem Content="Продать точную сумму" />
         <ListBoxItem Content="Купить точную сумму" />
@@ -74,6 +198,8 @@
         <Button Content="Обменять" Command="{Binding SwapNow}" Classes="accent" MinWidth="130" />
       </StackPanel>
       <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+      </Panel>
     </StackPanel>
   </ScrollViewer>
 </UserControl>
