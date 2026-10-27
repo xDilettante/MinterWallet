@@ -88,6 +88,41 @@
         </Border>
       </StackPanel>
 
+      <!-- Address book -->
+      <StackPanel Spacing="10">
+        <TextBlock Text="Адресная книга" Classes="h2" />
+        <TextBlock Classes="caption prose" Text="Получатели, которым вы уже отправляли, и адреса, которым вы дали имя. При переводе их можно выбрать в «Контактах», а кошелёк не будет предупреждать о новом получателе." />
+        <Border Classes="card" Padding="0" IsVisible="{Binding HasContacts}">
+          <ItemsControl Classes="rows" ItemsSource="{Binding Contacts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="local:ContactItem">
+                <Border Classes="row">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Classes="avatar" Width="32" Height="32"><TextBlock Text="{Binding Initial}" /></Border>
+                    <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <SelectableTextBlock Text="{Binding Grouped}" Classes="caption mono" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="link" VerticalAlignment="Center" Content="Удалить"
+                            Command="{Binding $parent[UserControl].((local:MainViewModel)DataContext).RemoveContact}" CommandParameter="{Binding}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+        <Border Classes="card" DataContext="{Binding AccountsPage}" x:DataType="local:AccountsViewModel">
+          <StackPanel Spacing="12">
+            <TextBlock Text="Добавить или переименовать" Classes="label" Margin="0" />
+            <Grid ColumnDefinitions="*,2*" ColumnSpacing="10">
+              <TextBox Text="{Binding ContactName}" PlaceholderText="Имя" AutomationProperties.Name="Имя контакта" />
+              <TextBox Grid.Column="1" Text="{Binding ContactAddress}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Адрес контакта" />
+            </Grid>
+            <Button Content="Сохранить в адресной книге" Command="{Binding AddContact}" HorizontalAlignment="Right" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
       <!-- Adding -->
       <StackPanel Spacing="10" DataContext="{Binding AccountsPage}" x:DataType="local:AccountsViewModel">
         <TextBlock Text="Добавить счёт" Classes="h2" />

@@ -24,6 +24,9 @@ public static class Display
         return Group(whole) + (fraction.Length > 0 ? "." + fraction : "");
     }
 
+    // Dollars from an amount in pip of USD (18 decimals): two decimals, grouped; "< $0.01" for less than a cent.
+    public static string Usd(BigInteger pip) => pip.Sign > 0 && pip < Units.PipPerCoin / 100 ? "< $0.01" : "$" + Amount(pip, 2);
+
     public static string Integer(long value) => value < 0 ? "−" + Group((-value).ToString(CultureInfo.InvariantCulture)) : Group(value.ToString(CultureInfo.InvariantCulture));
 
     private static string Group(string digits)

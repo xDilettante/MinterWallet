@@ -5,6 +5,7 @@
         x:Class="MinterWallet.MainWindow"
         x:DataType="local:Shell"
         Title="Minter Wallet"
+        Icon="avares://MinterWallet/Assets/app.ico"
         Width="1100" Height="720" MinWidth="860" MinHeight="580"
         WindowStartupLocation="CenterScreen">
   <Window.DataTemplates>

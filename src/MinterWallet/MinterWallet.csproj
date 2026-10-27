@@ -6,6 +6,7 @@
     <AssemblyName>MinterWallet</AssemblyName>
     <RootNamespace>MinterWallet</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <SatelliteResourceLanguages>en;ru</SatelliteResourceLanguages>
     <!-- No ICU dependency on any OS (minimal Linux images lack libicu); amounts are formatted by Minter.Protocol.Units. -->
@@ -23,6 +24,10 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MinterWallet.Api\MinterWallet.Api.csproj" />

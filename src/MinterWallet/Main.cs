@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Text;
 using Avalonia.Threading;
 using Minter.Protocol;
+using MinterWallet.Api;
 using MinterWallet.Core;
 
 namespace MinterWallet;
@@ -19,7 +20,7 @@ public sealed record AccountItem(WalletAccount Account, string Kind, string Glyp
     public override string ToString() => $"{Name} · {Short}";
 }
 
-public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipValue, string BaseSymbol)
+public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipValue, string BaseSymbol, string Usd = "")
 {
     public string Symbol => Coin.Symbol;
     public string Id => Coin.Id.ToString(CultureInfo.InvariantCulture);
@@ -27,7 +28,7 @@ public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipV
     public string Amount => Units.FormatCoins(Value);
     public string AmountShort => Display.Amount(Value);
     public string Bip => Units.FormatCoins(BipValue);
-    public string BipText => $"≈ {Display.Amount(BipValue)} {BaseSymbol}";
+    public string BipText => Coin.Id == 0 ? Usd.Length > 0 ? $"≈ {Usd}" : "" : $"≈ {Display.Amount(BipValue)} {BaseSymbol}{(Usd.Length > 0 ? $" · {Usd}" : "")}";
     public string Initial => Symbol.Length > 0 ? Symbol[..1] : "?";
     public override string ToString() => $"{Symbol} (id {Id}) — {Amount}";
 }
@@ -43,16 +44,26 @@ public sealed record DelegationItem(Delegation Delegation, string BaseSymbol)
 
 public sealed record FrozenItem(string Amount, string AmountShort, string Caption);
 
+public sealed record ContactItem(AddressBookEntry Entry)
+{
+    public string Name => Entry.Name.Length > 0 ? Entry.Name : "Без имени";
+    public string Address => Entry.Address;
+    public string Grouped => Minter.Protocol.Address.TryParse(Entry.Address, out var a) ? AddressBook.Grouped(a) : Entry.Address;
+    public string Initial => Entry.Name.Length > 0 ? Entry.Name[..1].ToUpperInvariant() : "?";
+}
+
 public sealed class MainViewModel : ScreenModel
 {
     private readonly Shell shell;
     private readonly DispatcherTimer autoLock;
     private AccountItem? selected;
     private Section section;
-    private string sourceName, networkText = "подключение…", blockText = "", updated = "", totalText = "—", totalCaption = "", copyLabel = "Копировать";
-    private bool connected;
+    private string sourceName, networkText = "подключение…", blockText = "", updated = "", totalText = "—", totalCaption = "", totalUsd = "", copyLabel = "Копировать", updateText = "";
+    private bool connected, showReceive;
+    private Uri? updatePage;
     private AccountState? state;
     private IReadOnlyList<CoinListing>? catalog;
+    private Dictionary<uint, string> catalogSymbols = [];
     private object? catalogFrom;
 
     public MainViewModel(Shell shell)
@@ -66,6 +77,9 @@ public sealed class MainViewModel : ScreenModel
         OpenSwap = new Command(() => Section = Section.Swap);
         OpenStaking = new Command(() => Section = Section.Staking);
         AddAddress = new Command(() => { AccountsPage!.StartAdding(); Section = Section.Accounts; });
+        ToggleReceive = new Command(() => ShowReceive = !ShowReceive);
+        OpenUpdate = new AsyncCommand(async () => { if (updatePage != null && shell.OpenUrl != null) await shell.OpenUrl(updatePage); }, Fail);
+        RemoveContact = new RelayCommand(item => { if (item is ContactItem c && Minter.Protocol.Address.TryParse(c.Address, out var a)) { shell.AddressBook.Remove(a); LoadContacts(); } });
         Send = new SendViewModel(this);
         Multisend = new MultisendViewModel(this);
         Swap = new SwapViewModel(this);
@@ -77,7 +91,50 @@ public sealed class MainViewModel : ScreenModel
         autoLock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         autoLock.Tick += (_, _) => { if (DateTime.UtcNow - LastActivity > TimeSpan.FromMinutes(Math.Max(1, shell.Settings.AutoLockMinutes))) { autoLock.Stop(); shell.Lock(); } };
         autoLock.Start();
+        LoadContacts();
         Refresh.Execute(null);
+        if (shell.Settings.CheckUpdates) _ = CheckUpdatesAsync();
+    }
+
+    public ObservableCollection<ContactItem> Contacts { get; } = [];
+    public bool HasContacts => Contacts.Count > 0;
+    public bool ShowReceive { get => showReceive; set => Set(ref showReceive, value); }
+    public string TotalUsd { get => totalUsd; set { Set(ref totalUsd, value); Changed(nameof(HasUsd)); } }
+    public bool HasUsd => TotalUsd.Length > 0;
+    public string UpdateText { get => updateText; set { Set(ref updateText, value); Changed(nameof(HasUpdate)); } }
+    public bool HasUpdate => UpdateText.Length > 0;
+    public Command ToggleReceive { get; }
+    public AsyncCommand OpenUpdate { get; }
+    public RelayCommand RemoveContact { get; }
+
+    // Recipients the user has paid or saved, most recent first.
+    public void LoadContacts()
+    {
+        Contacts.Clear();
+        foreach (var e in shell.AddressBook.Entries.OrderByDescending(e => e.LastUsed)) Contacts.Add(new ContactItem(e));
+        Changed(nameof(HasContacts));
+    }
+
+    private async Task CheckUpdatesAsync()
+    {
+        try
+        {
+            using var updates = new UpdateClient();
+            if (await updates.LatestAsync() is { } latest && UpdateClient.IsNewer(latest.Version, Version.Parse(Program.Version)))
+            {
+                updatePage = latest.Page;
+                UpdateText = $"Вышла версия {latest.Version.ToString(3)}. Сейчас у вас {Program.Version}.";
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException) { }
+    }
+
+    // Dollars per base coin from the mainnet pool with USDTE (coin 1993), in pip; null elsewhere or without the pool.
+    private async Task<BigInteger?> UsdPerCoinAsync(ChainStatus s)
+    {
+        if (!s.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) || shell.Backend == null) return null;
+        try { return await shell.Backend.SwapPoolAsync(0, 1993) is ({ Sign: > 0 } bip, var usd) ? usd * Units.PipPerCoin / bip : null; }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException) { return null; }
     }
 
     public Shell Shell => shell;
@@ -168,7 +225,7 @@ public sealed class MainViewModel : ScreenModel
     public void Disconnect()
     {
         shell.Disconnect();
-        catalog = null; catalogFrom = null;
+        catalog = null; catalogFrom = null; catalogSymbols = [];
         Connected = false; SourceName = shell.Settings.Source.Name; NetworkText = "подключение…"; BlockText = "";
         Staking.Reset(); History.Reset(); Swap.Buy.Selected = null;
     }
@@ -185,6 +242,15 @@ public sealed class MainViewModel : ScreenModel
         return list.Where(c => c.Id != exclude).ToList();
     }
 
+    // The source's history; on mainnet, behind a gate that started its history at some height, the older part from
+    // the explorer (when the user keeps that on).
+    public HistoryCursor HistoryCursor(WalletService wallet, Address me, int perPage)
+    {
+        Task<IReadOnlyList<TxRecord>> Source(int page) => wallet.Backend.HistoryAsync(me, page, perPage);
+        var useExplorer = shell.Settings.HistoryFromExplorer && shell.GateIndexFrom > 1 && shell.Status?.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) == true;
+        return useExplorer ? new HistoryCursor(Source, perPage, page => shell.Explorer.HistoryAsync(me, page), shell.GateIndexFrom) : new HistoryCursor(Source, perPage);
+    }
+
     public async Task<CoinOption?> LookupCoinAsync(string text)
     {
         var wallet = await WalletAsync();
@@ -198,10 +264,12 @@ public sealed class MainViewModel : ScreenModel
         catalogFrom = shell.Backend;
         try { catalog = await shell.Backend.CoinListAsync(); }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or System.Text.Json.JsonException) { catalog = null; }
+        catalogSymbols = catalog?.ToDictionary(c => c.Id, c => c.Symbol) ?? [];
         Swap.Buy.Refresh();
     }
 
-    public string Symbol(uint coin) => shell.Coins.Symbol(coin);
+    // Tickers the wallet has seen first, then the gate's coin list: history never shows a bare id when the source knows the coin.
+    public string Symbol(uint coin) => shell.Coins.Symbol(coin) is ['#', ..] unknown ? catalogSymbols.GetValueOrDefault(coin, unknown) : shell.Coins.Symbol(coin);
 
     public async Task<WalletService> WalletAsync()
     {
@@ -239,12 +307,15 @@ public sealed class MainViewModel : ScreenModel
         state = await wallet.Backend.AccountAsync(Selected.Account.Address);
         Changed(nameof(State));
         var conflicts = new List<string>();
+        var usdPerCoin = await UsdPerCoinAsync(s);
+        string Usd(BigInteger bip) => usdPerCoin is { } p ? Display.Usd(bip * p / Units.PipPerCoin) : "";
         Balances.Clear();
         foreach (var b in state.Balances)
         {
             if (shell.Coins.Observe(b.Coin) is { } c) conflicts.Add($"{c.Symbol}: раньше id {c.KnownId}, теперь id {c.NewId}");
-            Balances.Add(new BalanceItem(b.Coin, b.Value, b.BipValue, BaseSymbol));
+            Balances.Add(new BalanceItem(b.Coin, b.Value, b.BipValue, BaseSymbol, Usd(b.BipValue)));
         }
+        TotalUsd = usdPerCoin == null ? "" : "≈ " + Usd(state.TotalBipValue);
         Delegations.Clear();
         foreach (var d in state.Delegated) Delegations.Add(new DelegationItem(d, BaseSymbol));
         TotalText = Display.Amount(state.TotalBipValue);
@@ -314,7 +385,7 @@ public sealed class MainViewModel : ScreenModel
 public sealed class SendViewModel : ScreenModel
 {
     private readonly MainViewModel main;
-    private string recipient = "", amount = "", payload = "";
+    private string recipient = "", amount = "", payload = "", recipientName = "";
     private BalanceItem? coin, gasCoin;
     private int modeIndex;
 
@@ -324,13 +395,21 @@ public sealed class SendViewModel : ScreenModel
         SendNow = new AsyncCommand(SendAsync, Fail);
         All = new AsyncCommand(AllAsync, Fail);
         Paste = new AsyncCommand(PasteAsync, Fail);
+        PickContact = new RelayCommand(item => { if (item is ContactItem c) Recipient = c.Address; });
+        main.Contacts.CollectionChanged += (_, _) => Changed(nameof(HasContacts));
     }
 
+    public bool HasContacts => main.Contacts.Count > 0;
+
     public ObservableCollection<BalanceItem> Coins { get; } = [];
+    public ObservableCollection<ContactItem> Contacts => main.Contacts;
+    public RelayCommand PickContact { get; }
+    public string RecipientName { get => recipientName; set => Set(ref recipientName, value); }
+    public bool IsNewRecipient => Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) && !main.Shell.AddressBook.IsKnown(a);
     public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) { Changed(nameof(Multiple)); Changed(nameof(Single)); } } }
     public bool Multiple { get => modeIndex == 1; set => ModeIndex = value ? 1 : 0; }
     public bool Single => modeIndex == 0;
-    public string Recipient { get => recipient; set { Set(ref recipient, value); Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); } }
+    public string Recipient { get => recipient; set { Set(ref recipient, value); Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); Changed(nameof(IsNewRecipient)); } }
     public BalanceItem? Coin { get => coin; set { Set(ref coin, value); Changed(nameof(Available)); } }
     public BalanceItem? GasCoin { get => gasCoin; set => Set(ref gasCoin, value); }
     public string Amount { get => amount; set => Set(ref amount, value); }
@@ -390,7 +469,13 @@ public sealed class SendViewModel : ScreenModel
         if (to == main.Selected!.Account.Address) warnings.Add("Перевод самому себе.");
         var outcome = await main.ConfirmAndSendAsync("Перевод", data, GasCoin?.Coin.Id ?? 0, MainViewModel.Utf8(Payload),
             [("Получатель", AddressBook.Grouped(to)), ("Сумма", $"{Units.FormatCoins(value)} {Coin.Coin.Symbol} (id {Coin.Coin.Id})")], warnings, this);
-        if (outcome?.Succeeded == true) { main.Shell.AddressBook.Remember(to); Amount = ""; Payload = ""; Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); }
+        if (outcome?.Succeeded == true)
+        {
+            main.Shell.AddressBook.Remember(to, RecipientName.Trim());
+            main.LoadContacts();
+            Amount = ""; Payload = ""; RecipientName = "";
+            Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); Changed(nameof(IsNewRecipient));
+        }
     }
 }
 
@@ -673,7 +758,7 @@ public sealed class StakingViewModel : ScreenModel
     }
 }
 
-public sealed record HistoryItem(HistoryEntry Entry)
+public sealed record HistoryItem(HistoryEntry Entry, bool FromExplorer = false)
 {
     public string Summary => Entry.Summary;
     public string Height => Display.Integer(Entry.Height);
@@ -693,54 +778,62 @@ public sealed record HistoryItem(HistoryEntry Entry)
     };
 }
 
+// History newest first, a page at a time with "show more": the source's own history, then (a gate on mainnet) the
+// older part from the Minter explorer.
 public sealed class HistoryViewModel : ScreenModel
 {
+    private const int PageSize = 30;
     private readonly MainViewModel main;
-    private int page = 1;
-    private bool loading, loaded;
+    private HistoryCursor? cursor;
+    private bool loading, loaded, hasMore, olderShown;
 
     public HistoryViewModel(MainViewModel main)
     {
         this.main = main;
-        Load = new AsyncCommand(LoadAsync, e => { Loading = false; Fail(e); });
-        Next = new Command(() => { page++; Load.Execute(null); }, () => Items.Count >= PageSize);
-        Previous = new Command(() => { if (page > 1) { page--; Load.Execute(null); } }, () => page > 1);
+        Load = new AsyncCommand(async () => { cursor = null; Items.Clear(); olderShown = false; await MoreAsync(); }, e => { Loading = false; Fail(e); });
+        More = new AsyncCommand(MoreAsync, e => { Loading = false; Fail(e); });
         CopyHash = new RelayCommand(async hash => { if (hash is string h && main.Shell.CopyText != null) { await main.Shell.CopyText(h); Say("Хеш транзакции скопирован.", Tone.Success); } });
     }
 
-    private const int PageSize = 30;
     public ObservableCollection<HistoryItem> Items { get; } = [];
-    public string PageText => $"Страница {page}";
     public bool Loading { get => loading; set { Set(ref loading, value); Changed(nameof(IsEmpty)); } }
+    public bool HasMore { get => hasMore; private set => Set(ref hasMore, value); }
     public bool IsEmpty => loaded && !Loading && Items.Count == 0;
-    public string EmptyText => page > 1 ? "На этой странице записей нет." : "Транзакций пока нет — или у источника выключен индекс транзакций.";
+    public string EmptyText => "Транзакций пока нет.";
+    public string Note => olderShown ? "Старые транзакции — из обозревателя Minter: наш гейт помнит историю с момента своего запуска." : "";
+    public bool HasNote => olderShown;
     public AsyncCommand Load { get; }
-    public Command Next { get; }
-    public Command Previous { get; }
+    public AsyncCommand More { get; }
     public RelayCommand CopyHash { get; }
 
     public void Reset()
     {
-        page = 1; loaded = false;
+        cursor = null; loaded = false; olderShown = false;
         Items.Clear();
-        Changed(nameof(PageText)); Changed(nameof(IsEmpty));
-        Next.Refresh(); Previous.Refresh();
+        HasMore = false;
+        Changed(nameof(IsEmpty)); Changed(nameof(Note)); Changed(nameof(HasNote));
         if (main.IsHistory) Load.Execute(null);
     }
 
-    private async Task LoadAsync()
+    private async Task MoreAsync()
     {
         if (main.Selected == null) return;
         Loading = true;
         var wallet = await main.WalletAsync();
         var me = main.Selected.Account.Address;
-        var records = await wallet.Backend.HistoryAsync(me, page, PageSize);
-        Items.Clear();
-        foreach (var r in records) Items.Add(new HistoryItem(Core.History.Decode(r, me, main.Symbol)));
+        cursor ??= main.HistoryCursor(wallet, me, PageSize);
+        foreach (var (record, older) in await cursor.NextAsync())
+        {
+            HistoryEntry entry;
+            try { entry = Core.History.Decode(record, me, main.Symbol); }
+            catch (FormatException) { continue; }   // bytes the wallet cannot read (a third-party answer) are skipped
+            Items.Add(new HistoryItem(entry, older));
+            olderShown |= older;
+        }
         loaded = true;
         Loading = false;
-        Changed(nameof(PageText)); Changed(nameof(EmptyText));
-        Next.Refresh(); Previous.Refresh();
+        HasMore = cursor.HasMore;
+        Changed(nameof(Note)); Changed(nameof(HasNote)); Changed(nameof(IsEmpty));
         if (Tone == Tone.Error) Say("");
     }
 }
@@ -758,7 +851,7 @@ public sealed class SettingsViewModel : ScreenModel
 {
     private static readonly string[] Themes = ["system", "dark", "light"];
     private readonly MainViewModel main;
-    private string gasCap, autoLock, newName = "", newUrl = "";
+    private string gasCap, autoLock, newName = "", newUrl = "", currentPassword = "", newPassword = "", repeatPassword = "";
     private bool adding;
 
     public SettingsViewModel(MainViewModel main)
@@ -772,6 +865,7 @@ public sealed class SettingsViewModel : ScreenModel
         ShowAdd = new Command(() => Adding = !Adding);
         AddSource = new AsyncCommand(AddSourceAsync, Fail);
         RemoveSource = new AsyncCommand(RemoveSourceAsync, Fail);
+        ChangePassword = new AsyncCommand(ChangePasswordAsync, Fail);
         LoadSources();
     }
 
@@ -795,6 +889,28 @@ public sealed class SettingsViewModel : ScreenModel
     public string NewUrl { get => newUrl; set => Set(ref newUrl, value); }
     public string GasCap { get => gasCap; set => Set(ref gasCap, value); }
     public string AutoLock { get => autoLock; set => Set(ref autoLock, value); }
+    public string CurrentPassword { get => currentPassword; set => Set(ref currentPassword, value); }
+    public string NewPassword { get => newPassword; set { Set(ref newPassword, value); Changed(nameof(PasswordHint)); } }
+    public string RepeatPassword { get => repeatPassword; set { Set(ref repeatPassword, value); Changed(nameof(PasswordHint)); } }
+    public string PasswordHint => NewPassword.Length == 0 ? "" : Passwords.Hint(NewPassword, RepeatPassword);
+    public AsyncCommand ChangePassword { get; }
+    public bool CheckUpdates
+    {
+        get => main.Shell.Settings.CheckUpdates;
+        set { if (value == main.Shell.Settings.CheckUpdates) return; main.Shell.Settings.CheckUpdates = value; main.Shell.Settings.Save(main.Shell.DataDirectory); Changed(); }
+    }
+    public bool HistoryFromExplorer
+    {
+        get => main.Shell.Settings.HistoryFromExplorer;
+        set
+        {
+            if (value == main.Shell.Settings.HistoryFromExplorer) return;
+            main.Shell.Settings.HistoryFromExplorer = value;
+            main.Shell.Settings.Save(main.Shell.DataDirectory);
+            Changed();
+            main.History.Reset();
+        }
+    }
     public int ThemeIndex
     {
         get => Math.Max(0, Array.IndexOf(Themes, main.Shell.Settings.Theme));
@@ -869,6 +985,17 @@ public sealed class SettingsViewModel : ScreenModel
         settings.Save(main.Shell.DataDirectory);
         LoadSources();
         await ConnectAsync();
+    }
+
+    // The key store re-encrypted under the new password (Argon2id with a fresh salt); the current one proves the owner.
+    private async Task ChangePasswordAsync()
+    {
+        if (Passwords.Problem(NewPassword, RepeatPassword) is { } problem) { Say(problem, Tone.Error); return; }
+        Say("Шифрование ключей новым паролем…", Tone.Progress);
+        try { await Task.Run(() => main.Shell.Session!.ChangePassword(CurrentPassword, NewPassword)); }
+        catch (WrongPasswordException) { Say("Текущий пароль неверен — пароль не изменён.", Tone.Error); return; }
+        CurrentPassword = ""; NewPassword = ""; RepeatPassword = "";
+        Say("Пароль изменён. Он нужен при входе и перед каждой подписью.", Tone.Success);
     }
 
     private void SaveSecurityNow()

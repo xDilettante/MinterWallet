@@ -7,10 +7,7 @@
   <Grid Margin="32,28,32,24" RowDefinitions="Auto,Auto,*" RowSpacing="14" DataContext="{Binding History}" x:DataType="local:HistoryViewModel">
     <DockPanel>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-        <Button Classes="icon" Command="{Binding Previous}" ToolTip.Tip="Новее" AutomationProperties.Name="Предыдущая страница"><local:Icon Kind="chevron-left" /></Button>
-        <TextBlock Text="{Binding PageText}" Classes="muted" VerticalAlignment="Center" Margin="4,0" />
-        <Button Classes="icon" Command="{Binding Next}" ToolTip.Tip="Старее" AutomationProperties.Name="Следующая страница"><local:Icon Kind="chevron-right" /></Button>
-        <Button Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить" Margin="8,0,0,0"><local:Icon Kind="refresh" /></Button>
+        <Button Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить"><local:Icon Kind="refresh" /></Button>
       </StackPanel>
       <StackPanel Spacing="4">
         <TextBlock Text="История" Classes="h1" />
@@ -19,9 +16,12 @@
     </DockPanel>
     <StackPanel Grid.Row="1" Spacing="8">
       <ProgressBar IsIndeterminate="True" IsVisible="{Binding Loading}" />
+      <TextBlock Text="{Binding Note}" Classes="caption prose" IsVisible="{Binding HasNote}" />
       <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
     </StackPanel>
     <Panel Grid.Row="2">
+      <DockPanel>
+      <Button DockPanel.Dock="Bottom" Content="Показать ещё" Command="{Binding More}" IsVisible="{Binding HasMore}" HorizontalAlignment="Center" Margin="0,10,0,0" />
       <ListBox Classes="rows" ItemsSource="{Binding Items}" AutomationProperties.Name="Транзакции">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="local:HistoryItem">
@@ -48,6 +48,7 @@
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>
+      </DockPanel>
       <StackPanel IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Margin="0,0,0,60">
         <Border Classes="avatar" Width="48" Height="48" CornerRadius="24" HorizontalAlignment="Center"><local:Icon Kind="history" Width="22" Height="22" /></Border>
         <TextBlock Text="{Binding EmptyText}" Classes="muted" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360" />

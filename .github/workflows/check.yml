@@ -1,0 +1,49 @@
+# Every push and pull request: the wallet checks on Windows (build, protocol and wallet checks, single files and their
+# self-test) and, on Linux, the same against a fresh devnet of upstream minter-go-node v3.3.0 (tools/devnet):
+# transactions, the wallet core and the headless window, whose screenshots are kept as an artifact.
+name: check
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Checks
+        shell: pwsh
+        run: ./tools/check.ps1
+  linux-devnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/devnet/go.mod
+          cache-dependency-path: tools/devnet/go.sum
+      - name: Build the devnet (genesis tool and minter-go-node v3.3.0)
+        working-directory: tools/devnet
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go build -o bin/devnet-linux .
+          go build -o bin/minter-linux github.com/MinterTeam/minter-go-node/cmd/minter
+      - name: Start the devnet
+        run: sudo bash tools/devnet/start.sh
+      - name: Checks against the devnet
+        shell: pwsh
+        run: ./tools/check.ps1 -Devnet http://127.0.0.1:38843
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-checks
+          path: artifacts/ui-checks

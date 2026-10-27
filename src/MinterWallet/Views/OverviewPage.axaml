@@ -7,6 +7,15 @@
   <ScrollViewer>
     <StackPanel Margin="32,28,32,32" Spacing="24" MaxWidth="860">
       <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      <Border Background="{DynamicResource AccentSubtle}" CornerRadius="8" Padding="14,10" IsVisible="{Binding HasUpdate}">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Скачать" Command="{Binding OpenUpdate}" Classes="accent" />
+          <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <local:Icon Kind="info" Foreground="{DynamicResource Accent}" />
+            <TextBlock Text="{Binding UpdateText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
 
       <Border Classes="card" Padding="24">
         <StackPanel Spacing="14">
@@ -19,6 +28,7 @@
               <TextBlock Text="{Binding TotalText}" Classes="display" />
               <TextBlock Text="{Binding BaseSymbol}" Classes="h2 muted" VerticalAlignment="Bottom" Margin="0,0,0,7" />
             </StackPanel>
+            <TextBlock Text="{Binding TotalUsd}" Classes="h2 muted" FontWeight="Medium" IsVisible="{Binding HasUsd}" />
             <TextBlock Text="{Binding TotalCaption}" Classes="caption" />
           </StackPanel>
           <Border Classes="well">
@@ -29,18 +39,35 @@
               </Button>
             </Grid>
           </Border>
-          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding CanSign}">
-            <Button Classes="accent" Command="{Binding OpenSend}">
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Button Classes="accent" Command="{Binding OpenSend}" IsVisible="{Binding CanSign}">
               <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="send" Width="16" Height="16" /><TextBlock Text="Отправить" /></StackPanel>
             </Button>
-            <Button Command="{Binding OpenSwap}">
+            <Button Command="{Binding ToggleReceive}">
+              <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="receive" Width="16" Height="16" /><TextBlock Text="Получить" /></StackPanel>
+            </Button>
+            <Button Command="{Binding OpenSwap}" IsVisible="{Binding CanSign}">
               <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="swap" Width="16" Height="16" /><TextBlock Text="Обменять" /></StackPanel>
             </Button>
-            <Button Command="{Binding OpenStaking}">
+            <Button Command="{Binding OpenStaking}" IsVisible="{Binding CanSign}">
               <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="stake" Width="16" Height="16" /><TextBlock Text="Делегировать" /></StackPanel>
             </Button>
           </WrapPanel>
         </StackPanel>
+      </Border>
+
+      <Border Classes="card" IsVisible="{Binding ShowReceive}">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="24">
+          <local:QrView Text="{Binding Address}" Width="196" Height="196" VerticalAlignment="Top" />
+          <StackPanel Grid.Column="1" Spacing="12">
+            <TextBlock Text="Получить" Classes="h2" />
+            <TextBlock Classes="muted prose" Text="Отправьте на этот адрес монеты Minter — BIP или любые токены сети. Покажите QR-код или скопируйте адрес целиком; при отправке с другого устройства сверьте его по группам символов." />
+            <SelectableTextBlock Text="{Binding GroupedAddress}" Classes="mono" FontSize="15" TextWrapping="Wrap" />
+            <Button Command="{Binding CopyAddress}" HorizontalAlignment="Left">
+              <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="{Binding CopyLabel}" /></StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
       </Border>
 
       <StackPanel Spacing="10">

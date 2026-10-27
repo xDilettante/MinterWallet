@@ -20,11 +20,16 @@ public sealed class Shell : Observable
     public NodeApiClient? Backend { get; private set; }
     public WalletService? Wallet { get; private set; }
     public ChainStatus? Status { get; private set; }
+    // The first height of the gate's own transaction history (0: not a gate, or a gate without a history index).
+    public long GateIndexFrom { get; private set; }
+    public ExplorerClient Explorer => explorer ??= new ExplorerClient();
+    private ExplorerClient? explorer;
 
     // Asks the user to confirm and re-enter the password; set by the window (null in tests).
     public Func<ConfirmRequest, Task<string?>>? Confirm { get; set; }
     public Func<string, Task>? CopyText { get; set; }
     public Func<Task<string?>>? PasteText { get; set; }
+    public Func<Uri, Task>? OpenUrl { get; set; }
 
     public Shell(string? dataDirectory = null)
     {
@@ -80,7 +85,9 @@ public sealed class Shell : Observable
         var source = Settings.Source;
         Backend = new NodeApiClient(new Uri(source.Url), source.Name);
         var status = await Backend.StatusAsync();
-        var kind = await Backend.IsGateAsync() ? "gate" : "node";
+        var gate = await Backend.GateAsync();
+        var kind = gate != null ? "gate" : "node";
+        GateIndexFrom = gate?.IndexFrom ?? 0;
         if (source.Kind != kind) { source.Kind = kind; Settings.Save(DataDirectory); }
         if (source.ExpectedNetwork == null) { source.ExpectedNetwork = status.Network; Settings.Save(DataDirectory); }
         else if (source.ExpectedNetwork != status.Network)

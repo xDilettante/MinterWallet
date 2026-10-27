@@ -3,6 +3,7 @@
         xmlns:local="using:MinterWallet"
         x:Class="MinterWallet.ConfirmWindow"
         Title="Подтверждение"
+        Icon="avares://MinterWallet/Assets/app.ico"
         Width="680" SizeToContent="Height" MaxHeight="780" CanResize="False"
         WindowStartupLocation="CenterOwner">
   <DockPanel Margin="24">

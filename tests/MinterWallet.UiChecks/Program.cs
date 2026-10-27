@@ -14,11 +14,14 @@ using MinterWallet.Core;
 // accounts page; more addresses: the next one of the phrase, a new phrase, an address to watch, rename, remove. Then a
 // test key: balances, send with the confirmation (password stubbed), history, swap with the coin found by ticker and
 // the quote by itself, delegation, multisend, sources in the settings, wrong password, both themes, lock and unlock.
-if (args is not ["--devnet", var url]) { Console.WriteLine("Usage: MinterWallet.UiChecks --devnet http://WSL-IP:38843"); return 2; }
-var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "ui-checks"));
+// --mainnet URL: read-only, against a real MinterGate: a public mainnet address to watch, its balances in dollars, its
+// history with the older part from the Minter explorer, the gate's coin list for a swap. Nothing is signed.
+if (args is not ["--devnet" or "--mainnet", var url]) { Console.WriteLine("Usage: MinterWallet.UiChecks --devnet http://WSL-IP:38843 | --mainnet https://GATE"); return 2; }
+var mainnet = args[0] == "--mainnet";
+var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", mainnet ? "ui-mainnet" : "ui-checks"));
 Directory.CreateDirectory(output);
 var session = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
-var code = await session.Dispatch(() => UiScenario.Run(url, output), CancellationToken.None);
+var code = await session.Dispatch(() => mainnet ? UiScenario.Mainnet(url, output) : UiScenario.Run(url, output), CancellationToken.None);
 // The headless session keeps its dispatcher thread (and the wallet's timers) alive: end the process explicitly.
 Environment.Exit(code);
 return code;
@@ -48,7 +51,7 @@ public static class UiScenario
             await Operations(url, data);
             Console.WriteLine($"PASS ui: {step} screens rendered to {output}; create (copy, skip and paste-check), forgot password, restore from a pasted numbered phrase, " +
                 "phrase reveal and copy, next address, new phrase, watch-only, rename, remove; import, balances, send, wrong password, history, swap by ticker with automatic quote, " +
-                "delegation, multisend, sources, lock/unlock against the devnet; dark and light themes");
+                "delegation, multisend, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes");
             return 0;
         }
         catch (Exception error)
@@ -64,8 +67,61 @@ public static class UiScenario
         }
     }
 
-    private static void Settings(string directory, string url, string theme) =>
-        File.WriteAllText(Path.Combine(directory, WalletSettings.FileName), $$"""{"Sources":[{"Name":"devnet (WSL)","Url":"{{url}}"}],"SelectedSource":0,"GasPriceCap":10,"AutoLockMinutes":10,"Theme":"{{theme}}"}""");
+    private static void Settings(string directory, string url, string theme, string name = "devnet (WSL)") =>
+        File.WriteAllText(Path.Combine(directory, WalletSettings.FileName), $$"""{"Sources":[{"Name":"{{name}}","Url":"{{url}}"}],"SelectedSource":0,"GasPriceCap":10,"AutoLockMinutes":10,"Theme":"{{theme}}","CheckUpdates":false}""");
+
+    // Read-only on mainnet: a busy public address to watch (it sends multisends), nothing signed.
+    public static async Task<int> Mainnet(string url, string outputDirectory)
+    {
+        output = outputDirectory;
+        foreach (var old in Directory.GetFiles(output, "*.png")) File.Delete(old);
+        var data = Directory.CreateTempSubdirectory("minterwallet-ui-").FullName;
+        try
+        {
+            Settings(data, url, "dark", "MinterGate");
+            var shell = new Shell(data);
+            window = new MainWindow(shell) { Width = 1100, Height = 720 };
+            window.Show();
+            ((WelcomeViewModel)shell.Page).Watch.Execute(null);
+            var watch = (ImportViewModel)shell.Page;
+            watch.Secret = "Mxf4a7739c9956dea74ca4ae87be4c9665bb71a310"; watch.Name = "Наблюдение"; watch.Password = Password; watch.Repeat = Password;
+            watch.Finish.Execute(null);
+            var main = await Until(() => shell.Page as MainViewModel, "main screen");
+            await Until(() => main.Balances.Count > 0 && main.HasUsd ? main : null, "balances in dollars from the gate", 60, () => main.Status);
+            Check(shell.GateIndexFrom > 1 && main.Settings.Sources[main.Settings.SourceIndex].Source.Kind == "gate", "the source is a gate with a history index");
+            Shot("mainnet-overview");
+            main.Section = Section.History;
+            await Until(() => main.History.Items.Count > 0 && !main.History.Loading ? main : null, "history", 60, () => main.History.Status);
+            for (var i = 0; i < 5 && !main.History.Items.Any(x => x.FromExplorer) && main.History.HasMore; i++)
+            {
+                var count = main.History.Items.Count;
+                main.History.More.Execute(null);
+                await Until(() => main.History.Items.Count > count || !main.History.HasMore ? main : null, "more history", 60, () => main.History.Status);
+            }
+            Check(main.History.Items.Any(x => x.FromExplorer && x.Entry.Height < shell.GateIndexFrom), "history older than the gate's index from the explorer");
+            Shot("mainnet-history");
+            main.Section = Section.Swap;
+            await Until(() => main.HasCatalog ? main : null, "the gate's coin list", 60);
+            main.Swap.Buy.Query = "USDT";
+            Check(main.Swap.Buy.Results.Any(c => c.Symbol.StartsWith("USDT", StringComparison.Ordinal)), "USDT found by ticker in the gate's list");
+            main.Section = Section.Overview; main.ShowReceive = true;
+            Shot("mainnet-receive");
+            Console.WriteLine($"PASS ui mainnet: {main.Balances.Count} coins with dollars ({main.TotalUsd}), {main.History.Items.Count} history items " +
+                $"({main.History.Items.Count(x => x.FromExplorer)} from the explorer below {shell.GateIndexFrom}), coin list from the gate; screens in {output}");
+            return 0;
+        }
+        catch (Exception error)
+        {
+            Shot("failure");
+            Console.WriteLine($"FAIL ui mainnet: {error.Message}");
+            return 1;
+        }
+        finally
+        {
+            window?.Close();
+            try { Directory.Delete(data, true); } catch (IOException) { }
+        }
+    }
 
     // A new wallet without being forced through anything: copy the phrase, skip the check, come back and pass it with
     // the whole phrase pasted into one field; then forget the password, start over and restore from a pasted copy
@@ -167,6 +223,9 @@ public static class UiScenario
         accounts.Rename.Execute(null);
         Check(main.AccountName == "Наблюдение", "account renamed");
         Shot("accounts");
+        accounts.ContactName = "Друг"; accounts.ContactAddress = "Mx26a08b83ff690136b336c050e96d50178edd62de";
+        accounts.AddContact.Execute(null);
+        Check(main.Contacts.Any(c => c.Name == "Друг"), "contact added by hand");
         accounts.Remove.Execute(null);
         Check(accounts.ConfirmingRemove, "removal asks first");
         accounts.Remove.Execute(null);
@@ -194,11 +253,17 @@ public static class UiScenario
         await Until(() => main.Balances.Count > 0 ? main : null, "balances from the devnet");
         Check(main.Selected!.Account.Address.ToString() == "Mx37980a12b1be0855384b8d4f24b2d7957f680149", "imported address");
         Shot("overview");
+        main.ToggleReceive.Execute(null);
+        Check(main.ShowReceive, "receive panel");
+        Shot("receive");
+        main.ToggleReceive.Execute(null);
 
         // Send 1.5 to test account C with a payload: confirmation shows the grouped address and the amount.
         main.Section = Section.Send;
         main.Send.Recipient = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
         main.Send.Amount = "1,5"; main.Send.Payload = "из интерфейса ✓";
+        Check(main.Send.IsNewRecipient, "new recipient can be named");
+        main.Send.RecipientName = "Тестовый C";
         Shot("send-filled");
         main.Send.SendNow.Execute(null);
         await Until(() => main.Send.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "send included", 90, () => main.Send.Status);
@@ -211,7 +276,7 @@ public static class UiScenario
         dialog.Show(); Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         dialog.CaptureRenderedFrame()?.Save(Path.Combine(output, $"{++step:00}-confirm.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         dialog.Close();
-        Check(main.Send.RecipientCheck.StartsWith("Вы уже отправляли", StringComparison.Ordinal), "recipient remembered");
+        Check(main.Send.RecipientCheck == "Из адресной книги: Тестовый C" && main.Contacts.Any(c => c.Name == "Тестовый C"), "recipient remembered with its name");
 
         // Wrong password: nothing is sent.
         answer = "не тот";
@@ -267,10 +332,17 @@ public static class UiScenario
         main.Settings.ThemeIndex = 2; Shot("overview-light");
         main.Section = Section.Send; main.Send.Multiple = false; Shot("send-light");
         main.Settings.ThemeIndex = 1;
+        const string NewPassword = "ui-check-новый-пароль";
+        main.Settings.CurrentPassword = Password; main.Settings.NewPassword = NewPassword; main.Settings.RepeatPassword = NewPassword;
+        main.Settings.ChangePassword.Execute(null);
+        await Until(() => main.Settings.Status.StartsWith("Пароль изменён", StringComparison.Ordinal) ? main : null, "password changed", 30, () => main.Settings.Status);
         main.LockNow.Execute(null);
         var unlock = (UnlockViewModel)shell.Page;
         Shot("locked");
         unlock.Password = Password;
+        unlock.Unlock.Execute(null);
+        await Until(() => unlock.Tone == Tone.Error ? unlock : null, "the old password no longer opens the wallet");
+        unlock.Password = NewPassword;
         unlock.Unlock.Execute(null);
         await Until(() => shell.Page as MainViewModel, "unlocked");
     }

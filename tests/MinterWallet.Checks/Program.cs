@@ -11,6 +11,8 @@ var groups = new (string Name, Func<Task> Run)[]
     ("send queue", QueueChecks.Run),
     ("guards", GuardChecks.Run),
     ("history decoding", HistoryChecks.Run),
+    ("history beyond the gate", HistoryCursorChecks.Run),
+    ("updates", UpdateChecks.Run),
 };
 
 var failed = 0;

@@ -46,6 +46,9 @@
             </StackPanel>
           </StackPanel>
         </Border>
+        <CheckBox IsChecked="{Binding HistoryFromExplorer}">
+          <TextBlock Classes="prose" Text="Старые транзакции — из обозревателя Minter. Гейт помнит историю с момента своего запуска; более раннюю кошелёк возьмёт у explorer-api.minter.network, и обозреватель узнает, какой адрес вы смотрите." />
+        </CheckBox>
         <Button Classes="link" Command="{Binding AcceptNetwork}" HorizontalAlignment="Left" ToolTip.Tip="Если выбранный источник теперь сообщает другую сеть и вы этого ждали">
           <TextBlock Text="Источник сменил сеть — принять новую" FontSize="13" />
         </Button>
@@ -63,6 +66,17 @@
               <Button DockPanel.Dock="Right" Content="Сохранить" Command="{Binding SaveSecurity}" />
               <TextBlock Text="Фразу восстановления можно посмотреть в разделе «Счета»." Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" />
             </DockPanel>
+            <Border Classes="divider" />
+            <TextBlock Text="Сменить пароль" Classes="label" Margin="0" />
+            <TextBox Text="{Binding CurrentPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Текущий пароль" AutomationProperties.Name="Текущий пароль" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <TextBox Text="{Binding NewPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Новый пароль" AutomationProperties.Name="Новый пароль" />
+              <TextBox Grid.Column="1" Text="{Binding RepeatPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Новый пароль ещё раз" AutomationProperties.Name="Новый пароль ещё раз" />
+            </Grid>
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Сменить пароль" Command="{Binding ChangePassword}" />
+              <TextBlock Text="{Binding PasswordHint}" Classes="caption" VerticalAlignment="Center" />
+            </DockPanel>
           </StackPanel>
         </Border>
       </StackPanel>
@@ -75,6 +89,10 @@
           <ListBoxItem Content="Светлая" />
         </ListBox>
       </StackPanel>
+
+      <CheckBox IsChecked="{Binding CheckUpdates}">
+        <TextBlock Classes="prose" Text="Сообщать о новых версиях (кошелёк спрашивает GitHub при запуске)" />
+      </CheckBox>
 
       <StackPanel Spacing="2">
         <SelectableTextBlock Text="{Binding DataDirectory, StringFormat='Файлы кошелька: {0}'}" Classes="caption" TextWrapping="Wrap" />

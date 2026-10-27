@@ -23,6 +23,7 @@ public sealed class AccountsViewModel : ScreenModel
     private IReadOnlyList<PhraseWord> newWords = [], shownWords = [];
     private string? shownPhrase;
     private bool confirmingRemove;
+    private string contactName = "", contactAddress = "";
 
     public AccountsViewModel(MainViewModel main)
     {
@@ -37,6 +38,22 @@ public sealed class AccountsViewModel : ScreenModel
         CopyAddress = new AsyncCommand(() => Copy(main.Address, "Адрес скопирован."), Fail);
         Remove = new AsyncCommand(RemoveAsync, Fail);
         CancelRemove = new Command(() => ConfirmingRemove = false);
+        AddContact = new Command(AddContactNow);
+    }
+
+    public string ContactName { get => contactName; set => Set(ref contactName, value); }
+    public string ContactAddress { get => contactAddress; set => Set(ref contactAddress, value); }
+    public Command AddContact { get; }
+
+    // A name for an address: new or renamed (the same address again with another name).
+    private void AddContactNow()
+    {
+        if (!Address.TryParse(ContactAddress.Trim(), out var address)) { Say("Адрес — Mx и 40 шестнадцатеричных символов.", Tone.Error); return; }
+        if (ContactName.Trim().Length == 0) { Say("Укажите имя.", Tone.Error); return; }
+        main.Shell.AddressBook.Remember(address, ContactName.Trim());
+        main.LoadContacts();
+        Say($"«{ContactName.Trim()}» в адресной книге.", Tone.Success);
+        ContactName = ""; ContactAddress = "";
     }
 
     public int AddIndex

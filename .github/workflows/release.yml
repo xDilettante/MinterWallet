@@ -1,0 +1,85 @@
+# A tag v<version> builds the release from that commit: MinterWallet-<version>-win-x64.exe (signed with Azure Trusted
+# Signing when its secrets are set), the Linux file, its AppImage and .deb, and SHA256SUMS.txt, then publishes them
+# as a GitHub release with the notes of .github/release-notes.md.
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish src/MinterWallet -c Release -r win-x64 -p:PublishSingleFile=true -o out
+          if ($LASTEXITCODE -ne 0) { throw 'publish failed' }
+          ./out/MinterWallet.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'self-test failed' }
+      - name: Sign (Azure Trusted Signing)
+        if: env.AZURE_CLIENT_ID != ''
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          files-folder: out
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Name
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item out/MinterWallet.exe "dist/MinterWallet-$version-win-x64.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Publish and package
+        run: |
+          sudo apt-get install -y desktop-file-utils
+          dotnet publish src/MinterWallet -c Release -r linux-x64 -p:PublishSingleFile=true -o out
+          ./out/MinterWallet --self-test
+          bash tools/package-linux.sh out/MinterWallet "${GITHUB_REF_NAME#v}" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cd dist && sha256sum MinterWallet-* > SHA256SUMS.txt && cd ..
+          sed "s/{version}/$version/g" .github/release-notes.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "Minter Wallet $version" --notes-file notes.md dist/*

@@ -38,7 +38,9 @@ public static class History
         {
             SendData s when from == me => $"Перевод {A(s.Value, s.Coin)} → {Short(s.To)}",
             SendData s => $"Получено {A(s.Value, s.Coin)} от {Short(from)}",
-            MultisendData m when from == me => $"Мультисенд: {m.List.Count} {(m.List.Count % 10 == 1 && m.List.Count % 100 != 11 ? "получатель" : m.List.Count % 10 is >= 2 and <= 4 && m.List.Count % 100 is < 12 or > 14 ? "получателя" : "получателей")}",
+            MultisendData { List: [var only] } when from == me => $"Мультисенд {A(only.Value, only.Coin)} → {Short(only.To)}",
+            MultisendData m when from == me => $"Мультисенд: {m.List.Count} {(m.List.Count % 10 is >= 2 and <= 4 && m.List.Count % 100 is < 12 or > 14 ? "получателя" : "получателей")}, "
+                + string.Join(", ", m.List.GroupBy(i => i.Coin).Select(g => A(g.Aggregate(BigInteger.Zero, (s, i) => s + i.Value), g.Key))),
             MultisendData m => "Получено " + string.Join(", ", m.List.Where(i => i.To == me).Select(i => A(i.Value, i.Coin))) + $" от {Short(from)} (мультисенд)",
             SellCoinData s => $"Обмен (резерв): {A(s.ValueToSell, s.CoinToSell)} → {symbol(s.CoinToBuy)}",
             SellAllCoinData s => $"Обмен всего (резерв): {symbol(s.CoinToSell)} → {symbol(s.CoinToBuy)}",
@@ -86,5 +88,39 @@ public static class History
     {
         try { return new UTF8Encoding(false, true).GetString(payload); }
         catch (DecoderFallbackException) { return "0x" + Convert.ToHexStringLower(payload); }
+    }
+}
+
+// History newest first, a page at a time: the source until it runs out, then older transactions from a second
+// provider (the explorer) below the height where the source's own history begins, each transaction once.
+public sealed class HistoryCursor(Func<int, Task<IReadOnlyList<TxRecord>>> source, int perPage,
+    Func<int, Task<(IReadOnlyList<TxRecord> Records, bool More)>>? older = null, long olderBelow = long.MaxValue)
+{
+    private readonly HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+    private int sourcePage, olderPage;
+    private bool sourceDone, olderDone = older == null;
+
+    public bool HasMore => !sourceDone || !olderDone;
+
+    public async Task<IReadOnlyList<(TxRecord Record, bool Older)>> NextAsync()
+    {
+        var result = new List<(TxRecord, bool)>();
+        while (result.Count < perPage && HasMore)
+        {
+            if (!sourceDone)
+            {
+                var page = await source(++sourcePage);
+                // The sent and received lists come merged: fewer than a page means both ran out.
+                if (page.Count < perPage) sourceDone = true;
+                foreach (var r in page) if (seen.Add(r.Hash)) result.Add((r, false));
+            }
+            else
+            {
+                var (records, more) = await older!(++olderPage);
+                if (!more || records.Count == 0) olderDone = true;
+                foreach (var r in records) if (r.Height < olderBelow && seen.Add(r.Hash)) result.Add((r, true));
+            }
+        }
+        return result;
     }
 }

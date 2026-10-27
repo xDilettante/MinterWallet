@@ -28,6 +28,10 @@ public sealed class WalletSettings
     public int AutoLockMinutes { get; set; } = 10;
     // "system", "dark" or "light".
     public string Theme { get; set; } = "system";
+    // Older history of mainnet addresses from the Minter explorer, below where a gate's own history begins.
+    public bool HistoryFromExplorer { get; set; } = true;
+    // Ask GitHub for a newer release at start.
+    public bool CheckUpdates { get; set; } = true;
     public string? LastAccountId { get; set; }
 
     [JsonIgnore] public SourceSettings Source => Sources[Math.Clamp(SelectedSource, 0, Sources.Count - 1)];
@@ -80,6 +84,12 @@ public sealed class AddressBook
         if (path != null && File.Exists(path))
             try { Entries = JsonSerializer.Deserialize(File.ReadAllBytes(path), SettingsJson.Default.ListAddressBookEntry) ?? []; }
             catch (JsonException) { Entries = []; }
+    }
+
+    public void Remove(Address address)
+    {
+        Entries.RemoveAll(e => string.Equals(e.Address, address.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (directory != null) WalletPaths.WriteAtomic(Path.Combine(directory, FileName), JsonSerializer.SerializeToUtf8Bytes(Entries, SettingsJson.Default.ListAddressBookEntry), secret: false);
     }
 
     public bool IsKnown(Address address) => Entries.Any(e => string.Equals(e.Address, address.ToString(), StringComparison.OrdinalIgnoreCase));

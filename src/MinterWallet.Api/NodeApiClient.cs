@@ -135,6 +135,13 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
             c.TryGetProperty("validator", out var v) && v.GetBoolean(), Address.Parse(Str(c, "owner_address")))).ToList();
     }
 
+    // The reserves of the pool of two coins, in the order asked; null when there is no such pool.
+    public async Task<(BigInteger Amount0, BigInteger Amount1)?> SwapPoolAsync(uint coin0, uint coin1, CancellationToken ct = default)
+    {
+        try { var j = await Get($"swap_pool/{coin0}/{coin1}", ct); return (Big(j, "amount0"), Big(j, "amount1")); }
+        catch (ChainApiException e) when (e.Code is 404 or 400 || e.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)) { return null; }
+    }
+
     // MinterGate only (/gate/v1/coins): the coins that can be bought, most liquid first; null from a plain node.
     public async Task<IReadOnlyList<CoinListing>?> CoinListAsync(CancellationToken ct = default)
     {
@@ -145,12 +152,24 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
             Str(c, "type") == "token", Big(c, "reserve"), Big(c, "pool_base"), (int)U64(c, "pools"))).ToList();
     }
 
-    // A MinterGate answers /gate/v1/info; a node does not.
-    public async Task<bool> IsGateAsync(CancellationToken ct = default)
+    // A MinterGate answers /gate/v1/info, a node does not. IndexFrom: the first height of the gate's transaction
+    // history (0 when it keeps none beyond its in-memory window).
+    public sealed record GateDetails(long IndexFrom, long IndexTo);
+
+    public async Task<GateDetails?> GateAsync(CancellationToken ct = default)
     {
-        try { using var reply = await http.GetAsync("../gate/v1/info", ct); return reply.IsSuccessStatusCode; }
-        catch (HttpRequestException) { return false; }
+        try
+        {
+            using var reply = await http.GetAsync("../gate/v1/info", ct);
+            if (!reply.IsSuccessStatusCode) return null;
+            using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct));
+            var j = doc.RootElement;
+            return new GateDetails(j.TryGetProperty("index_from", out var f) ? f.GetInt64() : 0, j.TryGetProperty("index_to", out var t) ? t.GetInt64() : 0);
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException) { return null; }
     }
+
+    public async Task<bool> IsGateAsync(CancellationToken ct = default) => await GateAsync(ct) != null;
 
     public async Task<IReadOnlyList<FrozenFunds>> FrozenAsync(Address address, CancellationToken ct = default)
     {
