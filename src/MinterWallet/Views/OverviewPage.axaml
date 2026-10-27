@@ -66,6 +66,22 @@
             <Button Command="{Binding CopyAddress}" HorizontalAlignment="Left">
               <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="{Binding CopyLabel}" /></StackPanel>
             </Button>
+            <Border Classes="divider" Margin="0,6" />
+            <StackPanel Spacing="10" DataContext="{Binding RedeemCheck}" x:DataType="local:CheckRedeemViewModel">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}">
+                  <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="paste" Width="16" Height="16" /><TextBlock Text="Вставить" /></StackPanel>
+                </Button>
+                <TextBlock Text="Есть чек? Погасите его на этот счёт" Classes="label" Margin="0" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBox Text="{Binding Text}" Classes="mono" PlaceholderText="Mc…" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="90" AutomationProperties.Name="Чек" />
+              <views:NoticeBar Classes="inline" Text="{Binding Info}" Tone="{Binding InfoTone}" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Погасить" Command="{Binding Redeem}" Classes="accent" Margin="8,0,0,0" />
+                <TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Пароль чека" AutomationProperties.Name="Пароль чека" />
+              </DockPanel>
+              <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+            </StackPanel>
           </StackPanel>
         </Grid>
       </Border>

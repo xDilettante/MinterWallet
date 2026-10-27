@@ -51,7 +51,7 @@ public static class UiScenario
             await Operations(url, data);
             Console.WriteLine($"PASS ui: {step} screens rendered to {output}; create (copy, skip and paste-check), forgot password, restore from a pasted numbered phrase, " +
                 "phrase reveal and copy, next address, new phrase, watch-only, rename, remove; import, balances, send, wrong password, history, swap by ticker with automatic quote, " +
-                "delegation, multisend, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes");
+                "delegation, multisend, check issued and redeemed, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes");
             return 0;
         }
         catch (Exception error)
@@ -322,6 +322,34 @@ public static class UiScenario
         Shot("multisend");
         main.Multisend.SendNow.Execute(null);
         await Until(() => main.Multisend.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "multisend included", 90, () => main.Multisend.Status);
+        // A check of 1 MNT from B, redeemed by a new account of the same wallet: a wrong password first, then the right
+        // one; the issuer pays the commission, so the new account gets exactly 1 MNT.
+        main.Section = Section.Send; main.Send.ModeIndex = 2;
+        main.IssueCheck.Coin = main.IssueCheck.Coins.First(c => c.Coin.Id == 0);
+        main.IssueCheck.Amount = "1"; main.IssueCheck.Password = "пароль-чека"; main.IssueCheck.Days = "7";
+        main.IssueCheck.Issue.Execute(null);
+        await Until(() => main.IssueCheck.HasIssued ? main : null, "check issued", 30, () => main.IssueCheck.Status);
+        var issued = main.IssueCheck.Issued;
+        Check(issued.StartsWith("Mc", StringComparison.Ordinal) && confirmations[^1].Action == "Выписать чек", "check text and its confirmation");
+        Shot("check-issued");
+        main.AccountsPage.AddIndex = (int)AddKind.NewPhrase; main.AccountsPage.Name = "Получатель чека";
+        main.AccountsPage.Add.Execute(null);
+        Check(main.AccountName == "Получатель чека", "new account selected");
+        main.Section = Section.Overview; main.ShowReceive = true;
+        main.RedeemCheck.Text = issued;
+        Check(main.RedeemCheck.InfoTone == Tone.Success && main.RedeemCheck.Info.StartsWith("Чек на 1 MNT", StringComparison.Ordinal), "check read while pasted");
+        main.RedeemCheck.Password = "не тот";
+        main.RedeemCheck.Redeem.Execute(null);
+        await Until(() => main.RedeemCheck.Status == "Пароль чека не подходит." ? main : null, "wrong check password refused", 30, () => main.RedeemCheck.Status);
+        main.RedeemCheck.Password = "пароль-чека";
+        main.RedeemCheck.Redeem.Execute(null);
+        await Until(() => main.RedeemCheck.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "check redeemed", 90, () => main.RedeemCheck.Status);
+        await Until(() => main.Balances.Any(b => b.Coin.Id == 0 && b.Value == Units.PipPerCoin) ? main : null, "exactly 1 MNT on the new account");
+        Shot("check-redeemed");
+        main.ShowReceive = false;
+        main.Selected = main.Accounts.First(x => x.Name == "Тестовый B");
+        await Until(() => main.Balances.Count > 1 ? main : null, "back to B");
+
         main.Section = Section.Settings;
         Check(main.Settings.Sources.Count == 2 && main.Settings.Sources[0].Source.IsDefaultGate && main.Settings.SourceIndex == 1 && main.Settings.CanRemove,
             "the project's gate offered first, the devnet still in use");

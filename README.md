@@ -92,6 +92,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check.ps1 -Devnet 
 | `tools/oracle`, `tools/js-oracle` | эталоны для фикстур: Go-нода Minter и JS-библиотеки |
 | `tools/devnet` | локальная сеть из одного валидатора на Go-ноде Minter v3.3.0 |
 
+## Для сопровождающих
+
+- **Релиз:** тег `v<версия>` → `.github/workflows/release.yml` собирает и публикует файлы.
+- **Подпись exe:** [SIGNING.md](SIGNING.md).
+- **Наблюдение за гейтом по умолчанию:** `.github/workflows/gate-monitor.yml` раз в 10 минут; сообщения в Telegram
+  при сбое и восстановлении, если заданы секреты `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`.
+
 ## Лицензия
 
 MIT — см. [LICENSE](LICENSE) и [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

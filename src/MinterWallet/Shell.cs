@@ -79,10 +79,15 @@ public sealed class Shell : Observable
     }
 
     // (Re)connects to the selected source; the network must match the one seen before (or is remembered now).
-    public async Task<ChainStatus> ConnectAsync()
+    // The source in use: the selected one, or another of the same network while the selected one is unreachable.
+    public SourceSettings ActiveSource => active ?? Settings.Source;
+    private SourceSettings? active;
+
+    public async Task<ChainStatus> ConnectAsync(SourceSettings? fallback = null)
     {
         Backend?.Dispose();
-        var source = Settings.Source;
+        active = fallback;
+        var source = ActiveSource;
         Backend = new NodeApiClient(new Uri(source.Url), source.Name);
         var status = await Backend.StatusAsync();
         var gate = await Backend.GateAsync();

@@ -70,7 +70,7 @@ public sealed class MainViewModel : ScreenModel
     {
         this.shell = shell;
         sourceName = shell.Settings.Source.Name;
-        Refresh = new AsyncCommand(RefreshAsync, e => { Connected = false; NetworkText = "нет связи"; BlockText = ""; Fail(e); });
+        Refresh = new AsyncCommand(RefreshAsync, e => { Connected = false; NetworkText = "нет связи"; BlockText = ""; Fail(e); if (e is HttpRequestException or TaskCanceledException) _ = FallbackAsync(); });
         LockNow = new Command(shell.Lock);
         CopyAddress = new AsyncCommand(CopyAddressAsync, Fail);
         OpenSend = new Command(() => Section = Section.Send);
@@ -87,6 +87,8 @@ public sealed class MainViewModel : ScreenModel
         History = new HistoryViewModel(this);
         AccountsPage = new AccountsViewModel(this);
         Settings = new SettingsViewModel(this);
+        IssueCheck = new CheckIssueViewModel(this);
+        RedeemCheck = new CheckRedeemViewModel(this);
         LoadAccounts(shell.Settings.LastAccountId);
         autoLock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         autoLock.Tick += (_, _) => { if (DateTime.UtcNow - LastActivity > TimeSpan.FromMinutes(Math.Max(1, shell.Settings.AutoLockMinutes))) { autoLock.Stop(); shell.Lock(); } };
@@ -185,7 +187,7 @@ public sealed class MainViewModel : ScreenModel
     public string SourceName { get => sourceName; set => Set(ref sourceName, value); }
     public string NetworkText { get => networkText; set => Set(ref networkText, value); }
     public string BlockText { get => blockText; set => Set(ref blockText, value); }
-    public string SourceTip => $"{shell.Settings.Source.Url}\nОтветы источника кошелёк не проверяет: выбирайте тот, которому доверяете.{(updated.Length > 0 ? $"\nОбновлено {updated}." : "")}";
+    public string SourceTip => $"{shell.ActiveSource.Url}\nОтветы источника кошелёк не проверяет: выбирайте тот, которому доверяете.{(updated.Length > 0 ? $"\nОбновлено {updated}." : "")}";
     public bool Connected { get => connected; set => Set(ref connected, value); }
     public string TotalText { get => totalText; set => Set(ref totalText, value); }
     public string TotalCaption { get => totalCaption; set => Set(ref totalCaption, value); }
@@ -204,6 +206,8 @@ public sealed class MainViewModel : ScreenModel
     public Command OpenStaking { get; }
     public Command AddAddress { get; }
     public AccountsViewModel AccountsPage { get; }
+    public CheckIssueViewModel IssueCheck { get; }
+    public CheckRedeemViewModel RedeemCheck { get; }
     public SendViewModel Send { get; }
     public MultisendViewModel Multisend { get; }
     public SwapViewModel Swap { get; }
@@ -279,9 +283,32 @@ public sealed class MainViewModel : ScreenModel
         return shell.Wallet!;
     }
 
+    // The selected source does not answer: another one of the same network, for this session only. The selected one
+    // stays selected and is tried again at the next start or "Переподключиться".
+    private bool fallingBack;
+    private async Task FallbackAsync()
+    {
+        if (fallingBack || shell.ActiveSource != shell.Settings.Source) return;
+        fallingBack = true;
+        try
+        {
+            var failed = shell.Settings.Source;
+            foreach (var other in shell.Settings.Sources.Where(x => x != failed && x.ExpectedNetwork != null && x.ExpectedNetwork == failed.ExpectedNetwork))
+            {
+                try { await shell.ConnectAsync(other); }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException or ChainApiException) { continue; }
+                Say($"«{failed.Name}» не отвечает — пока подключились к «{other.Name}». Вернуться можно в настройках: «Переподключиться».", Tone.Warning);
+                Refresh.Execute(null);
+                return;
+            }
+            shell.Disconnect();
+        }
+        finally { fallingBack = false; }
+    }
+
     private void ShowSource(ChainStatus s)
     {
-        SourceName = shell.Settings.Source.Name;
+        SourceName = shell.ActiveSource.Name;
         NetworkText = s.Network;
         BlockText = $"блок {Display.Integer(s.Height)}";
         Connected = true;
@@ -329,7 +356,7 @@ public sealed class MainViewModel : ScreenModel
         foreach (var name in new[] { nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
         if (conflicts.Count > 0) Say("Тикер указывает на другой id монеты, чем раньше: " + string.Join("; ", conflicts) + ". Проверьте монету перед отправкой.", Tone.Warning);
         else if (Tone == Tone.Error) Say("");
-        Send.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged();
+        Send.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); IssueCheck.BalancesChanged();
     }
 
     private static string EstimateDate(ChainStatus s, long height) => s.BlockTime.AddSeconds((height - s.Height) * 5).ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
@@ -406,9 +433,10 @@ public sealed class SendViewModel : ScreenModel
     public RelayCommand PickContact { get; }
     public string RecipientName { get => recipientName; set => Set(ref recipientName, value); }
     public bool IsNewRecipient => Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) && !main.Shell.AddressBook.IsKnown(a);
-    public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) { Changed(nameof(Multiple)); Changed(nameof(Single)); } } }
+    public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) { Changed(nameof(Multiple)); Changed(nameof(Single)); Changed(nameof(ByCheck)); } } }
     public bool Multiple { get => modeIndex == 1; set => ModeIndex = value ? 1 : 0; }
     public bool Single => modeIndex == 0;
+    public bool ByCheck { get => modeIndex == 2; set => ModeIndex = value ? 2 : 0; }
     public string Recipient { get => recipient; set { Set(ref recipient, value); Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); Changed(nameof(IsNewRecipient)); } }
     public BalanceItem? Coin { get => coin; set { Set(ref coin, value); Changed(nameof(Available)); } }
     public BalanceItem? GasCoin { get => gasCoin; set => Set(ref gasCoin, value); }
@@ -944,6 +972,7 @@ public sealed class SettingsViewModel : ScreenModel
     {
         var source = main.Shell.Settings.Source;
         main.Disconnect();
+        main.Say("");
         Say($"Подключение к «{source.Name}»…", Tone.Progress);
         try
         {

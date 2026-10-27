@@ -134,7 +134,8 @@ public sealed class WalletService(IChainBackend backend, KeystoreSession session
     {
         payload ??= [];
         if (payload.Length > Transaction.MaxPayload) throw new ArgumentException($"Payload не больше {Transaction.MaxPayload} байт.");
-        var gasPrice = Gas.Choose(await Backend.MinGasPriceAsync(ct));
+        // A check is redeemed only at gas price 1 (RedeemCheckData refuses any other).
+        var gasPrice = data is RedeemCheckData ? 1u : Gas.Choose(await Backend.MinGasPriceAsync(ct));
         var prices = await Backend.PricesAsync(ct);
         var nonce = (await Backend.AccountAsync(account.Address, ct)).Nonce + 1;
         // Estimate on a copy signed by a throwaway key: the source never sees a valid signature before confirmation.

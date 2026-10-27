@@ -10,6 +10,7 @@
       <ListBox Classes="segmented" SelectedIndex="{Binding Send.ModeIndex}" AutomationProperties.Name="Кому">
         <ListBoxItem Content="Одному получателю" />
         <ListBoxItem Content="Нескольким сразу" />
+        <ListBoxItem Content="Чеком" />
       </ListBox>
 
       <!-- One recipient -->
@@ -103,6 +104,65 @@
       </StackPanel>
 
       <!-- Several recipients in one transaction -->
+      <!-- A check: coins for whoever has the check and its password -->
+      <Panel IsVisible="{Binding Send.ByCheck}">
+      <StackPanel Spacing="18" DataContext="{Binding IssueCheck}" x:DataType="local:CheckIssueViewModel">
+        <TextBlock Classes="muted prose" Text="Чек — это обещание выплаты: вы подписываете его здесь, а получатель гасит по паролю, когда удобно. Монеты спишутся со счёта только при погашении, поэтому держите их на счёте до тех пор." />
+        <Border Classes="card" IsVisible="{Binding !HasIssued}">
+          <StackPanel Spacing="16">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <StackPanel>
+                <TextBlock Text="Монета" Classes="label" />
+                <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета чека">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:BalanceItem">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="Сумма" Classes="label" />
+                <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Сумма чека" />
+              </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding Available}" Classes="caption" Margin="0,-10,0,0" />
+            <Grid ColumnDefinitions="2*,*" ColumnSpacing="12">
+              <StackPanel>
+                <TextBlock Text="Пароль чека" Classes="label" />
+                <TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" AutomationProperties.Name="Пароль чека" />
+                <TextBlock Text="Получатель введёт его при погашении. Это не пароль кошелька." Classes="caption" Margin="0,6,0,0" />
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="Действует, дней" Classes="label" />
+                <TextBox Text="{Binding Days}" AutomationProperties.Name="Срок чека в днях" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+        <Button Content="Выписать чек" Command="{Binding Issue}" Classes="accent" MinWidth="150" HorizontalAlignment="Right" IsVisible="{Binding !HasIssued}" />
+        <Border Classes="card" IsVisible="{Binding HasIssued}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="20">
+            <local:QrView Text="{Binding Issued}" Width="220" Height="220" VerticalAlignment="Top" />
+            <StackPanel Grid.Column="1" Spacing="12">
+              <TextBlock Text="{Binding IssuedInfo}" Classes="prose" FontWeight="Medium" />
+              <SelectableTextBlock Text="{Binding Issued}" Classes="mono caption" TextWrapping="Wrap" MaxHeight="120" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Command="{Binding Copy}">
+                  <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="Копировать чек" /></StackPanel>
+                </Button>
+                <Button Content="Выписать ещё" Command="{Binding Clear}" />
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+        </Border>
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+      </Panel>
+
       <Panel IsVisible="{Binding Send.Multiple}">
       <StackPanel Spacing="18" DataContext="{Binding Multisend}" x:DataType="local:MultisendViewModel">
         <Border Classes="card">

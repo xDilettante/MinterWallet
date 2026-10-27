@@ -1,0 +1,46 @@
+# The wallets' default MinterGate watched from outside every 10 minutes. On a change (it broke, or it is back) a
+# Telegram message goes out when TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set; a broken gate also fails the run,
+# and GitHub mails the repository owner about failed scheduled runs. The last state is kept in the Actions cache.
+name: gate-monitor
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  look:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: .gate-state
+          key: gate-state-${{ github.run_id }}
+          restore-keys: gate-state-
+      - name: Look at the gate
+        id: look
+        run: |
+          now=$(bash .github/gate-monitor.sh)
+          before=$(cat .gate-state 2>/dev/null || echo ok)
+          echo "$now" > .gate-state
+          echo "now: $now"; echo "before: $before"
+          echo "now=$now" >> "$GITHUB_OUTPUT"
+          if [ "$now" != "$before" ] && { [ "$now" = ok ] || [ "$before" = ok ]; }; then echo "changed=yes" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .gate-state
+          key: gate-state-${{ github.run_id }}
+      - name: Telegram
+        if: steps.look.outputs.changed == 'yes' && env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NOW: ${{ steps.look.outputs.now }}
+        run: |
+          if [ "$NOW" = ok ]; then text="MinterGate снова в порядке"; else text="MinterGate: $NOW"; fi
+          curl -sf -m 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${text}" > /dev/null
+      - name: Fail when broken
+        if: steps.look.outputs.now != 'ok'
+        run: exit 1
