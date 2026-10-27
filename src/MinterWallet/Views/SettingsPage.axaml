@@ -35,11 +35,15 @@
           </Button>
           <Button Content="Удалить выбранный" Command="{Binding RemoveSource}" IsEnabled="{Binding CanRemove}" />
         </WrapPanel>
+        <CheckBox IsChecked="{Binding SkipCertificate}">
+          <TextBlock Classes="prose" Text="Не проверять сертификат TLS выбранного источника. Только чтобы понять, в сертификате ли дело: пока проверка выключена, ответы источника может подменить любой посредник в сети. Подпись остаётся на этом устройстве." />
+        </CheckBox>
         <Border Classes="card" IsVisible="{Binding Adding}">
           <StackPanel Spacing="14">
             <TextBlock Classes="caption prose" Text="Адрес MinterGate или API v2 ноды Minter. Своя нода на этом компьютере обычно http://127.0.0.1:8843. Перед добавлением кошелёк спросит у источника сеть и высоту." />
             <StackPanel><TextBlock Text="Адрес" Classes="label" /><TextBox Text="{Binding NewUrl}" Classes="mono" PlaceholderText="https://хост:порт" AutomationProperties.Name="Адрес источника" /></StackPanel>
             <StackPanel><TextBlock Text="Название (необязательно)" Classes="label" /><TextBox Text="{Binding NewName}" PlaceholderText="Например, моя нода" /></StackPanel>
+            <CheckBox IsChecked="{Binding NewSkipCertificate}"><TextBlock Classes="prose" Text="Не проверять сертификат TLS (небезопасно)" /></CheckBox>
             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
               <Button Content="Отмена" Command="{Binding ShowAdd}" />
               <Button Content="Проверить и добавить" Command="{Binding AddSource}" Classes="accent" />

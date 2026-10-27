@@ -13,6 +13,7 @@ var groups = new (string Name, Func<Task> Run)[]
     ("history decoding", HistoryChecks.Run),
     ("history beyond the gate", HistoryCursorChecks.Run),
     ("updates", UpdateChecks.Run),
+    ("tls certificate switch", TlsChecks.Run),
 };
 
 var failed = 0;

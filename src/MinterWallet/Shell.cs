@@ -96,7 +96,7 @@ public sealed class Shell : Observable
         Backend?.Dispose();
         active = fallback;
         var source = ActiveSource;
-        Backend = new NodeApiClient(new Uri(source.Url), source.Name);
+        Backend = new NodeApiClient(new Uri(source.Url), source.Name, skipCertificateCheck: source.SkipCertificateCheck);
         var status = await Backend.StatusAsync();
         var gate = await Backend.GateAsync();
         var kind = gate != null ? "gate" : "node";

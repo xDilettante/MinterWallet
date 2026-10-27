@@ -18,14 +18,20 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
     public SourceTrust Trust => SourceTrust.Node;
     public Uri BaseUri { get; }
 
-    public NodeApiClient(Uri baseUri, string? name = null, HttpMessageHandler? handler = null)
+    // skipCertificateCheck: any TLS certificate is accepted (the user's choice for one source, to tell a certificate
+    // problem from others); the answers can then come from anyone in between.
+    public NodeApiClient(Uri baseUri, string? name = null, HttpMessageHandler? handler = null, bool skipCertificateCheck = false)
     {
         var text = baseUri.AbsoluteUri.TrimEnd('/');
         if (!text.EndsWith("/v2", StringComparison.Ordinal)) text += "/v2";
         BaseUri = new Uri(text + "/");
         Name = name ?? $"Нода {baseUri.Authority}";
         // A node on this machine or in the local network is reached directly, not through a system proxy.
-        handler ??= new SocketsHttpHandler { UseProxy = !IsLocal(baseUri.Host), PooledConnectionLifetime = TimeSpan.FromMinutes(2), AutomaticDecompression = DecompressionMethods.All };
+        handler ??= new SocketsHttpHandler
+        {
+            UseProxy = !IsLocal(baseUri.Host), PooledConnectionLifetime = TimeSpan.FromMinutes(2), AutomaticDecompression = DecompressionMethods.All,
+            SslOptions = skipCertificateCheck ? new System.Net.Security.SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true } : new(),
+        };
         http = new HttpClient(handler) { BaseAddress = BaseUri, Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = 32 * 1024 * 1024 };
     }
 

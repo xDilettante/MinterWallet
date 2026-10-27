@@ -539,5 +539,8 @@ internal static class Translations
         ("нет ответа. Возможно, порт источника закрыт в вашей сети (офис, публичный Wi-Fi) — попробуйте другую сеть или VPN.", "no answer. The source's port may be closed in your network (office, public Wi-Fi) — try another network or a VPN."),
         ("адрес источника не найден. Проверьте подключение к интернету и адрес в настройках.", "the source's address was not found. Check the internet connection and the address in the settings."),
         ("{0} ({1})", "{0} ({1})"),
+        ("Не проверять сертификат TLS выбранного источника. Только чтобы понять, в сертификате ли дело: пока проверка выключена, ответы источника может подменить любой посредник в сети. Подпись остаётся на этом устройстве.", "Do not check the TLS certificate of the selected source. Only to see whether the certificate is the problem: while the check is off, anyone in between can replace the source's answers. Signing stays on this device."),
+        ("Не проверять сертификат TLS (небезопасно)", "Do not check the TLS certificate (unsafe)"),
+        ("сертификат не проверяется", "certificate not checked"),
     ];
 }

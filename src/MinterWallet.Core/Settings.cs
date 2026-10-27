@@ -12,6 +12,8 @@ public sealed class SourceSettings
     public string? ExpectedNetwork { get; set; }
     // "gate" or "node" as seen at the last connection (a gate answers /gate/v1/info); null until then.
     public string? Kind { get; set; }
+    // The user turned off the TLS certificate check for this source (to see whether the certificate is the problem).
+    public bool SkipCertificateCheck { get; set; }
 
     [JsonIgnore] public bool IsDefaultGate => string.Equals(Url, WalletSettings.DefaultGateUrl, StringComparison.OrdinalIgnoreCase);
 }

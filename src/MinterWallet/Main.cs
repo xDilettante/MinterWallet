@@ -190,7 +190,8 @@ public sealed class MainViewModel : ScreenModel
     public string NetworkText { get => networkText; set => Set(ref networkText, value); }
     public string BlockText { get => blockText; set => Set(ref blockText, value); }
     public string SourceTip => $"{shell.ActiveSource.Url}\nОтветы источника кошелёк не проверяет: выбирайте тот, которому доверяете.{(updated.Length > 0 ? $"\nОбновлено {updated}." : "")}";
-    public bool Connected { get => connected; set => Set(ref connected, value); }
+    public bool Connected { get => connected; set { Set(ref connected, value); Changed(nameof(CertificateUnchecked)); } }
+    public bool CertificateUnchecked => shell.ActiveSource.SkipCertificateCheck && shell.ActiveSource.Url.StartsWith("https", StringComparison.OrdinalIgnoreCase);
     public string TotalText { get => totalText; set => Set(ref totalText, value); }
     public string TotalCaption { get => totalCaption; set => Set(ref totalCaption, value); }
     public string CopyLabel { get => copyLabel; set => Set(ref copyLabel, value); }
@@ -900,7 +901,7 @@ public sealed class SettingsViewModel : ScreenModel
     private static readonly string[] Themes = ["system", "dark", "light"];
     private readonly MainViewModel main;
     private string gasCap, autoLock, newName = "", newUrl = "", currentPassword = "", newPassword = "", repeatPassword = "";
-    private bool adding;
+    private bool adding, newSkipCertificate;
 
     public SettingsViewModel(MainViewModel main)
     {
@@ -927,11 +928,25 @@ public sealed class SettingsViewModel : ScreenModel
             if (value < 0 || value >= s.Sources.Count || value == s.SelectedSource) return;
             s.SelectedSource = value;
             s.Save(main.Shell.DataDirectory);
-            Changed(); Changed(nameof(CanRemove));
+            Changed(); Changed(nameof(CanRemove)); Changed(nameof(SkipCertificate));
             Reconnect.Execute(null);
         }
     }
     public bool CanRemove => !main.Shell.Settings.Source.IsDefaultGate && main.Shell.Settings.Sources.Count > 1;
+    public bool NewSkipCertificate { get => newSkipCertificate; set => Set(ref newSkipCertificate, value); }
+    public bool SkipCertificate
+    {
+        get => main.Shell.Settings.Source.SkipCertificateCheck;
+        set
+        {
+            var source = main.Shell.Settings.Source;
+            if (value == source.SkipCertificateCheck) return;
+            source.SkipCertificateCheck = value;
+            main.Shell.Settings.Save(main.Shell.DataDirectory);
+            Changed();
+            Reconnect.Execute(null);
+        }
+    }
     public bool Adding { get => adding; set => Set(ref adding, value); }
     public string NewName { get => newName; set => Set(ref newName, value); }
     public string NewUrl { get => newUrl; set => Set(ref newUrl, value); }
@@ -998,7 +1013,7 @@ public sealed class SettingsViewModel : ScreenModel
     {
         Sources.Clear();
         foreach (var source in main.Shell.Settings.Sources) Sources.Add(new SourceItem(source));
-        Changed(nameof(SourceIndex)); Changed(nameof(CanRemove));
+        Changed(nameof(SourceIndex)); Changed(nameof(CanRemove)); Changed(nameof(SkipCertificate));
     }
 
     // Drops everything read from the previous source and connects to the chosen one.
@@ -1029,12 +1044,12 @@ public sealed class SettingsViewModel : ScreenModel
         var settings = main.Shell.Settings;
         if (settings.Sources.FindIndex(x => string.Equals(x.Url, url, StringComparison.OrdinalIgnoreCase)) is >= 0 and var existing) { SourceIndex = existing; Adding = false; return; }
         Say("Проверка источника…", Tone.Progress);
-        using var probe = new MinterWallet.Api.NodeApiClient(new Uri(url));
+        using var probe = new MinterWallet.Api.NodeApiClient(new Uri(url), skipCertificateCheck: NewSkipCertificate);
         var status = await probe.StatusAsync();
         var gate = await probe.IsGateAsync();
-        settings.Sources.Add(new SourceSettings { Name = NewName.Trim().Length > 0 ? NewName.Trim() : uri.Host, Url = url, Kind = gate ? "gate" : "node", ExpectedNetwork = status.Network });
+        settings.Sources.Add(new SourceSettings { Name = NewName.Trim().Length > 0 ? NewName.Trim() : uri.Host, Url = url, Kind = gate ? "gate" : "node", ExpectedNetwork = status.Network, SkipCertificateCheck = NewSkipCertificate });
         settings.Save(main.Shell.DataDirectory);
-        NewName = ""; NewUrl = ""; Adding = false;
+        NewName = ""; NewUrl = ""; Adding = false; NewSkipCertificate = false;
         LoadSources();
         SourceIndex = settings.Sources.Count - 1;
     }

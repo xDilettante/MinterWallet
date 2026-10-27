@@ -38,6 +38,7 @@
                 <TextBlock Text="{Binding SourceName}" FontSize="13" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding NetworkText}" Classes="caption" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding BlockText}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="сертификат не проверяется" FontSize="12" Foreground="{DynamicResource Warning}" IsVisible="{Binding CertificateUnchecked}" TextWrapping="Wrap" />
               </StackPanel>
               <Button Grid.Column="2" Classes="icon" Command="{Binding Refresh}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить"
                       VerticalAlignment="Center"><local:Icon Kind="refresh" Width="16" Height="16" /></Button>
