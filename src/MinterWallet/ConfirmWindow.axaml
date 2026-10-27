@@ -27,7 +27,7 @@
               <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
                 <Grid ColumnDefinitions="Auto,*">
                   <local:Icon Kind="alert" Foreground="{DynamicResource Warning}" VerticalAlignment="Top" Margin="0,1,10,0" />
-                  <TextBlock Grid.Column="1" Text="{Binding}" Classes="prose" />
+                  <TextBlock Grid.Column="1" local:AddressMarks.Text="{Binding}" Classes="prose" />
                 </Grid>
               </Border>
             </DataTemplate>

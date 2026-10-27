@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -47,13 +48,15 @@ public static class UiScenario
         var data = Directory.CreateTempSubdirectory("minterwallet-ui-").FullName;
         try
         {
+            Formatting();
             await FirstRun(url, first);
             await Operations(url, data);
             await English(url, Directory.CreateTempSubdirectory("minterwallet-ui-").FullName);
             Console.WriteLine($"PASS ui: {step} screens rendered to {output}; create (copy, skip and paste-check), forgot password, restore from a pasted numbered phrase, " +
                 "phrase reveal and copy, next address, new phrase, watch-only, rename, remove; import, balances, send, wrong password, history, swap by ticker with automatic quote, " +
                 "every screen in English with no Cyrillic left, the language switched in place, " +
-                "liquidity added and halved, limit order placed and cancelled, delegation, multisend, check issued and redeemed, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes");
+                "liquidity added and halved, limit order placed and cancelled, delegation, multisend, check issued and redeemed, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes; " +
+                "amounts by significant digits, addresses with highlighted edges, the «Вид» switches");
             return 0;
         }
         catch (Exception error)
@@ -82,7 +85,7 @@ public static class UiScenario
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         Dispatcher.UIThread.RunJobs();
         foreach (var block in (root ?? window!).GetVisualDescendants().OfType<TextBlock>())
-            if (block.IsEffectivelyVisible && block.Text is { } text && Localization.HasCyrillic(text) && text != "Русский"
+            if (block.IsEffectivelyVisible && Shown(block) is { } text && Localization.HasCyrillic(text) && text != "Русский"
                 && !(block.DataContext is HistoryItem item && text == item.Payload))   // a transaction's own message is data
                 Untranslated.Add($"{where}: {text}");
     }
@@ -132,8 +135,8 @@ public static class UiScenario
         main.Section = Section.Accounts; Scan("accounts");
         main.Section = Section.Settings; Scan("settings"); Shot("en-settings");
         var dialog = new ConfirmWindow(new ConfirmRequest("Перевод",
-            [("Операция", "Перевод 1.5 MNT → Mxf1e0…f8d5"), ("Получатель", "Mx f1e0 f934 a415 d370 18a3 18c7 7944 1143 ba20 f8d5"), ("Комиссия", "0.068 MNT (id 0), gas price 1"), ("Сеть", "minter-devnet (chain ID 2) · devnet")],
-            ["Новый получатель. У адресов Minter нет контрольной суммы: опечатка или подмена в буфере обмена дадут другой действительный адрес. Сверьте все группы символов."]));
+            [("Операция", "Перевод 1.5 MNT → Mxf1e0…f8d5"), ("Получатель", "Mxf1e0f934a415d37018a318c779441143ba20f8d5"), ("Комиссия", "0.068 MNT (id 0), gas price 1"), ("Сеть", "minter-devnet (chain ID 2) · devnet")],
+            ["Новый получатель. У адресов Minter нет контрольной суммы: опечатка или подмена в буфере обмена дадут другой действительный адрес. Сверьте адрес целиком: мошенники подбирают адреса с теми же началом и концом."]));
         dialog.Show(); Scan("confirmation", dialog);
         dialog.CaptureRenderedFrame()?.Save(Path.Combine(output, $"{++step:00}-en-confirm.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         dialog.Close();
@@ -185,6 +188,7 @@ public static class UiScenario
             Check(main.Swap.Buy.Results.Any(c => c.Symbol.StartsWith("USDT", StringComparison.Ordinal)), "USDT found by ticker in the gate's list");
             main.Section = Section.Overview; main.ShowReceive = true;
             Shot("mainnet-receive");
+            Check(main.Balances.Where(b => b.Coin.Id != 0 && b.BipValue.IsZero).All(b => b.BipText == $"нет оценки в {main.BaseSymbol}"), "a token without a price says so");
             Console.WriteLine($"PASS ui mainnet: {main.Balances.Count} coins with dollars ({main.TotalUsd}), {main.History.Items.Count} history items " +
                 $"({main.History.Items.Count(x => x.FromExplorer)} from the explorer below {shell.GateIndexFrom}), coin list from the gate; screens in {output}");
             return 0;
@@ -336,12 +340,13 @@ public static class UiScenario
         await Until(() => main.Balances.Count > 0 ? main : null, "balances from the devnet");
         Check(main.Selected!.Account.Address.ToString() == "Mx37980a12b1be0855384b8d4f24b2d7957f680149", "imported address");
         Shot("overview");
+        Check(Marked(main.AddressText) is ["Mx3798", "0149"], "overview address with its beginning and end highlighted");
         main.ToggleReceive.Execute(null);
         Check(main.ShowReceive, "receive panel");
         Shot("receive");
         main.ToggleReceive.Execute(null);
 
-        // Send 1.5 to test account C with a payload: confirmation shows the grouped address and the amount.
+        // Send 1.5 to test account C with a payload: confirmation shows the address in one piece and the amount.
         main.Section = Section.Send;
         main.Send.Recipient = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
         main.Send.Amount = "1,5"; main.Send.Payload = "из интерфейса ✓";
@@ -351,7 +356,7 @@ public static class UiScenario
         main.Send.SendNow.Execute(null);
         await Until(() => main.Send.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "send included", 90, () => main.Send.Status);
         var confirm = confirmations[^1];
-        Check(confirm.Rows.Any(r => r.Value == "Mx f1e0 f934 a415 d370 18a3 18c7 7944 1143 ba20 f8d5"), "confirmation shows the grouped recipient");
+        Check(confirm.Rows.Any(r => r.Value == "Mxf1e0f934a415d37018a318c779441143ba20f8d5"), "confirmation shows the recipient in one piece");
         Check(confirm.Rows.Any(r => r.Label == "Сумма" && r.Value.StartsWith("1.5 MNT (id 0)", StringComparison.Ordinal)), "confirmation shows amount with coin id");
         Check(confirm.Warnings.Any(w => w.StartsWith("Новый получатель", StringComparison.Ordinal)), "new recipient warned");
         Shot("send-done");
@@ -470,6 +475,21 @@ public static class UiScenario
             "the project's gate offered first, the devnet still in use");
         Shot("settings");
 
+        // «Вид»: addresses in groups of four and every decimal, then back.
+        main.Settings.AddressIndex = 1; main.Settings.DecimalsIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        Check(Display.GroupAddresses && Display.AllDecimals && main.AddressText == "Mx 3798 0a12 b1be 0855 384b 8d4f 24b2 d795 7f68 0149", "addresses in groups after the switch");
+        var saved = WalletSettings.Load(data);
+        Check(saved.GroupAddresses && saved.AllDecimals, "the «Вид» switches saved");
+        main.Section = Section.Overview;
+        await Until(() => main.Balances.Count > 1 ? main : null, "balances read again");
+        Check(Marked(main.AddressText) is ["Mx 3798", "0149"], "grouped address with its edges highlighted");
+        Shot("overview-grouped");
+        main.Settings.AddressIndex = 0; main.Settings.DecimalsIndex = 0;
+        Dispatcher.UIThread.RunJobs();
+        Check(!Display.GroupAddresses && !Display.AllDecimals && main.AddressText == "Mx37980a12b1be0855384b8d4f24b2d7957f680149", "back to the address in one piece");
+        await Until(() => main.Balances.Count > 1 ? main : null, "balances read again");
+
         // The light theme, then lock and unlock with the password.
         main.Section = Section.Overview;
         main.Settings.ThemeIndex = 2; Shot("overview-light");
@@ -505,6 +525,39 @@ public static class UiScenario
     }
 
     private static void Check(bool condition, string what) { if (!condition) throw new InvalidOperationException(what); }
+
+    // What a TextBlock shows: its runs when it has them (AddressMarks), its Text otherwise.
+    private static string? Shown(TextBlock block) => block.Inlines is { Count: > 0 } inlines ? string.Concat(inlines.OfType<Run>().Select(r => r.Text)) : block.Text;
+
+    // The highlighted parts of the shown text block that holds this address.
+    private static string[] Marked(string address)
+    {
+        Dispatcher.UIThread.RunJobs();
+        var block = window!.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(b => b.IsEffectivelyVisible && AddressMarks.GetText(b) == address);
+        return block?.Inlines?.OfType<Run>().Where(r => r.FontWeight == Avalonia.Media.FontWeight.SemiBold).Select(r => r.Text ?? "").ToArray() ?? [];
+    }
+
+    // Amounts and addresses as the views show them.
+    private static void Formatting()
+    {
+        static string Plain(string text) => new(text.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        static System.Numerics.BigInteger Pip(string coins) => Units.ParseCoins(coins);
+        var cases = new (string Coins, string Shown)[]
+        {
+            ("1234567.89123", "1234567.8912"), ("1.2345678", "1.2345"), ("1.5", "1.5"), ("0.1234", "0.1234"),
+            ("0.000001234", "0.000001234"), ("0.0000123456789", "0.00001234"), ("0.000000000000000001", "0.000000000000000001"), ("0", "0"),
+        };
+        foreach (var (coins, shown) in cases) Check(Plain(Display.Amount(Pip(coins))) == shown, $"{coins} shown as {shown}, not {Display.Amount(Pip(coins))}");
+        Check(Plain(Display.Amount(-Pip("0.00005"))) == "−0.00005", "negative small amount");
+        Check(Display.Usd(Pip("0.4123")) == "$0.412" && Display.Usd(Pip("0.000412")) == "$0.000412" && Plain(Display.Usd(Pip("12.40"))) == "$12.4",
+            $"dollars: {Display.Usd(Pip("0.4123"))}, {Display.Usd(Pip("0.000412"))}, {Display.Usd(Pip("12.40"))}");
+        var address = Address.Parse("Mx37980a12b1be0855384b8d4f24b2d7957f680149");
+        Check(Display.Address(address) == "Mx37980a12b1be0855384b8d4f24b2d7957f680149", "address in one piece by default");
+        Display.Use(new WalletSettings { AllDecimals = true, GroupAddresses = true });
+        Check(Plain(Display.Amount(Pip("1.2345678"))) == "1.2345678" && Display.Address(address) == "Mx 3798 0a12 b1be 0855 384b 8d4f 24b2 d795 7f68 0149"
+            && Display.Usd(Pip("0.4123")) == "$0.412", "every decimal and grouped addresses when asked; dollars stay short");
+        Display.Use(new WalletSettings());
+    }
 
     private static async Task<T> Until<T>(Func<T?> probe, string what, int seconds = 30, Func<string>? detail = null) where T : class
     {

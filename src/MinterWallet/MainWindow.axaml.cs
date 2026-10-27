@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     public MainWindow(Shell shell)
     {
         Localization.Use(shell.Settings.Language);
+        Display.Use(shell.Settings);
         InitializeComponent();
         App.ApplyTheme(shell.Settings.Theme);
         shell.Confirm ??= request => new ConfirmWindow(request).ShowDialog<string?>(this);

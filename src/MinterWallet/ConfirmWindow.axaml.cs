@@ -21,7 +21,9 @@ public partial class ConfirmWindow : Window
             Rows.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             var line = i == 0 ? new Thickness(0) : new Thickness(0, 1, 0, 0);
             var label = new Border { BorderThickness = line, Padding = new(0, 10, 12, 10), Child = new TextBlock { Text = request.Rows[i].Label, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } } };
-            var value = new Border { BorderThickness = line, Padding = new(0, 10), Child = new SelectableTextBlock { Text = request.Rows[i].Value, TextWrapping = TextWrapping.Wrap, Classes = { "mono" } } };
+            var text = new SelectableTextBlock { TextWrapping = TextWrapping.Wrap, Classes = { "mono" } };
+            AddressMarks.SetText(text, request.Rows[i].Value);
+            var value = new Border { BorderThickness = line, Padding = new(0, 10), Child = text };
             label.Bind(Border.BorderBrushProperty, label.GetResourceObservable("Line"));
             value.Bind(Border.BorderBrushProperty, value.GetResourceObservable("Line"));
             Grid.SetRow(label, i); Grid.SetRow(value, i); Grid.SetColumn(value, 1);

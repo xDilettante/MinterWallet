@@ -16,7 +16,7 @@ public sealed record AccountItem(WalletAccount Account, string Kind, string Glyp
     public string Name => Account.Name;
     public string Short => History.Short(Account.Address);
     public string Caption => $"{Short} · {Kind}";
-    public string Grouped => AddressBook.Grouped(Account.Address);
+    public string AddressText => Display.Address(Account.Address);
     public override string ToString() => $"{Name} · {Short}";
 }
 
@@ -28,7 +28,11 @@ public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipV
     public string Amount => Units.FormatCoins(Value);
     public string AmountShort => Display.Amount(Value);
     public string Bip => Units.FormatCoins(BipValue);
-    public string BipText => Coin.Id == 0 ? Usd.Length > 0 ? $"≈ {Usd}" : "" : $"≈ {Display.Amount(BipValue)} {BaseSymbol}{(Usd.Length > 0 ? $" · {Usd}" : "")}";
+    // A token with no pool to the base coin has no estimate (the source says 0): said so rather than "≈ 0 · $0".
+    public string BipText => Coin.Id == 0 ? Usd.Length > 0 ? $"≈ {Usd}" : ""
+        : BipValue.IsZero && !Value.IsZero ? $"нет оценки в {BaseSymbol}"
+        : $"≈ {Display.Amount(BipValue)} {BaseSymbol}{(Usd.Length > 0 ? $" · {Usd}" : "")}";
+    public string? BipTip => Coin.Id == 0 || BipValue.IsZero ? null : $"≈ {Bip} {BaseSymbol}";
     public string Initial => Symbol.Length > 0 ? Symbol[..1] : "?";
     public override string ToString() => $"{Symbol} (id {Id}) — {Amount}";
 }
@@ -40,6 +44,7 @@ public sealed record DelegationItem(Delegation Delegation, string BaseSymbol)
     public string Amount => Units.FormatCoins(Delegation.Value);
     public string AmountShort => Display.Amount(Delegation.Value);
     public string BipText => $"≈ {Display.Amount(Delegation.BipValue)} {BaseSymbol}";
+    public string BipTip => $"≈ {Units.FormatCoins(Delegation.BipValue)} {BaseSymbol}";
 }
 
 public sealed record FrozenItem(string Amount, string AmountShort, string Caption);
@@ -48,7 +53,7 @@ public sealed record ContactItem(AddressBookEntry Entry)
 {
     public string Name => Entry.Name.Length > 0 ? Entry.Name : "Без имени";
     public string Address => Entry.Address;
-    public string Grouped => Minter.Protocol.Address.TryParse(Entry.Address, out var a) ? AddressBook.Grouped(a) : Entry.Address;
+    public string AddressText => Minter.Protocol.Address.TryParse(Entry.Address, out var a) ? Display.Address(a) : Entry.Address;
     public string Initial => Entry.Name.Length > 0 ? Entry.Name[..1].ToUpperInvariant() : "?";
 }
 
@@ -173,7 +178,7 @@ public sealed class MainViewModel : ScreenModel
         set
         {
             if (!Set(ref selected, value) || value == null) return;
-            foreach (var name in new[] { nameof(Address), nameof(GroupedAddress), nameof(CanSign), nameof(IsWatchOnly), nameof(AccountName) }) Changed(name);
+            foreach (var name in new[] { nameof(Address), nameof(AddressText), nameof(CanSign), nameof(IsWatchOnly), nameof(AccountName) }) Changed(name);
             shell.Settings.LastAccountId = value.Account.Id; shell.Settings.Save(shell.DataDirectory);
             History.Reset();
             AccountsPage.Reload();
@@ -181,7 +186,7 @@ public sealed class MainViewModel : ScreenModel
         }
     }
     public string Address => Selected?.Account.Address.ToString() ?? "";
-    public string GroupedAddress => Selected == null ? "" : AddressBook.Grouped(Selected.Account.Address);
+    public string AddressText => Selected == null ? "" : Display.Address(Selected.Account.Address);
     public string AccountName => Selected?.Name ?? "";
     public bool CanSign => Selected is { Account.WatchOnly: false };
     public bool IsWatchOnly => Selected is { Account.WatchOnly: true };
@@ -200,6 +205,7 @@ public sealed class MainViewModel : ScreenModel
     public bool HasDelegations => Delegations.Count > 0;
     public bool HasFrozen => Frozen.Count > 0;
     public AccountState? State => state;
+    public string? TotalExact => state == null ? null : $"{Units.FormatCoins(state.TotalBipValue)} {BaseSymbol}";
 
     public AsyncCommand Refresh { get; }
     public Command LockNow { get; }
@@ -367,6 +373,7 @@ public sealed class MainViewModel : ScreenModel
         Delegations.Clear();
         foreach (var d in state.Delegated) Delegations.Add(new DelegationItem(d, BaseSymbol));
         TotalText = Display.Amount(state.TotalBipValue);
+        Changed(nameof(TotalExact));
         TotalCaption = $"≈ всего в {BaseSymbol} по оценке источника · отправлено транзакций: {Display.Integer((long)state.Nonce)}";
         Changed(nameof(BaseSymbol));
         var frozenFunds = await wallet.Backend.FrozenAsync(Selected.Account.Address);
@@ -392,7 +399,7 @@ public sealed class MainViewModel : ScreenModel
         var wallet = await WalletAsync();
         screen.Say("Расчёт комиссии…", Tone.Progress);
         var preview = await wallet.PreviewAsync(account, data, gasCoin, payload);
-        var allRows = new List<(string, string)> { ("Операция", Core.History.Describe(data, account.Address, account.Address, Symbol)), ("Со счёта", $"{account.Name}\n{AddressBook.Grouped(account.Address)}") };
+        var allRows = new List<(string, string)> { ("Операция", Core.History.Describe(data, account.Address, account.Address, Symbol)), ("Со счёта", $"{account.Name}\n{Display.Address(account.Address)}") };
         allRows.AddRange(rows);
         allRows.Add(("Комиссия", $"{Units.FormatCoins(preview.Commission)} {preview.CommissionCoin.Symbol} (id {preview.CommissionCoin.Id}), gas price {preview.GasPrice}"));
         if (payload.Length > 0) allRows.Add(("Сообщение", Encoding.UTF8.GetString(payload)));
@@ -470,7 +477,7 @@ public sealed class SendViewModel : ScreenModel
 
     public string RecipientCheck => !Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) ? (Recipient.Length == 0 ? "" : "Адрес — Mx и 40 шестнадцатеричных символов.")
         : main.Shell.AddressBook.NameOf(a) is { Length: > 0 } n ? $"Из адресной книги: {n}" : main.Shell.AddressBook.IsKnown(a) ? "Вы уже отправляли на этот адрес."
-        : "Новый получатель: сверьте адрес по группам символов в подтверждении.";
+        : "Новый получатель: в подтверждении сверьте адрес целиком, а не только выделенные начало и конец.";
     public Tone RecipientTone => !Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) ? (Recipient.Length == 0 ? Tone.None : Tone.Error)
         : main.Shell.AddressBook.IsKnown(a) ? Tone.Success : Tone.Warning;
 
@@ -514,10 +521,10 @@ public sealed class SendViewModel : ScreenModel
         if (!MainViewModel.TryAmount(Amount, this, out var value)) return;
         var data = new SendData(Coin.Coin.Id, to, value);
         var warnings = new List<string>();
-        if (!main.Shell.AddressBook.IsKnown(to)) warnings.Add("Новый получатель. У адресов Minter нет контрольной суммы: опечатка или подмена в буфере обмена дадут другой действительный адрес. Сверьте все группы символов.");
+        if (!main.Shell.AddressBook.IsKnown(to)) warnings.Add("Новый получатель. У адресов Minter нет контрольной суммы: опечатка или подмена в буфере обмена дадут другой действительный адрес. Сверьте адрес целиком: мошенники подбирают адреса с теми же началом и концом.");
         if (to == main.Selected!.Account.Address) warnings.Add("Перевод самому себе.");
         var outcome = await main.ConfirmAndSendAsync("Перевод", data, GasCoin?.Coin.Id ?? 0, MainViewModel.Utf8(Payload),
-            [("Получатель", AddressBook.Grouped(to)), ("Сумма", $"{Units.FormatCoins(value)} {Coin.Coin.Symbol} (id {Coin.Coin.Id})")], warnings, this);
+            [("Получатель", Display.Address(to)), ("Сумма", $"{Units.FormatCoins(value)} {Coin.Coin.Symbol} (id {Coin.Coin.Id})")], warnings, this);
         if (outcome?.Succeeded == true)
         {
             main.Shell.AddressBook.Remember(to, RecipientName.Trim());
@@ -582,8 +589,8 @@ public sealed class MultisendViewModel : ScreenModel
     {
         if (Parse(out var items) is { } problem) { Say(problem, Tone.Error); return; }
         if (items.Count == 0) { Say("Добавьте хотя бы одного получателя.", Tone.Error); return; }
-        var warnings = items.Where(i => !main.Shell.AddressBook.IsKnown(i.To)).Select(i => $"Новый получатель {AddressBook.Grouped(i.To)}").Take(10).ToList();
-        var rows = items.Select((i, k) => ($"{k + 1}.", $"{AddressBook.Grouped(i.To)}\n{Units.FormatCoins(i.Value)} {main.Symbol(i.Coin)} (id {i.Coin})")).ToList();
+        var warnings = items.Where(i => !main.Shell.AddressBook.IsKnown(i.To)).Select(i => $"Новый получатель {Display.Address(i.To)}").Take(10).ToList();
+        var rows = items.Select((i, k) => ($"{k + 1}.", $"{Display.Address(i.To)}\n{Units.FormatCoins(i.Value)} {main.Symbol(i.Coin)} (id {i.Coin})")).ToList();
         var outcome = await main.ConfirmAndSendAsync("Мультисенд", new MultisendData(items), 0, [], rows, warnings, this);
         if (outcome?.Succeeded == true) foreach (var i in items) main.Shell.AddressBook.Remember(i.To);
     }
@@ -987,6 +994,26 @@ public sealed class SettingsViewModel : ScreenModel
             Changed();
             Dispatcher.UIThread.Post(main.Shell.Redraw);
         }
+    }
+    public int AddressIndex
+    {
+        get => main.Shell.Settings.GroupAddresses ? 1 : 0;
+        set { if (value < 0 || (value == 1) == main.Shell.Settings.GroupAddresses) return; main.Shell.Settings.GroupAddresses = value == 1; Restyle(); }
+    }
+    public int DecimalsIndex
+    {
+        get => main.Shell.Settings.AllDecimals ? 1 : 0;
+        set { if (value < 0 || (value == 1) == main.Shell.Settings.AllDecimals) return; main.Shell.Settings.AllDecimals = value == 1; Restyle(); }
+    }
+
+    // Addresses and amounts are put together when shown: the views are drawn again and the balances read again.
+    private void Restyle()
+    {
+        main.Shell.Settings.Save(main.Shell.DataDirectory);
+        Display.Use(main.Shell.Settings);
+        Changed(nameof(AddressIndex)); Changed(nameof(DecimalsIndex));
+        Dispatcher.UIThread.Post(main.Shell.Redraw);
+        main.Refresh.Execute(null);
     }
     public int ThemeIndex
     {

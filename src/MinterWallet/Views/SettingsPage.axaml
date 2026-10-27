@@ -95,12 +95,30 @@
       </StackPanel>
 
       <StackPanel Spacing="10">
-        <TextBlock Text="Оформление" Classes="h2" />
-        <ListBox Classes="segmented" SelectedIndex="{Binding ThemeIndex}" AutomationProperties.Name="Тема">
-          <ListBoxItem Content="Как в системе" />
-          <ListBoxItem Content="Тёмная" />
-          <ListBoxItem Content="Светлая" />
-        </ListBox>
+        <TextBlock Text="Вид" Classes="h2" />
+        <StackPanel>
+          <TextBlock Text="Тема" Classes="label" />
+          <ListBox Classes="segmented" SelectedIndex="{Binding ThemeIndex}" AutomationProperties.Name="Тема">
+            <ListBoxItem Content="Как в системе" />
+            <ListBoxItem Content="Тёмная" />
+            <ListBoxItem Content="Светлая" />
+          </ListBox>
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Text="Адрес" Classes="label" />
+          <ListBox Classes="segmented" SelectedIndex="{Binding AddressIndex}" AutomationProperties.Name="Адрес">
+            <ListBoxItem Content="Сплошной" />
+            <ListBoxItem Content="Группами по 4" />
+          </ListBox>
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Text="Знаки после точки" Classes="label" />
+          <ListBox Classes="segmented" SelectedIndex="{Binding DecimalsIndex}" AutomationProperties.Name="Знаки после точки">
+            <ListBoxItem Content="Авто" />
+            <ListBoxItem Content="Все" />
+          </ListBox>
+        </StackPanel>
+        <TextBlock Classes="caption prose" Text="Авто — четыре знака, у сумм меньше единицы — до первых значащих цифр. Точная сумма — в подсказке при наведении." />
       </StackPanel>
 
       <CheckBox IsChecked="{Binding CheckUpdates}">

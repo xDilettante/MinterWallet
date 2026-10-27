@@ -57,7 +57,7 @@ public sealed class CheckIssueViewModel : ScreenModel
         var due = (ulong)(height + d * BlocksPerDay);
         var text = $"{Units.FormatCoins(value)} {Coin.Coin.Symbol} (id {Coin.Coin.Id})";
         var confirm = main.Shell.Confirm == null ? null : await main.Shell.Confirm(new ConfirmRequest("Выписать чек",
-            [("Чек на", text), ("Со счёта", $"{account.Name}\n{AddressBook.Grouped(account.Address)}"), ("Действует", $"до блока {Display.Integer((long)due)}, ≈ {d} дн.")],
+            [("Чек на", text), ("Со счёта", $"{account.Name}\n{Display.Address(account.Address)}"), ("Действует", $"до блока {Display.Integer((long)due)}, ≈ {d} дн.")],
             ["Сумма и комиссия за погашение спишутся с этого счёта, когда чек погасят. До тех пор держите их на счёте — иначе погасить не выйдет.",
              "Кто знает чек и его пароль — заберёт монеты. Передавайте пароль отдельно от чека."], "Выписать чек"));
         if (confirm == null) { Say("Отменено.", Tone.Info); return; }
@@ -123,7 +123,7 @@ public sealed class CheckRedeemViewModel : ScreenModel
         var data = check.Redeem(account.Address, Password);
         if (!check.AcceptsProof(account.Address, data.Proof)) { Say("Пароль чека не подходит.", Tone.Error); return; }
         var outcome = await main.ConfirmAndSendAsync("Погашение чека", data, check.GasCoin, [],
-            [("Чек", Info), ("На счёт", $"{account.Name}\n{AddressBook.Grouped(account.Address)}")],
+            [("Чек", Info), ("На счёт", $"{account.Name}\n{Display.Address(account.Address)}")],
             ["Комиссию за погашение платит тот, кто выписал чек."], this);
         if (outcome?.Succeeded == true) { Text = ""; Password = ""; }
     }

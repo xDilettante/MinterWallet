@@ -179,7 +179,7 @@ public sealed class AccountsViewModel : ScreenModel
             }
             Name = "";
             main.LoadAccounts(account.Id);
-            Say($"Добавлен счёт «{account.Name}»: {AddressBook.Grouped(account.Address)}. Он уже выбран.", Tone.Success);
+            Say($"Добавлен счёт «{account.Name}»: {Display.Address(account.Address)}. Он уже выбран.", Tone.Success);
         }
         catch (Exception e) when (e is InvalidOperationException or ArgumentException or FormatException) { Fail(e); }
     }
@@ -213,7 +213,7 @@ public sealed class AccountsViewModel : ScreenModel
         if (main.Shell.Store!.Accounts.Count == 1) { Say("Это единственный счёт кошелька — его нельзя удалить. Можно сначала добавить другой.", Tone.Warning); return; }
         if (!ConfirmingRemove) { ConfirmingRemove = true; return; }
         var password = main.Shell.Confirm == null ? null : await main.Shell.Confirm(new ConfirmRequest("Удалить счёт",
-            [("Счёт", $"{account.Name}\n{AddressBook.Grouped(account.Address)}")], [RemoveWarning], "Удалить счёт"));
+            [("Счёт", $"{account.Name}\n{Display.Address(account.Address)}")], [RemoveWarning], "Удалить счёт"));
         if (password == null) { ConfirmingRemove = false; return; }
         if (!await main.Shell.CheckPasswordAsync(password)) { Say("Неверный пароль — счёт не удалён.", Tone.Error); return; }
         main.Shell.Session!.Remove(account.Id);

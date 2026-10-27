@@ -20,7 +20,7 @@
               <Border Classes="avatar" Width="34" Height="34"><local:Icon Kind="{Binding Glyph}" Width="17" Height="17" /></Border>
               <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="1">
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding Grouped}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
+                <TextBlock local:AddressMarks.Text="{Binding AddressText}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
               </StackPanel>
               <Border Grid.Column="2" Classes="badge neutral" VerticalAlignment="Center"><TextBlock Text="{Binding Kind}" /></Border>
             </Grid>
@@ -101,7 +101,7 @@
                     <Border Classes="avatar" Width="32" Height="32"><TextBlock Text="{Binding Initial}" /></Border>
                     <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                      <SelectableTextBlock Text="{Binding Grouped}" Classes="caption mono" />
+                      <SelectableTextBlock local:AddressMarks.Text="{Binding AddressText}" Classes="caption mono" />
                     </StackPanel>
                     <Button Grid.Column="2" Classes="link" VerticalAlignment="Center" Content="Удалить"
                             Command="{Binding $parent[UserControl].((local:MainViewModel)DataContext).RemoveContact}" CommandParameter="{Binding}" />

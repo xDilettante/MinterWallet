@@ -36,6 +36,9 @@ public sealed class WalletSettings
     public bool HistoryFromExplorer { get; set; } = true;
     // Ask GitHub for a newer release at start.
     public bool CheckUpdates { get; set; } = true;
+    // «Вид»: Mx addresses in groups of four instead of one piece, and amounts with every decimal instead of a few.
+    public bool GroupAddresses { get; set; }
+    public bool AllDecimals { get; set; }
     public string? LastAccountId { get; set; }
 
     [JsonIgnore] public SourceSettings Source => Sources[Math.Clamp(SelectedSource, 0, Sources.Count - 1)];

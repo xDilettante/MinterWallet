@@ -10,22 +10,38 @@ public static class Display
 {
     private const char Gap = ' ';
 
-    // "1 234 567.8912": the whole part in groups of three and at most `decimals` fraction digits, cut rather than rounded
-    // so a balance is never shown larger than it is. The exact value stays available (Units.FormatCoins) for copying.
-    public static string Amount(BigInteger pip, int decimals = 4)
+    // The settings' «Вид»: every decimal of an amount, and addresses in groups of four.
+    public static bool AllDecimals { get; private set; }
+    public static bool GroupAddresses { get; private set; }
+
+    public static void Use(Core.WalletSettings settings) => (AllDecimals, GroupAddresses) = (settings.AllDecimals, settings.GroupAddresses);
+
+    // "1 234 567.8912": the whole part in groups of three and `decimals` fraction digits; below 1, as many as it takes
+    // to show `significant` digits (0.0001234), so a small amount is not shown as nothing. Cut rather than rounded, so
+    // an amount is never shown larger than it is; AllDecimals shows every digit. The exact value: Units.FormatCoins.
+    public static string Amount(BigInteger pip, int decimals = 4, int significant = 4) => Format(pip, decimals, significant, AllDecimals);
+
+    // Dollars from an amount in pip of USD (18 decimals): cents from $1 up, three significant digits below ($0.000412).
+    // An estimate, so never every decimal.
+    public static string Usd(BigInteger pip) => "$" + Format(pip, 2, 3, false);
+
+    // An address as the settings ask: in one piece (as everywhere in Minter) or in groups of four.
+    public static string Address(Address address) => GroupAddresses ? Core.AddressBook.Grouped(address) : address.ToString();
+
+    private static string Format(BigInteger pip, int decimals, int significant, bool all)
     {
-        if (pip.Sign < 0) return "−" + Amount(-pip, decimals);
+        if (pip.Sign < 0) return "−" + Format(-pip, decimals, significant, all);
         var text = Units.FormatCoins(pip);
         var dot = text.IndexOf('.');
         var whole = dot < 0 ? text : text[..dot];
         var fraction = dot < 0 ? "" : text[(dot + 1)..];
-        if (fraction.Length > decimals) fraction = fraction[..decimals].TrimEnd('0');
-        if (whole == "0" && fraction.Length == 0 && pip.Sign > 0) return decimals == 0 ? "< 1" : "< 0." + new string('0', decimals - 1) + "1";
+        if (!all)
+        {
+            var keep = whole == "0" ? Math.Max(decimals, fraction.Length - fraction.TrimStart('0').Length + significant) : decimals;
+            if (fraction.Length > keep) fraction = fraction[..keep].TrimEnd('0');
+        }
         return Group(whole) + (fraction.Length > 0 ? "." + fraction : "");
     }
-
-    // Dollars from an amount in pip of USD (18 decimals): two decimals, grouped; "< $0.01" for less than a cent.
-    public static string Usd(BigInteger pip) => pip.Sign > 0 && pip < Units.PipPerCoin / 100 ? "< $0.01" : "$" + Amount(pip, 2);
 
     public static string Integer(long value) => value < 0 ? "−" + Group((-value).ToString(CultureInfo.InvariantCulture)) : Group(value.ToString(CultureInfo.InvariantCulture));
 

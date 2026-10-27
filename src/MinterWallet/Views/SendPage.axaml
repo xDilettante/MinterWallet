@@ -34,7 +34,7 @@
                             <DataTemplate x:DataType="local:ContactItem">
                               <StackPanel Spacing="1">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding Grouped}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
+                                <TextBlock local:AddressMarks.Text="{Binding AddressText}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
                               </StackPanel>
                             </DataTemplate>
                           </ListBox.ItemTemplate>
