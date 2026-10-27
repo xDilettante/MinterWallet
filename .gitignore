@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+.vs/
+*.user
+*.log
+artifacts/
+tools/oracle/oracle.exe
+tools/oracle/oracle
+tools/js-oracle/node_modules/
+tools/devnet/bin/

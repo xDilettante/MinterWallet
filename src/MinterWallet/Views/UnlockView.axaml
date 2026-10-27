@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.UnlockView"
+             x:DataType="local:UnlockViewModel">
+  <ScrollViewer>
+    <StackPanel Width="380" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24,40" Spacing="14">
+      <Border Classes="logo large" HorizontalAlignment="Center"><TextBlock /></Border>
+      <TextBlock Text="Minter Wallet" Classes="h1" HorizontalAlignment="Center" />
+      <TextBlock Text="{Binding Accounts, StringFormat='Счета: {0}'}" Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+      <TextBox x:Name="PasswordBox" Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Пароль" Margin="0,8,0,0"
+               AutomationProperties.Name="Пароль" />
+      <Button Content="Разблокировать" Command="{Binding Unlock}" IsDefault="True" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" />
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      <Button Content="Забыли пароль?" Classes="link" Command="{Binding Forgot}" HorizontalAlignment="Center" />
+      <Border Classes="card" IsVisible="{Binding Forgetting}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="{Binding StartOverText}" Classes="prose" />
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="Отмена" Command="{Binding Forgot}" />
+            <Button Content="Восстановить заново" Command="{Binding StartOver}" Classes="accent" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

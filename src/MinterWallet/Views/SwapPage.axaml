@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.SwapPage"
+             x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640" DataContext="{Binding Swap}" x:DataType="local:SwapViewModel">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Обмен" Classes="h1" />
+        <TextBlock Classes="muted prose" Text="Выберите монеты и сумму — цену и маршрут кошелёк найдёт сам. Допустимое проскальзывание задаёт границу цены: дальше неё сеть сделку не проведёт." />
+      </StackPanel>
+      <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Режим обмена">
+        <ListBoxItem Content="Продать точную сумму" />
+        <ListBoxItem Content="Купить точную сумму" />
+      </ListBox>
+
+      <Border Classes="card">
+        <StackPanel Spacing="16">
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <StackPanel>
+              <TextBlock Text="Отдаю" Classes="label" />
+              <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Sell}" HorizontalAlignment="Stretch" AutomationProperties.Name="Отдаю">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="local:BalanceItem">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                      <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                    </DockPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Text="{Binding Available}" Classes="caption" Margin="0,6,0,0" />
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+              <TextBlock Text="Получаю" Classes="label" />
+              <views:CoinPicker DataContext="{Binding Buy}" />
+            </StackPanel>
+          </Grid>
+          <StackPanel>
+            <TextBlock Text="{Binding AmountLabel}" Classes="label" />
+            <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" />
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Text="Допустимое проскальзывание" Classes="label" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <ListBox Classes="segmented" SelectedIndex="{Binding SlippageIndex}" AutomationProperties.Name="Проскальзывание">
+                <ListBoxItem Content="0.5 %" />
+                <ListBoxItem Content="1 %" />
+                <ListBoxItem Content="3 %" />
+              </ListBox>
+              <TextBox Text="{Binding Slippage}" Width="80" VerticalAlignment="Center" AutomationProperties.Name="Своё проскальзывание, %" />
+              <TextBlock Text="%" VerticalAlignment="Center" Classes="muted" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" IsVisible="{Binding HasQuote}">
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="20" RowSpacing="10">
+          <TextBlock Text="Маршрут" Classes="muted" />
+          <SelectableTextBlock Grid.Column="1" Text="{Binding QuoteRoute}" TextWrapping="Wrap" />
+          <TextBlock Grid.Row="1" Text="{Binding QuoteExpectedLabel}" Classes="muted" />
+          <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding QuoteExpected}" Classes="mono" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Grid.Row="2" Text="Гарантия сети" Classes="muted" />
+          <SelectableTextBlock Grid.Row="2" Grid.Column="1" Text="{Binding QuoteLimit}" Classes="mono" TextWrapping="Wrap" />
+          <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Classes="caption prose"
+                     Text="Оценка — от источника. Если цена уйдёт дальше гарантии, транзакция не выполнится и спишется только комиссия." />
+        </Grid>
+      </Border>
+
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="Обновить цену" Command="{Binding Estimate}" MinWidth="130" ToolTip.Tip="Цена считается сама, когда заполнены монеты и сумма" />
+        <Button Content="Обменять" Command="{Binding SwapNow}" Classes="accent" MinWidth="130" />
+      </StackPanel>
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             x:Class="MinterWallet.Views.CoinPicker"
+             x:DataType="local:CoinPickerViewModel">
+  <!-- A button with the chosen coin; it opens a searchable list of coins by ticker and name. -->
+  <Button x:Name="Open" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,6" MinHeight="40"
+          AutomationProperties.Name="Выбрать монету">
+    <DockPanel>
+      <local:Icon DockPanel.Dock="Right" Kind="chevron-down" Width="16" Height="16" VerticalAlignment="Center" />
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border Classes="avatar" Width="26" Height="26" IsVisible="{Binding HasSelection}">
+          <TextBlock Text="{Binding Selected.Initial}" FontSize="12" />
+        </Border>
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding Subtitle}" Classes="caption" IsVisible="{Binding HasSelection}" TextTrimming="CharacterEllipsis" MaxWidth="200" />
+        </StackPanel>
+      </StackPanel>
+    </DockPanel>
+    <Button.Flyout>
+      <Flyout Placement="BottomEdgeAlignedLeft">
+        <StackPanel Width="360" Spacing="8">
+          <TextBox x:Name="Search" Text="{Binding Query}" PlaceholderText="Тикер или название, например BIP" AutomationProperties.Name="Поиск монеты">
+            <TextBox.InnerLeftContent><local:Icon Kind="search" Width="16" Height="16" Margin="10,0,0,0" Foreground="{DynamicResource Muted}" /></TextBox.InnerLeftContent>
+          </TextBox>
+          <ListBox x:Name="List" Classes="rows" ItemsSource="{Binding Results}" MaxHeight="340" AutomationProperties.Name="Монеты">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="local:CoinOption">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Border Classes="avatar" Width="30" Height="30"><TextBlock Text="{Binding Initial}" FontSize="13" /></Border>
+                  <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Caption}" Classes="caption" IsVisible="{Binding HasCaption}" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="2" Text="{Binding Note}" Classes="caption" VerticalAlignment="Center" IsVisible="{Binding HasNote}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Text="{Binding EmptyText}" Classes="caption prose" IsVisible="{Binding HasEmptyText}" Margin="4,0" />
+        </StackPanel>
+      </Flyout>
+    </Button.Flyout>
+  </Button>
+</UserControl>

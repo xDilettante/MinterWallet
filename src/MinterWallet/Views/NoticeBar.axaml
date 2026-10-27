@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             x:Class="MinterWallet.Views.NoticeBar">
+  <Border x:Name="Box" Padding="12,10" CornerRadius="8" BorderThickness="1">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <local:Icon x:Name="Glyph" VerticalAlignment="Top" Margin="0,1,10,0" />
+      <SelectableTextBlock x:Name="Message" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" />
+      <Button x:Name="Close" Grid.Column="2" Classes="icon" Padding="4" Margin="8,-3,-4,-3" VerticalAlignment="Top"
+              ToolTip.Tip="Скрыть" AutomationProperties.Name="Скрыть сообщение">
+        <local:Icon Kind="close" Width="14" Height="14" />
+      </Button>
+    </Grid>
+  </Border>
+</UserControl>

@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:MinterWallet"
+        xmlns:views="using:MinterWallet.Views"
+        x:Class="MinterWallet.MainWindow"
+        x:DataType="local:Shell"
+        Title="Minter Wallet"
+        Width="1100" Height="720" MinWidth="860" MinHeight="580"
+        WindowStartupLocation="CenterScreen">
+  <Window.DataTemplates>
+    <DataTemplate DataType="local:WelcomeViewModel"><views:WelcomeView /></DataTemplate>
+    <DataTemplate DataType="local:CreateWalletViewModel"><views:CreateWalletView /></DataTemplate>
+    <DataTemplate DataType="local:ImportViewModel"><views:ImportView /></DataTemplate>
+    <DataTemplate DataType="local:UnlockViewModel"><views:UnlockView /></DataTemplate>
+    <DataTemplate DataType="local:MainViewModel"><views:MainView /></DataTemplate>
+  </Window.DataTemplates>
+  <ContentControl Content="{Binding Page}" />
+</Window>

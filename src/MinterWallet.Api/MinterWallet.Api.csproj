@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Sources for the wallet: a Minter Go node's API v2 (and, from stage 5, MinterGate, which serves the same API). -->
+  <PropertyGroup>
+    <RootNamespace>MinterWallet.Api</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MinterWallet.Core\MinterWallet.Core.csproj" />
+  </ItemGroup>
+</Project>

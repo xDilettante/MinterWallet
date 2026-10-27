@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.SettingsPage"
+             x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="32,28,32,32" Spacing="24" MaxWidth="680" DataContext="{Binding Settings}" x:DataType="local:SettingsViewModel">
+      <TextBlock Text="Настройки" Classes="h1" />
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+
+      <StackPanel Spacing="10">
+        <TextBlock Text="Куда подключаться" Classes="h2" />
+        <TextBlock Classes="caption prose" Text="Кошелёк читает балансы и отправляет транзакции через MinterGate или API ноды Minter. Ответы источника он не проверяет — выбирайте тот, которому доверяете. Ключи никуда не передаются: подпись делается на этом устройстве." />
+        <ListBox Classes="rows" ItemsSource="{Binding Sources}" SelectedIndex="{Binding SourceIndex}" AutomationProperties.Name="Источники">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="local:SourceItem">
+              <Grid ColumnDefinitions="Auto,*">
+                <Border Classes="avatar" Width="34" Height="34"><local:Icon Kind="{Binding Glyph}" Width="17" Height="17" /></Border>
+                <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Url}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding Caption}" Classes="caption" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <WrapPanel ItemSpacing="8" LineSpacing="8">
+          <Button Command="{Binding ShowAdd}">
+            <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="plus" Width="16" Height="16" /><TextBlock Text="Свой адрес…" /></StackPanel>
+          </Button>
+          <Button Command="{Binding Reconnect}">
+            <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="refresh" Width="16" Height="16" /><TextBlock Text="Переподключиться" /></StackPanel>
+          </Button>
+          <Button Content="Удалить выбранный" Command="{Binding RemoveSource}" IsEnabled="{Binding CanRemove}" />
+        </WrapPanel>
+        <Border Classes="card" IsVisible="{Binding Adding}">
+          <StackPanel Spacing="14">
+            <TextBlock Classes="caption prose" Text="Адрес MinterGate или API v2 ноды Minter. Своя нода на этом компьютере обычно http://127.0.0.1:8843. Перед добавлением кошелёк спросит у источника сеть и высоту." />
+            <StackPanel><TextBlock Text="Адрес" Classes="label" /><TextBox Text="{Binding NewUrl}" Classes="mono" PlaceholderText="https://хост:порт" AutomationProperties.Name="Адрес источника" /></StackPanel>
+            <StackPanel><TextBlock Text="Название (необязательно)" Classes="label" /><TextBox Text="{Binding NewName}" PlaceholderText="Например, моя нода" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="Отмена" Command="{Binding ShowAdd}" />
+              <Button Content="Проверить и добавить" Command="{Binding AddSource}" Classes="accent" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Button Classes="link" Command="{Binding AcceptNetwork}" HorizontalAlignment="Left" ToolTip.Tip="Если выбранный источник теперь сообщает другую сеть и вы этого ждали">
+          <TextBlock Text="Источник сменил сеть — принять новую" FontSize="13" />
+        </Button>
+      </StackPanel>
+
+      <StackPanel Spacing="10">
+        <TextBlock Text="Безопасность" Classes="h2" />
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <StackPanel><TextBlock Text="Автоблокировка, минут" Classes="label" /><TextBox Text="{Binding AutoLock}" /></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Потолок gas price" Classes="label" ToolTip.Tip="Выше этого кошелёк не подпишет" /><TextBox Text="{Binding GasCap}" /></StackPanel>
+            </Grid>
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Сохранить" Command="{Binding SaveSecurity}" />
+              <TextBlock Text="Фразу восстановления можно посмотреть в разделе «Счета»." Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" />
+            </DockPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <StackPanel Spacing="10">
+        <TextBlock Text="Оформление" Classes="h2" />
+        <ListBox Classes="segmented" SelectedIndex="{Binding ThemeIndex}" AutomationProperties.Name="Тема">
+          <ListBoxItem Content="Как в системе" />
+          <ListBoxItem Content="Тёмная" />
+          <ListBoxItem Content="Светлая" />
+        </ListBox>
+      </StackPanel>
+
+      <StackPanel Spacing="2">
+        <SelectableTextBlock Text="{Binding DataDirectory, StringFormat='Файлы кошелька: {0}'}" Classes="caption" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Version}" Classes="caption" />
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

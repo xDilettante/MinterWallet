@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.StakingPage"
+             x:DataType="local:MainViewModel">
+  <Grid Margin="32,28,32,24" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14" DataContext="{Binding Staking}" x:DataType="local:StakingViewModel">
+    <StackPanel Spacing="4">
+      <TextBlock Text="Стейкинг" Classes="h1" />
+      <TextBlock Classes="muted prose" Text="Делегируйте монеты валидатору и получайте долю наград. Выведенный стейк возвращается примерно через 30 дней." />
+    </StackPanel>
+    <DockPanel Grid.Row="1">
+      <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить список" AutomationProperties.Name="Обновить список"
+              Margin="8,0,0,0"><local:Icon Kind="refresh" /></Button>
+      <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Classes="caption" VerticalAlignment="Center" Margin="12,0,0,0" />
+      <TextBox Text="{Binding Filter}" PlaceholderText="Поиск по ключу Mp…" Classes="mono" AutomationProperties.Name="Поиск валидатора">
+        <TextBox.InnerLeftContent><local:Icon Kind="search" Width="16" Height="16" Margin="10,0,0,0" Foreground="{DynamicResource Muted}" /></TextBox.InnerLeftContent>
+      </TextBox>
+    </DockPanel>
+    <ListBox Grid.Row="2" Classes="rows" ItemsSource="{Binding Candidates}" SelectedItem="{Binding Candidate}" AutomationProperties.Name="Валидаторы">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="local:CandidateItem">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Classes="avatar" Width="32" Height="32"><local:Icon Kind="shield" Width="16" Height="16" /></Border>
+            <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Short}" Classes="mono" ToolTip.Tip="{Binding Key}" />
+              <TextBlock Text="{Binding CommissionText}" Classes="caption" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="{Binding Stake}" HorizontalAlignment="Right" />
+              <Border Classes="badge neutral" Classes.success="{Binding IsValidator}" HorizontalAlignment="Right"><TextBlock Text="{Binding State}" /></Border>
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Border Grid.Row="3" Classes="card" Padding="16">
+      <StackPanel Spacing="12">
+        <StackPanel>
+          <TextBlock Text="{Binding CandidateTitle}" Classes="mono" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding CandidateCaption}" Classes="caption" />
+        </StackPanel>
+        <Grid ColumnDefinitions="200,*,Auto" ColumnSpacing="10">
+          <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="local:BalanceItem"><TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" /></DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBox Grid.Column="1" Text="{Binding Amount}" Classes="mono" PlaceholderText="Сумма" AutomationProperties.Name="Сумма" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+            <Button Content="Делегировать" Command="{Binding DelegateNow}" Classes="accent" />
+            <Button Content="Вывести" Command="{Binding Unbond}" />
+          </StackPanel>
+        </Grid>
+        <TextBlock Text="{Binding Available}" Classes="caption" />
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

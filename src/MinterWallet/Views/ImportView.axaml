@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.ImportView"
+             x:DataType="local:ImportViewModel">
+  <ScrollViewer>
+    <StackPanel Width="560" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24,32" Spacing="16">
+      <Button Classes="link" Command="{Binding Back}" HorizontalAlignment="Left">
+        <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="back" Width="16" Height="16" /><TextBlock Text="Назад" /></StackPanel>
+      </Button>
+      <TextBlock Text="{Binding Title}" Classes="h1" />
+      <TextBlock Text="{Binding Hint}" Classes="muted prose" />
+
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <StackPanel>
+            <DockPanel Margin="0,0,0,6">
+              <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}">
+                <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="paste" Width="16" Height="16" /><TextBlock Text="Вставить" /></StackPanel>
+              </Button>
+              <TextBlock Text="{Binding SecretLabel}" Classes="label" Margin="0" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBox Text="{Binding Secret}" Classes="mono" PlaceholderText="{Binding SecretPlaceholder}" IsVisible="{Binding !HidesSecret}"
+                     AcceptsReturn="{Binding IsPhrase}" TextWrapping="Wrap" MinHeight="{Binding SecretHeight}" />
+            <TextBox Text="{Binding Secret}" Classes="mono revealPasswordButton" PlaceholderText="{Binding SecretPlaceholder}" IsVisible="{Binding HidesSecret}"
+                     PasswordChar="•" />
+            <views:NoticeBar Classes="inline" Text="{Binding SecretCheck}" Tone="{Binding SecretTone}" />
+          </StackPanel>
+          <StackPanel><TextBlock Text="Название счёта" Classes="label" /><TextBox Text="{Binding Name}" /></StackPanel>
+          <Border Classes="divider" />
+          <TextBlock Classes="caption prose" Text="Пароль шифрует ключи на этом устройстве и спрашивается при входе и перед каждой подписью." />
+          <StackPanel><TextBlock Text="Пароль кошелька" Classes="label" /><TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
+          <StackPanel><TextBlock Text="Пароль ещё раз" Classes="label" /><TextBox Text="{Binding Repeat}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
+          <TextBlock Text="{Binding PasswordHint}" Classes="caption" />
+        </StackPanel>
+      </Border>
+      <Button Content="Открыть кошелёк" Command="{Binding Finish}" Classes="accent" HorizontalAlignment="Right" MinWidth="160" />
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

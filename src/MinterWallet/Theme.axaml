@@ -1,0 +1,305 @@
+<!-- The wallet's look: colour tokens for the dark and light variants, then the few control classes the views use.
+     Views refer to tokens (Bg, Card, Text, Muted, Accent, …), never to raw colours. Spacing steps: 4, 8, 12, 16, 24, 32. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:MinterWallet"
+        xmlns:views="using:MinterWallet.Views">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="Bg" Color="#0E1116" />
+          <SolidColorBrush x:Key="Sidebar" Color="#12161C" />
+          <SolidColorBrush x:Key="Card" Color="#181D25" />
+          <SolidColorBrush x:Key="Hover" Color="#222935" />
+          <SolidColorBrush x:Key="Selected" Color="#253247" />
+          <SolidColorBrush x:Key="Well" Color="#11151B" />
+          <SolidColorBrush x:Key="Line" Color="#262D38" />
+          <SolidColorBrush x:Key="LineStrong" Color="#3A4456" />
+          <SolidColorBrush x:Key="Text" Color="#E7EBF1" />
+          <SolidColorBrush x:Key="Muted" Color="#97A1B0" />
+          <SolidColorBrush x:Key="Accent" Color="#6CA2FF" />
+          <SolidColorBrush x:Key="AccentFill" Color="#2F6FE0" />
+          <SolidColorBrush x:Key="AccentFillHover" Color="#3D7DF0" />
+          <SolidColorBrush x:Key="AccentFillPressed" Color="#285FC4" />
+          <SolidColorBrush x:Key="AccentSubtle" Color="#264C8DFF" />
+          <SolidColorBrush x:Key="OnAccent" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="Success" Color="#45C083" />
+          <SolidColorBrush x:Key="SuccessSubtle" Color="#1F45C083" />
+          <SolidColorBrush x:Key="Warning" Color="#E5A83A" />
+          <SolidColorBrush x:Key="WarningSubtle" Color="#22E5A83A" />
+          <SolidColorBrush x:Key="Danger" Color="#F0675C" />
+          <SolidColorBrush x:Key="DangerSubtle" Color="#24F0675C" />
+          <!-- Fluent's own keys: plain buttons and text fields in the palette above. -->
+          <SolidColorBrush x:Key="ButtonBackground" Color="#202733" />
+          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28303E" />
+          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1B212B" />
+          <SolidColorBrush x:Key="ButtonBorderBrush" Color="#323B4A" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#3E4859" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#323B4A" />
+          <SolidColorBrush x:Key="TextControlBackground" Color="#10141A" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#141920" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#10141A" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#323B4A" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#465164" />
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="#10141A" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#141920" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#323B4A" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#465164" />
+          <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#161B22" />
+          <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#232A34" />
+          <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="#5E6878" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#10141A" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#141920" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#10141A" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#323B4A" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#465164" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#323B4A" />
+          <SolidColorBrush x:Key="ExpanderContentBackground" Color="#10141A" />
+          <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#323B4A" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="Bg" Color="#F4F6F9" />
+          <SolidColorBrush x:Key="Sidebar" Color="#ECEFF4" />
+          <SolidColorBrush x:Key="Card" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="Hover" Color="#E4E8EF" />
+          <SolidColorBrush x:Key="Selected" Color="#DAE5FA" />
+          <SolidColorBrush x:Key="Well" Color="#F1F3F7" />
+          <SolidColorBrush x:Key="Line" Color="#DDE2E9" />
+          <SolidColorBrush x:Key="LineStrong" Color="#C3CAD5" />
+          <SolidColorBrush x:Key="Text" Color="#151A21" />
+          <SolidColorBrush x:Key="Muted" Color="#5A6474" />
+          <SolidColorBrush x:Key="Accent" Color="#1D4FD0" />
+          <SolidColorBrush x:Key="AccentFill" Color="#2563EB" />
+          <SolidColorBrush x:Key="AccentFillHover" Color="#1D55D6" />
+          <SolidColorBrush x:Key="AccentFillPressed" Color="#1A45B8" />
+          <SolidColorBrush x:Key="AccentSubtle" Color="#1A2563EB" />
+          <SolidColorBrush x:Key="OnAccent" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="Success" Color="#1E8A4F" />
+          <SolidColorBrush x:Key="SuccessSubtle" Color="#1A1E8A4F" />
+          <SolidColorBrush x:Key="Warning" Color="#A86A00" />
+          <SolidColorBrush x:Key="WarningSubtle" Color="#1FA86A00" />
+          <SolidColorBrush x:Key="Danger" Color="#C8382E" />
+          <SolidColorBrush x:Key="DangerSubtle" Color="#1AC8382E" />
+          <SolidColorBrush x:Key="ButtonBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#F1F4F8" />
+          <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#E6EAF0" />
+          <SolidColorBrush x:Key="ButtonBorderBrush" Color="#CDD4DE" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#B9C2CE" />
+          <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#B9C2CE" />
+          <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FAFBFC" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#C9D0DA" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#AEB8C5" />
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#FAFBFC" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#C9D0DA" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#AEB8C5" />
+          <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#F4F6F9" />
+          <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#E1E5EB" />
+          <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="#A0A8B4" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#FAFBFC" />
+          <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#F4F6F9" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="#C9D0DA" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="#AEB8C5" />
+          <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="#C9D0DA" />
+          <SolidColorBrush x:Key="ExpanderContentBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="#C9D0DA" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <FontFamily x:Key="Mono">Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace</FontFamily>
+      <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+      <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource Bg}" />
+    <Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+
+  <!-- Type -->
+  <Style Selector="TextBlock.display"><Setter Property="FontSize" Value="34" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.h1"><Setter Property="FontSize" Value="24" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.h2"><Setter Property="FontSize" Value="16" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.label"><Setter Property="FontWeight" Value="Medium" /><Setter Property="Margin" Value="0,0,0,6" /></Style>
+  <Style Selector="TextBlock.muted, SelectableTextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+  <Style Selector="TextBlock.caption, SelectableTextBlock.caption"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+  <Style Selector="TextBlock.prose, SelectableTextBlock.prose"><Setter Property="TextWrapping" Value="Wrap" /><Setter Property="LineHeight" Value="21" /></Style>
+  <Style Selector="TextBlock.mono"><Setter Property="FontFamily" Value="{StaticResource Mono}" /></Style>
+  <Style Selector="TextBox.mono"><Setter Property="FontFamily" Value="{StaticResource Mono}" /></Style>
+
+  <!-- Surfaces -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="Border.well">
+    <Setter Property="Background" Value="{DynamicResource Well}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
+  <Style Selector="Border.row"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="0,1,0,0" /><Setter Property="Padding" Value="16,12" /></Style>
+  <Style Selector="ItemsControl.rows ContentPresenter:nth-child(1) Border.row"><Setter Property="BorderThickness" Value="0" /></Style>
+  <Style Selector="Border.divider"><Setter Property="Height" Value="1" /><Setter Property="Background" Value="{DynamicResource Line}" /><Setter Property="Margin" Value="0,4" /></Style>
+  <Style Selector="Border.avatar">
+    <Setter Property="Width" Value="36" /><Setter Property="Height" Value="36" /><Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Background" Value="{DynamicResource AccentSubtle}" />
+  </Style>
+  <Style Selector="Border.avatar > TextBlock">
+    <Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{DynamicResource Accent}" />
+  </Style>
+  <Style Selector="Border.avatar > local|Icon"><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
+  <Style Selector="Border.avatar.success"><Setter Property="Background" Value="{DynamicResource SuccessSubtle}" /></Style>
+  <Style Selector="Border.avatar.success > local|Icon"><Setter Property="Foreground" Value="{DynamicResource Success}" /></Style>
+  <Style Selector="Border.avatar.danger"><Setter Property="Background" Value="{DynamicResource DangerSubtle}" /></Style>
+  <Style Selector="Border.avatar.danger > local|Icon"><Setter Property="Foreground" Value="{DynamicResource Danger}" /></Style>
+  <Style Selector="Border.logo">
+    <Setter Property="Width" Value="32" /><Setter Property="Height" Value="32" /><Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+  </Style>
+  <Style Selector="Border.logo > TextBlock">
+    <Setter Property="Text" Value="M" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="FontSize" Value="17" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.logo.large"><Setter Property="Width" Value="52" /><Setter Property="Height" Value="52" /><Setter Property="CornerRadius" Value="13" /></Style>
+  <Style Selector="Border.logo.large > TextBlock"><Setter Property="FontSize" Value="27" /></Style>
+  <Style Selector="Border.badge">
+    <Setter Property="Background" Value="{DynamicResource WarningSubtle}" /><Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="8,2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.badge > TextBlock"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource Warning}" /></Style>
+  <Style Selector="Border.badge.neutral"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
+  <Style Selector="Border.badge.neutral > TextBlock"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+  <Style Selector="Border.badge.success"><Setter Property="Background" Value="{DynamicResource SuccessSubtle}" /></Style>
+  <Style Selector="Border.badge.success > TextBlock"><Setter Property="Foreground" Value="{DynamicResource Success}" /></Style>
+  <Style Selector="Ellipse.dot"><Setter Property="Width" Value="8" /><Setter Property="Height" Value="8" /><Setter Property="Fill" Value="{DynamicResource Danger}" /></Style>
+  <Style Selector="Ellipse.dot.on"><Setter Property="Fill" Value="{DynamicResource Success}" /></Style>
+
+  <!-- Buttons: Fluent's own plus "accent"; these add icon, ghost, link and the large choice buttons of the first run. -->
+  <Style Selector="Button"><Setter Property="Padding" Value="14,7" /></Style>
+  <Style Selector="Button.accent"><Setter Property="FontWeight" Value="Medium" /></Style>
+  <Style Selector="Button.icon, Button.ghost, Button.link">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.icon"><Setter Property="Padding" Value="7" /></Style>
+  <Style Selector="Button.icon:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.icon:disabled, Button.link:disabled"><Setter Property="Opacity" Value="0.45" /></Style>
+  <Style Selector="Button.ghost"><Setter Property="HorizontalContentAlignment" Value="Left" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="Button.link"><Setter Property="Padding" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="Cursor" Value="Hand" /></Style>
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.link:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Accent}" />
+  </Style>
+  <Style Selector="Button.link:pointerover TextBlock"><Setter Property="TextDecorations" Value="Underline" /></Style>
+  <Style Selector="Button.option">
+    <Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="16,14" /><Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Background" Value="{DynamicResource Card}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.option:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderBrush" Value="{DynamicResource LineStrong}" />
+    <Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="Button.option.primary">
+    <Setter Property="Background" Value="{DynamicResource AccentFill}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="Button.option.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentFillHover}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentFillHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="Button.option.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentFillPressed}" /><Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+
+  <!-- Sidebar navigation and segmented switches are list boxes: arrow keys and selection come for free. -->
+  <Style Selector="ListBox.nav, ListBox.segmented, ListBox.rows"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></Style>
+  <Style Selector="ListBox.nav ListBoxItem">
+    <Setter Property="Padding" Value="12,9" /><Setter Property="Margin" Value="0,0,0,2" /><Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="ListBox.nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.nav ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="ListBox.segmented">
+    <Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="8" /><Setter Property="Padding" Value="3" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+    <Setter Property="ItemsPanel"><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate></Setter>
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem">
+    <Setter Property="Padding" Value="14,6" /><Setter Property="MinHeight" Value="0" /><Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="ListBox.segmented ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.segmented ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Card}" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem"><Setter Property="Padding" Value="12,10" /><Setter Property="CornerRadius" Value="8" /><Setter Property="Margin" Value="0,0,0,2" /></Style>
+  <Style Selector="ListBox.rows ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
+  <Style Selector="ListBox.rows ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.rows ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+
+  <!-- First-run steps -->
+  <Style Selector="Border.step"><Setter Property="Padding" Value="0,0,0,8" /><Setter Property="BorderThickness" Value="0,0,0,2" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+  <Style Selector="Border.step > TextBlock"><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="FontSize" Value="13" /></Style>
+  <Style Selector="Border.step.done"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+  <Style Selector="Border.step.active"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+  <Style Selector="Border.step.active > TextBlock"><Setter Property="Foreground" Value="{DynamicResource Text}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="Border.word">
+    <Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="8" /><Setter Property="Padding" Value="12,9" /><Setter Property="Margin" Value="4" />
+  </Style>
+
+  <!-- Status notices: one per screen, coloured by tone. -->
+  <Style Selector="views|NoticeBar Border#Box">
+    <Setter Property="Background" Value="{DynamicResource AccentSubtle}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentSubtle}" />
+  </Style>
+  <Style Selector="views|NoticeBar local|Icon#Glyph"><Setter Property="Foreground" Value="{DynamicResource Accent}" /></Style>
+  <Style Selector="views|NoticeBar.success Border#Box"><Setter Property="Background" Value="{DynamicResource SuccessSubtle}" /><Setter Property="BorderBrush" Value="{DynamicResource SuccessSubtle}" /></Style>
+  <Style Selector="views|NoticeBar.success local|Icon#Glyph"><Setter Property="Foreground" Value="{DynamicResource Success}" /></Style>
+  <Style Selector="views|NoticeBar.warning Border#Box"><Setter Property="Background" Value="{DynamicResource WarningSubtle}" /><Setter Property="BorderBrush" Value="{DynamicResource WarningSubtle}" /></Style>
+  <Style Selector="views|NoticeBar.warning local|Icon#Glyph"><Setter Property="Foreground" Value="{DynamicResource Warning}" /></Style>
+  <Style Selector="views|NoticeBar.error Border#Box"><Setter Property="Background" Value="{DynamicResource DangerSubtle}" /><Setter Property="BorderBrush" Value="{DynamicResource DangerSubtle}" /></Style>
+  <Style Selector="views|NoticeBar.error local|Icon#Glyph"><Setter Property="Foreground" Value="{DynamicResource Danger}" /></Style>
+  <Style Selector="views|NoticeBar.progress Border#Box"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+  <Style Selector="views|NoticeBar.progress local|Icon#Glyph"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+  <!-- Inline: a hint under a field, no box and no close button. -->
+  <Style Selector="views|NoticeBar.inline Border#Box">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="Padding" Value="0,6,0,0" />
+  </Style>
+  <Style Selector="views|NoticeBar.inline SelectableTextBlock#Message"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+  <Style Selector="views|NoticeBar.inline local|Icon#Glyph"><Setter Property="Width" Value="14" /><Setter Property="Height" Value="14" /><Setter Property="Margin" Value="0,1,6,0" /></Style>
+  <Style Selector="views|NoticeBar.inline Button#Close"><Setter Property="IsVisible" Value="False" /></Style>
+  <Style Selector="local|Icon.spin">
+    <Setter Property="RenderTransform"><RotateTransform /></Setter>
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="Infinite">
+        <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+</Styles>

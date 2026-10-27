@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.HistoryPage"
+             x:DataType="local:MainViewModel">
+  <Grid Margin="32,28,32,24" RowDefinitions="Auto,Auto,*" RowSpacing="14" DataContext="{Binding History}" x:DataType="local:HistoryViewModel">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <Button Classes="icon" Command="{Binding Previous}" ToolTip.Tip="Новее" AutomationProperties.Name="Предыдущая страница"><local:Icon Kind="chevron-left" /></Button>
+        <TextBlock Text="{Binding PageText}" Classes="muted" VerticalAlignment="Center" Margin="4,0" />
+        <Button Classes="icon" Command="{Binding Next}" ToolTip.Tip="Старее" AutomationProperties.Name="Следующая страница"><local:Icon Kind="chevron-right" /></Button>
+        <Button Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить" Margin="8,0,0,0"><local:Icon Kind="refresh" /></Button>
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock Text="История" Classes="h1" />
+        <TextBlock Text="Кошелёк расшифровывает транзакции сам, из исходных байтов, а не из описания источника." Classes="muted prose" />
+      </StackPanel>
+    </DockPanel>
+    <StackPanel Grid.Row="1" Spacing="8">
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding Loading}" />
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+    </StackPanel>
+    <Panel Grid.Row="2">
+      <ListBox Classes="rows" ItemsSource="{Binding Items}" AutomationProperties.Name="Транзакции">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="local:HistoryItem">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="avatar" Classes.success="{Binding Incoming}" Classes.danger="{Binding Failed}" Width="32" Height="32">
+                <local:Icon Kind="{Binding Glyph}" Width="16" Height="16" />
+              </Border>
+              <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Payload}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPayload}" />
+                <TextBlock Text="{Binding FailedText}" Classes="caption" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" IsVisible="{Binding Failed}" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="{Binding HeightText}" Classes="caption" HorizontalAlignment="Right" />
+                <Button Classes="link" HorizontalAlignment="Right" ToolTip.Tip="{Binding Hash}"
+                        Command="{Binding $parent[ListBox].((local:HistoryViewModel)DataContext).CopyHash}" CommandParameter="{Binding Hash}">
+                  <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="{Binding HashShort}" Classes="mono" FontSize="12" />
+                    <local:Icon Kind="copy" Width="12" Height="12" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+      <StackPanel IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Margin="0,0,0,60">
+        <Border Classes="avatar" Width="48" Height="48" CornerRadius="24" HorizontalAlignment="Center"><local:Icon Kind="history" Width="22" Height="22" /></Border>
+        <TextBlock Text="{Binding EmptyText}" Classes="muted" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360" />
+      </StackPanel>
+    </Panel>
+  </Grid>
+</UserControl>

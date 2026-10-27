@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Executable checks without a test framework: Fixtures are produced by tools/oracle (upstream minter-go-node
+       v3.3.0) and tools/js-oracle (official Minter JS libraries); tools/generate-fixtures.ps1 regenerates them. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Minter.Protocol\Minter.Protocol.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.SendPage"
+             x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640">
+      <TextBlock Text="Отправить" Classes="h1" />
+      <ListBox Classes="segmented" SelectedIndex="{Binding Send.ModeIndex}" AutomationProperties.Name="Кому">
+        <ListBoxItem Content="Одному получателю" />
+        <ListBoxItem Content="Нескольким сразу" />
+      </ListBox>
+
+      <!-- One recipient -->
+      <StackPanel Spacing="18" DataContext="{Binding Send}" x:DataType="local:SendViewModel" IsVisible="{Binding Single}">
+        <Border Classes="card">
+          <StackPanel Spacing="16">
+            <StackPanel>
+              <DockPanel Margin="0,0,0,6">
+                <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}">
+                  <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="paste" Width="16" Height="16" /><TextBlock Text="Вставить" /></StackPanel>
+                </Button>
+                <TextBlock Text="Получатель" Classes="label" Margin="0" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBox Text="{Binding Recipient}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Адрес получателя" />
+              <views:NoticeBar Classes="inline" Text="{Binding RecipientCheck}" Tone="{Binding RecipientTone}" />
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Монета" Classes="label" />
+              <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="local:BalanceItem">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                      <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                    </DockPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Сумма" Classes="label" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Всё" Command="{Binding All}" Margin="8,0,0,0" ToolTip.Tip="Весь баланс монеты за вычетом комиссии, если она платится той же монетой" />
+                <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Сумма" />
+              </DockPanel>
+              <TextBlock Text="{Binding Available}" Classes="caption" Margin="0,6,0,0" />
+            </StackPanel>
+            <Expander Header="Сообщение и монета комиссии" HorizontalAlignment="Stretch">
+              <StackPanel Spacing="14">
+                <StackPanel>
+                  <TextBlock Text="Сообщение (payload), необязательно" Classes="label" />
+                  <TextBox Text="{Binding Payload}" MaxLength="10000" PlaceholderText="Видно всем в блокчейне" />
+                </StackPanel>
+                <StackPanel>
+                  <TextBlock Text="Комиссию платить в" Classes="label" />
+                  <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding GasCoin}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="local:BalanceItem">
+                        <DockPanel>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                          <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                        </DockPanel>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </StackPanel>
+            </Expander>
+          </StackPanel>
+        </Border>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Продолжить" Command="{Binding SendNow}" Classes="accent" MinWidth="150" />
+          <TextBlock Text="Перед подписью покажем все данные и спросим пароль." Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </DockPanel>
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+
+      <!-- Several recipients in one transaction -->
+      <Panel IsVisible="{Binding Send.Multiple}">
+      <StackPanel Spacing="18" DataContext="{Binding Multisend}" x:DataType="local:MultisendViewModel">
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}">
+                <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="paste" Width="16" Height="16" /><TextBlock Text="Вставить" /></StackPanel>
+              </Button>
+              <TextBlock Text="Получатели" Classes="label" Margin="0" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Classes="caption prose" Text="По строке на получателя: «Mx… сумма [монета]». Без монеты — базовая. До 100 строк, одна транзакция и одна комиссия." />
+            <TextBox Text="{Binding Lines}" AcceptsReturn="True" Height="240" Classes="mono" TextWrapping="NoWrap"
+                     PlaceholderText="Mx… 10&#10;Mx… 2.5 BIP" AutomationProperties.Name="Получатели" />
+            <views:NoticeBar Classes="inline" Text="{Binding Summary}" Tone="{Binding SummaryTone}" />
+          </StackPanel>
+        </Border>
+        <Button Content="Продолжить" Command="{Binding SendNow}" Classes="accent" MinWidth="150" HorizontalAlignment="Right" />
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+      </Panel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

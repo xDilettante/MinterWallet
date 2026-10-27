@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.OverviewPage"
+             x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="32,28,32,32" Spacing="24" MaxWidth="860">
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+
+      <Border Classes="card" Padding="24">
+        <StackPanel Spacing="14">
+          <DockPanel>
+            <Border DockPanel.Dock="Right" Classes="badge" IsVisible="{Binding IsWatchOnly}"><TextBlock Text="только просмотр — подписи недоступны" /></Border>
+            <TextBlock Text="{Binding AccountName}" Classes="muted" VerticalAlignment="Center" />
+          </DockPanel>
+          <StackPanel Spacing="2">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="{Binding TotalText}" Classes="display" />
+              <TextBlock Text="{Binding BaseSymbol}" Classes="h2 muted" VerticalAlignment="Bottom" Margin="0,0,0,7" />
+            </StackPanel>
+            <TextBlock Text="{Binding TotalCaption}" Classes="caption" />
+          </StackPanel>
+          <Border Classes="well">
+            <Grid ColumnDefinitions="*,Auto">
+              <SelectableTextBlock Text="{Binding GroupedAddress}" Classes="mono" FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" />
+              <Button Grid.Column="1" Command="{Binding CopyAddress}" Margin="12,0,0,0" ToolTip.Tip="Скопировать адрес целиком">
+                <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="{Binding CopyLabel}" /></StackPanel>
+              </Button>
+            </Grid>
+          </Border>
+          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding CanSign}">
+            <Button Classes="accent" Command="{Binding OpenSend}">
+              <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="send" Width="16" Height="16" /><TextBlock Text="Отправить" /></StackPanel>
+            </Button>
+            <Button Command="{Binding OpenSwap}">
+              <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="swap" Width="16" Height="16" /><TextBlock Text="Обменять" /></StackPanel>
+            </Button>
+            <Button Command="{Binding OpenStaking}">
+              <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="stake" Width="16" Height="16" /><TextBlock Text="Делегировать" /></StackPanel>
+            </Button>
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+
+      <StackPanel Spacing="10">
+        <TextBlock Text="Монеты" Classes="h2" />
+        <Border Classes="card" Padding="0" IsVisible="{Binding HasBalances}">
+          <ItemsControl Classes="rows" ItemsSource="{Binding Balances}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="local:BalanceItem">
+                <Border Classes="row">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Classes="avatar"><TextBlock Text="{Binding Initial}" /></Border>
+                    <TextBlock Grid.Column="1" Text="{Binding Symbol}" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                      <SelectableTextBlock Text="{Binding AmountShort}" FontWeight="Medium" HorizontalAlignment="Right" ToolTip.Tip="{Binding Amount}" />
+                      <TextBlock Text="{Binding BipText}" Classes="caption" HorizontalAlignment="Right" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+        <Border Classes="card" IsVisible="{Binding HasNoBalances}">
+          <TextBlock Classes="muted prose" Text="Монет на счёте пока нет. Чтобы пополнить его, скопируйте адрес выше и отправьте на него монеты с другого кошелька или биржи." />
+        </Border>
+      </StackPanel>
+
+      <StackPanel Spacing="10" IsVisible="{Binding HasDelegations}">
+        <TextBlock Text="В стейкинге" Classes="h2" />
+        <Border Classes="card" Padding="0">
+          <ItemsControl Classes="rows" ItemsSource="{Binding Delegations}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="local:DelegationItem">
+                <Border Classes="row">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Classes="avatar"><local:Icon Kind="stake" /></Border>
+                    <TextBlock Grid.Column="1" Text="{Binding Symbol}" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                      <SelectableTextBlock Text="{Binding AmountShort}" FontWeight="Medium" HorizontalAlignment="Right" ToolTip.Tip="{Binding Amount}" />
+                      <TextBlock Text="{Binding BipText}" Classes="caption" HorizontalAlignment="Right" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+
+      <StackPanel Spacing="10" IsVisible="{Binding HasFrozen}">
+        <TextBlock Text="Заморожено" Classes="h2" />
+        <TextBlock Text="Выведенный стейк и блокировки: вернутся на счёт сами, когда сеть дойдёт до указанного блока." Classes="caption" />
+        <Border Classes="card" Padding="0">
+          <ItemsControl Classes="rows" ItemsSource="{Binding Frozen}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="local:FrozenItem">
+                <Border Classes="row">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border Classes="avatar"><local:Icon Kind="lock" /></Border>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                      <SelectableTextBlock Text="{Binding AmountShort}" FontWeight="Medium" ToolTip.Tip="{Binding Amount}" />
+                      <TextBlock Text="{Binding Caption}" Classes="caption" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

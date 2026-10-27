@@ -1,0 +1,3 @@
+*.sh text eol=lf
+*.go text eol=lf
+src/Minter.Protocol/Resources/bip39-english.txt text eol=lf

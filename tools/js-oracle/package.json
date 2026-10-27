@@ -1,0 +1,10 @@
+{
+  "name": "minterwallet-js-oracle",
+  "private": true,
+  "type": "module",
+  "description": "Second reference: official Minter JS libraries (wallet derivation, checks)",
+  "dependencies": {
+    "minter-js-sdk": "0.46.2",
+    "minterjs-wallet": "6.2.0"
+  }
+}

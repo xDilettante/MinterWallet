@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Minter wire format without any network: RLP, keys, addresses, all V3 transaction types, checks, BIP39/BIP32,
+       commission prices. Shared by the wallet (signing) and the gate (decoding). -->
+  <PropertyGroup>
+    <RootNamespace>Minter.Protocol</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\bip39-english.txt" LogicalName="bip39-english.txt" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Executable checks of the wallet core and the API v2 client; the devnet argument runs the wallet end to end on tools/devnet. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MinterWallet.Api\MinterWallet.Api.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Minter.Protocol.Checks\Fixtures\js-expected.json" Link="Fixtures\js-expected.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Minter.Protocol.Checks\Fixtures\go-expected.json" Link="Fixtures\go-expected.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

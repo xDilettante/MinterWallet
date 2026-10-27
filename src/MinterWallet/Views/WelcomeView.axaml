@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             x:Class="MinterWallet.Views.WelcomeView"
+             x:DataType="local:WelcomeViewModel">
+  <ScrollViewer>
+    <StackPanel Width="460" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24,40" Spacing="12">
+      <Border Classes="logo large" HorizontalAlignment="Center"><TextBlock /></Border>
+      <TextBlock Text="Minter Wallet" Classes="h1" HorizontalAlignment="Center" Margin="0,4,0,0" />
+      <TextBlock Classes="muted prose" TextAlignment="Center" Margin="0,0,0,12"
+                 Text="Ключи хранятся только на этом устройстве и зашифрованы вашим паролем. Кошелёк работает через ноду Minter или MinterGate." />
+
+      <Button Classes="option primary" Command="{Binding Create}">
+        <Grid ColumnDefinitions="Auto,*">
+          <local:Icon Kind="plus" Width="22" Height="22" Margin="0,0,14,0" />
+          <StackPanel Grid.Column="1" Spacing="2">
+            <TextBlock Text="Создать кошелёк" FontWeight="SemiBold" FontSize="15" />
+            <TextBlock Text="Новая фраза восстановления из 12 слов" Opacity="0.85" FontSize="12" />
+          </StackPanel>
+        </Grid>
+      </Button>
+
+      <TextBlock Text="Уже есть кошелёк" Classes="caption" Margin="4,12,0,0" />
+      <Button Classes="option" Command="{Binding Restore}">
+        <Grid ColumnDefinitions="Auto,*">
+          <local:Icon Kind="phrase" Width="22" Height="22" Margin="0,0,14,0" />
+          <StackPanel Grid.Column="1" Spacing="2">
+            <TextBlock Text="Фраза восстановления" FontWeight="SemiBold" />
+            <TextBlock Text="12 или 24 слова — можно вставить из буфера обмена" Classes="caption" />
+          </StackPanel>
+        </Grid>
+      </Button>
+      <Button Classes="option" Command="{Binding ImportKey}">
+        <Grid ColumnDefinitions="Auto,*">
+          <local:Icon Kind="key" Width="22" Height="22" Margin="0,0,14,0" />
+          <StackPanel Grid.Column="1" Spacing="2">
+            <TextBlock Text="Приватный ключ" FontWeight="SemiBold" />
+            <TextBlock Text="64 шестнадцатеричных символа" Classes="caption" />
+          </StackPanel>
+        </Grid>
+      </Button>
+      <Button Classes="option" Command="{Binding Watch}">
+        <Grid ColumnDefinitions="Auto,*">
+          <local:Icon Kind="eye" Width="22" Height="22" Margin="0,0,14,0" />
+          <StackPanel Grid.Column="1" Spacing="2">
+            <TextBlock Text="Только просмотр" FontWeight="SemiBold" />
+            <TextBlock Text="Балансы и история адреса Mx…, без подписи" Classes="caption" />
+          </StackPanel>
+        </Grid>
+      </Button>
+
+      <SelectableTextBlock Text="{Binding DataDirectory, StringFormat='Файлы кошелька: {0}'}" Classes="caption" TextWrapping="Wrap" TextAlignment="Center" Margin="0,20,0,0" />
+      <TextBlock Text="{Binding Version}" Classes="caption" HorizontalAlignment="Center" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

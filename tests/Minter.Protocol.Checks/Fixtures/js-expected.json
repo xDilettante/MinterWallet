@@ -1,0 +1,275 @@
+{
+  "source": "minterjs-wallet 6.2.0, bip39 3.1.0, minter-js-sdk 0.46.2",
+  "mnemonics": [
+    {
+      "entropy": "00000000000000000000000000000000",
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "valid": true,
+      "seed": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4",
+      "seedTrezor": "c55257c360c07c72029aebc1b53c05ed0362ada38ead3e3e9efa3708e53495531f09a6987599d18264c1e1c92f2cf141630c7a3c4ab7c81b2f001698e7463b04",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727",
+          "address": "Mx9858effd232b4033e47d90003d41ec34ecaeda94"
+        },
+        {
+          "index": 1,
+          "privateKey": "9a983cb3d832fbde5ab49d692b7a8bf5b5d232479c99333d0fc8e1d21f1b55b6",
+          "address": "Mx6fac4d18c912343bf86fa7049364dd4e424ab9c0"
+        },
+        {
+          "index": 7,
+          "privateKey": "dfb0930bcb8f6ca83296c1870e941998c641d3d0d413013c890b8b255dd537b5",
+          "address": "Mx593814d3309e2df31d112824f0bb5aa7cb0d7d47"
+        }
+      ]
+    },
+    {
+      "entropy": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+      "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow",
+      "valid": true,
+      "seed": "878386efb78845b3355bd15ea4d39ef97d179cb712b77d5c12b6be415fffeffe5f377ba02bf3f8544ab800b955e51fbff09828f682052a20faa6addbbddfb096",
+      "seedTrezor": "2e8905819b8723fe2c1d161860e5ee1830318dbf49a83bd451cfb8440c28bd6fa457fe1296106559a3c80937a1c1069be3a3a5bd381ee6260e8d9739fce1f607",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "33fa40f84e854b941c2b0436dd4a256e1df1cb41b9c1c0ccc8446408c19b8bf9",
+          "address": "Mx58a57ed9d8d624cbd12e2c467d34787555bb1b25"
+        },
+        {
+          "index": 1,
+          "privateKey": "5e4f6a62c67d2b8735d3cda66e37854d7a80f59aab639c3a4bed7e2c7432a4e4",
+          "address": "Mx0d3eb21b6b21833a4939cfff4810e9ae0758e12c"
+        },
+        {
+          "index": 7,
+          "privateKey": "d2c6137cc14729bfc8d9fd3b1233dccfaccdd6d7fb7231745db86e838ccffe36",
+          "address": "Mx3eb84b6a7b4707c20b6bca41b537055b61e84764"
+        }
+      ]
+    },
+    {
+      "entropy": "80808080808080808080808080808080",
+      "mnemonic": "letter advice cage absurd amount doctor acoustic avoid letter advice cage above",
+      "valid": true,
+      "seed": "77d6be9708c8218738934f84bbbb78a2e048ca007746cb764f0673e4b1812d176bbb173e1a291f31cf633f1d0bad7d3cf071c30e98cd0688b5bcce65ecaceb36",
+      "seedTrezor": "d71de856f81a8acc65e6fc851a38d4d7ec216fd0796d0a6827a3ad6ed5511a30fa280f12eb2e47ed2ac03b5c462a0358d18d69fe4f985ec81778c1b370b652a8",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "24d2034316d5deb53ff8d6d56c103b3de38d64e867709b3d8c6a295ba6d06c9b",
+          "address": "Mx3061750d3df69ef7b8d4407cb7f3f879fd9d2398"
+        },
+        {
+          "index": 1,
+          "privateKey": "c6673bda2a13a5b4ba4649f6d2900c600d1b90155831f50786f5bc66d40e7e2f",
+          "address": "Mx45a1ef7572a5b9998b46e54aa5dce838965acb35"
+        },
+        {
+          "index": 7,
+          "privateKey": "778f0b64e80c6cfcad55cb20d33ea449c8e788f27ea35d17d92c524007125710",
+          "address": "Mxf1ff3c1632b5b2e8f993f238a62ba1284b7b2c2f"
+        }
+      ]
+    },
+    {
+      "entropy": "ffffffffffffffffffffffffffffffff",
+      "mnemonic": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
+      "valid": true,
+      "seed": "b6a6d8921942dd9806607ebc2750416b289adea669198769f2e15ed926c3aa92bf88ece232317b4ea463e84b0fcd3b53577812ee449ccc448eb45e6f544e25b6",
+      "seedTrezor": "ac27495480225222079d7be181583751e86f571027b0497b5b5d11218e0a8a13332572917f0f8e5a589620c6f15b11c61dee327651a14c34e18231052e48c069",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "7af65ba4dd53f23495dcb04995e96f47c243217fc279f10795871b725cd009ae",
+          "address": "Mxfc2077ca7f403cbeca41b1b0f62d91b5ea631b5e"
+        },
+        {
+          "index": 1,
+          "privateKey": "1f33ca39bfd53f79a1591afca2ac83018fa074e9ad29175589bd55b3542bba57",
+          "address": "Mxd1a7451beb6fe0326b4b78e3909310880b781d66"
+        },
+        {
+          "index": 7,
+          "privateKey": "5b58d29e6bbf71327047883032dc6ee37c223f896f719774098cae3443391c5b",
+          "address": "Mx1de55545a139b3bec88301c87ba241323b0e5ae1"
+        }
+      ]
+    },
+    {
+      "entropy": "9e885d952ad362caeb4efe34a8e91bd2",
+      "mnemonic": "ozone drill grab fiber curtain grace pudding thank cruise elder eight picnic",
+      "valid": true,
+      "seed": "e2f88a043776c828063d4c3c97173944d32cf847a925b6e40b0b8bd0b4bead3ba734bdda5250d4698b310a71c9934e1a48e562315ce22bf85f89459df0e73a6c",
+      "seedTrezor": "274ddc525802f7c828d8ef7ddbcdc5304e87ac3535913611fbbfa986d0c9e5476c91689f9c8a54fd55bd38606aa6a8595ad213d4c9c9f9aca3fb217069a41028",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "82d1b15eb8f18be874762d6ad5a4e1476aa984bc5b14ecd994dc8f03ec11b7ef",
+          "address": "Mxd01d6027860c2e2e37295d3de4b5a5f46f68d52f"
+        },
+        {
+          "index": 1,
+          "privateKey": "3b6cd94c7f68c0f66ee1b751ff24a5e63d3203971bb1f4770dfd5bfa3fd7d989",
+          "address": "Mx2082bdd511991fb8e89b33462dc6e5e63487d73f"
+        },
+        {
+          "index": 7,
+          "privateKey": "ecd36eece69a4cf575636b200e7daf8bdf85fc211d3ea417bd257637acbd3321",
+          "address": "Mx205320f7eae670c41f3e7acfe735342327c3bd3b"
+        }
+      ]
+    },
+    {
+      "entropy": "0000000000000000000000000000000000000000",
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon address",
+      "valid": true,
+      "seed": "6e9360e8d511f85adcda7bf6078207f0b2d12933845953bc766041cb71ac3bf644ffadd57caac244066657e8ebe01efa0e394d1afa7331379a3c1aebd68f6645",
+      "seedTrezor": "fa08713f46bf5cb48728ceb70e3aae1bc53c5cb7b4e29c5610261d1cbb7be3bed4d805256fec515754d2be35974fc5da678168e9d9bb0cb70948026923b0def3",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "89fe6cf31a686f718017d664b08f75a51b706edc85edd6c67b1d2b56da628964",
+          "address": "Mx54be88525b024a20229fe7f6f62dc0884e4aaa0a"
+        },
+        {
+          "index": 1,
+          "privateKey": "67d060a978712a26d01a2d11fa4c636d4cd2f46b94a2e9a9cf95ed22704cc10c",
+          "address": "Mxbdf1d224569f43f0b5b011ee4ef71152d112b289"
+        },
+        {
+          "index": 7,
+          "privateKey": "705415ecf17d842642bb246d29c645c71e309d8bc41e53001d3531171a6f8852",
+          "address": "Mx42def6f0ee6c12f0a3fd176c2516141b5009a14a"
+        }
+      ]
+    },
+    {
+      "entropy": "808080808080808080808080808080808080808080808080",
+      "mnemonic": "letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter always",
+      "valid": true,
+      "seed": "04d5f77103510c41d610f7f5fb3f0badc77c377090815cee808ea5d2f264fdfabf7c7ded4be6d4c6d7cdb021ba4c777b0b7e57ca8aa6de15aeb9905dba674d66",
+      "seedTrezor": "107d7c02a5aa6f38c58083ff74f04c607c2d2c0ecc55501dadd72d025b751bc27fe913ffb796f841c49b1d33b610cf0e91d3aa239027f5e99fe4ce9e5088cd65",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "29f8cdaef54e6e8e4f9f3fdb98119122818e2166ddd889240d65f1339a7551d0",
+          "address": "Mx8d93934ab91e2417a21f25f3f862efcbcea85f9e"
+        },
+        {
+          "index": 1,
+          "privateKey": "23a443abb1d94fcdfc21e6bcc7e1c33fbd033d70837264ed2cd64a7271779d8f",
+          "address": "Mxf81b51f38d4346534b59fe0cffcd5af1103efef0"
+        },
+        {
+          "index": 7,
+          "privateKey": "c146f40313f4ccb3499bff49f9737824c38a5433f74b82aca2ae65b4b7cffbd3",
+          "address": "Mxe79ecbd962ddfa3c9f68bf4e5e53432f6d24785a"
+        }
+      ]
+    },
+    {
+      "entropy": "0000000000000000000000000000000000000000000000000000000000000000",
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+      "valid": true,
+      "seed": "408b285c123836004f4b8842c89324c1f01382450c0d439af345ba7fc49acf705489c6fc77dbd4e3dc1dd8cc6bc9f043db8ada1e243c4a0eafb290d399480840",
+      "seedTrezor": "bda85446c68413707090a52022edd26a1c9462295029f2e60cd7c4f2bbd3097170af7a4d73245cafa9c3cca8d561a7c3de6f5d4a10be8ed2a5e608d68f92fcc8",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "1053fae1b3ac64f178bcc21026fd06a3f4544ec2f35338b001f02d1d8efa3d5f",
+          "address": "Mxf278cf59f82edcf871d630f28ecc8056f25c1cdb"
+        },
+        {
+          "index": 1,
+          "privateKey": "0855b75d03a8830e390b5483d81694c9c7121d971e092145cf8b9c6fa3a5b373",
+          "address": "Mxf785bd075874b8423d3583728a981399f31e95aa"
+        },
+        {
+          "index": 7,
+          "privateKey": "e39ab523839806453291649e2f489b21af89f57b509de019251f104a80bb77e0",
+          "address": "Mx8b19eda4de09b98ffc1d1692bbf810053e91d5ae"
+        }
+      ]
+    },
+    {
+      "entropy": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "mnemonic": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote",
+      "valid": true,
+      "seed": "e28a37058c7f5112ec9e16a3437cf363a2572d70b6ceb3b6965447623d620f14d06bb321a26b33ec15fcd84a3b5ddfd5520e230c924c87aaa0d559749e044fef",
+      "seedTrezor": "dd48c104698c30cfe2b6142103248622fb7bb0ff692eebb00089b32d22484e1613912f0a5b694407be899ffd31ed3992c456cdf60f5d4564b8ba3f05a69890ad",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "105434ca932be16664cb5e44e5b006728577dd757440d068e6d15ef52c15a82f",
+          "address": "Mx1959f5f4979c5cd87d5cb75c678c770515cb5e0e"
+        },
+        {
+          "index": 1,
+          "privateKey": "a9fe0d531d6059f699426fb4476352843549b59849d85354b0e00a61de8285fc",
+          "address": "Mxefc840572b9889de6bf172da76b7fa59b53a0ea0"
+        },
+        {
+          "index": 7,
+          "privateKey": "677f25cb8f8d2bc00ad2541ab6e46089c6a88df041235b04456f1964edb3bb37",
+          "address": "Mx6dcef98f18f580326c97ef1824456f42bd1fcaec"
+        }
+      ]
+    },
+    {
+      "entropy": "68a79eaca2324873eacc50cb9c6eca8cc68ea5d936f98787c60c7ebc74e6ce7c",
+      "mnemonic": "hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length",
+      "valid": true,
+      "seed": "17e4b5661796eeff8904550f8572289317ece7c1cc1316469f8f4c986c1ffd7b9f4c3aeac3e1713ffc21fa33707d09d57a2ece358d72111ef7c7658e7b33f2d5",
+      "seedTrezor": "64c87cde7e12ecf6704ab95bb1408bef047c22db4cc7491c4271d170a1b213d20b385bc1588d9c7b38f1b39d415665b8a9030c9ec653d75e65f847d8fc1fc440",
+      "accounts": [
+        {
+          "index": 0,
+          "privateKey": "d224f35c694af7f12be4ba18ac5a9e1ac774633200ab2302d23839cef0a12f03",
+          "address": "Mx1dd9058722abee7eb7c24b7270c5f88d342e2e90"
+        },
+        {
+          "index": 1,
+          "privateKey": "df96e95f430e197d214511309adf396a9ddf1f8777d145610767ca51375a3a5f",
+          "address": "Mx16067a1cd7cdc44082a987143c0903930060f0c3"
+        },
+        {
+          "index": 7,
+          "privateKey": "7db0cc6676282634a51e7385bd969b19dea7ba544c5e43c1e203368486ad0e99",
+          "address": "Mx2dc83e47bc2e066e7507b4031d5fcd50b28d5825"
+        }
+      ]
+    }
+  ],
+  "invalid": [
+    {
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
+      "valid": false
+    },
+    {
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandonx",
+      "valid": false
+    },
+    {
+      "mnemonic": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo",
+      "valid": false
+    },
+    {
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "valid": false
+    }
+  ],
+  "checks": [
+    {
+      "name": "check-basic",
+      "check": "Mcf8983101843b9ac9ff80880de0b6b3a764000080b841cf390d1c7486f17e8f567c1a338e82aaaa2555d5db5d326c60eca1e2cd5c41cb729119677914c2fdfa5dc5a56c6645a1dd3d21e39e8cc21fc87300f2f7604346011ba064cffb766855005cc4a6e0a2cbc8e44854df6dc45d0dd904d2ad3a067e86d503a04079652e0a6d0cd98e6ecfbea951dbebcee852a66349a4c040c896a87fe9decc",
+      "proof": "cc8ef876c5cb7df171ce21295236f2449a15a9afca6d56187cf55332fe84a23e4d2d03aa3fe9868ecc69d9735f8c8ee91aa947fc2319683c08bbb269e40c42f801"
+    },
+    {
+      "name": "check-empty-password",
+      "check": "Mcf89480010184ffffffff8084ffffffffb84180bb1559b0ba84c54efd75bb1c3344de34c169b04db8bac8e48f5613589f83902d190e3eb886494af2558b6358745be53c24606f67e60fd6a6690f809b385032011ba05c2c0646cdc959e94b38fd961fcd361f206f9870993c421a8943b20957caab46a00ca438263f105b87880ff8f1afce0924b4270ccacd40160e3b3fe07af90cea5d",
+      "proof": "32caf59b4aa9502692bb700421edf991dcede432b6f5711db50e786a865b3c1957e8c02f69ccebcbe40c58e42b2ee39e1670c3d03d59cc2b19ebcb97ebd536f901"
+    }
+  ]
+}

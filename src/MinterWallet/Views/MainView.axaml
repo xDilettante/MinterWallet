@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.MainView"
+             x:DataType="local:MainViewModel">
+  <Grid ColumnDefinitions="236,*">
+    <!-- Sidebar: account, sections, source and lock -->
+    <Border Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
+      <DockPanel Margin="12,18,12,12">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="6,0,0,20">
+          <Border Classes="logo"><TextBlock /></Border>
+          <TextBlock Text="Minter Wallet" Classes="h2" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <DockPanel DockPanel.Dock="Top" Margin="6,0,0,4">
+          <Button DockPanel.Dock="Right" Classes="icon" Padding="5" Command="{Binding AddAddress}" ToolTip.Tip="Новый адрес или импорт"
+                  AutomationProperties.Name="Добавить счёт"><local:Icon Kind="plus" Width="15" Height="15" /></Button>
+          <TextBlock Text="Счёт" Classes="caption" VerticalAlignment="Center" />
+        </DockPanel>
+        <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Accounts}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch"
+                  Margin="0,0,0,18" AutomationProperties.Name="Счёт">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="local:AccountItem">
+              <StackPanel Spacing="1">
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Caption}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="6">
+          <Border Classes="card" Padding="12,10" ToolTip.Tip="{Binding SourceTip}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Ellipse Classes="dot" Classes.on="{Binding Connected}" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Margin="10,0,4,0">
+                <TextBlock Text="{Binding SourceName}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding NetworkText}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding BlockText}" Classes="caption" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <Button Grid.Column="2" Classes="icon" Command="{Binding Refresh}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить"
+                      VerticalAlignment="Center"><local:Icon Kind="refresh" Width="16" Height="16" /></Button>
+            </Grid>
+          </Border>
+          <Button Classes="ghost" Command="{Binding LockNow}" HorizontalAlignment="Stretch" Padding="12,9">
+            <StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="lock" /><TextBlock Text="Заблокировать" /></StackPanel>
+          </Button>
+        </StackPanel>
+
+        <ListBox Classes="nav" SelectedIndex="{Binding SectionIndex}" AutomationProperties.Name="Разделы">
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="wallet" /><TextBlock Text="Обзор" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="send" /><TextBlock Text="Отправить" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="swap" /><TextBlock Text="Обмен" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="stake" /><TextBlock Text="Стейкинг" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="history" /><TextBlock Text="История" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="users" /><TextBlock Text="Счета" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="settings" /><TextBlock Text="Настройки" /></StackPanel></ListBoxItem>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- The open section; the others keep their state while hidden. -->
+    <Panel Grid.Column="1">
+      <views:OverviewPage IsVisible="{Binding IsOverview}" />
+      <views:SendPage IsVisible="{Binding IsSend}" />
+      <views:SwapPage IsVisible="{Binding IsSwap}" />
+      <views:StakingPage IsVisible="{Binding IsStaking}" />
+      <views:HistoryPage IsVisible="{Binding IsHistory}" />
+      <views:AccountsPage IsVisible="{Binding IsAccounts}" />
+      <views:SettingsPage IsVisible="{Binding IsSettings}" />
+    </Panel>
+  </Grid>
+</UserControl>

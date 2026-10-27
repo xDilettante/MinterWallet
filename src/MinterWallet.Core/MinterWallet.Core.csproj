@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Wallet logic without UI: key store, accounts, the source contract (IChainBackend), sending queue, guards against
+       a lying source, history decoding. No network code here: sources live in MinterWallet.Api. -->
+  <PropertyGroup>
+    <RootNamespace>MinterWallet.Core</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Minter.Protocol\Minter.Protocol.csproj" />
+  </ItemGroup>
+</Project>

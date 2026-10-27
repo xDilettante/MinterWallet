@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:MinterWallet"
+        x:Class="MinterWallet.ConfirmWindow"
+        Title="Подтверждение"
+        Width="680" SizeToContent="Height" MaxHeight="780" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
+      <TextBlock x:Name="TitleText" Classes="h1" />
+      <TextBlock Text="Проверьте всё ниже: подписанное уже не отменить." Classes="muted" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,16,0,0">
+      <TextBlock Text="Пароль кошелька" Classes="label" Margin="0" />
+      <TextBox x:Name="PasswordBox" PasswordChar="•" Classes="revealPasswordButton" AutomationProperties.Name="Пароль кошелька" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+        <Button Content="Отмена" Click="OnCancel" IsCancel="True" MinWidth="110" />
+        <Button x:Name="ConfirmButton" Click="OnConfirm" IsDefault="True" Classes="accent" MinWidth="170" />
+      </StackPanel>
+    </StackPanel>
+    <ScrollViewer MaxHeight="520">
+      <StackPanel Spacing="10">
+        <ItemsControl x:Name="Warnings">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
+                <Grid ColumnDefinitions="Auto,*">
+                  <local:Icon Kind="alert" Foreground="{DynamicResource Warning}" VerticalAlignment="Top" Margin="0,1,10,0" />
+                  <TextBlock Grid.Column="1" Text="{Binding}" Classes="prose" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border Classes="card" Padding="16,6">
+          <Grid x:Name="Rows" ColumnDefinitions="130,*" />
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>
