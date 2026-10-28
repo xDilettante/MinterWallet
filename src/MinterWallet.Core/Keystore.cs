@@ -120,6 +120,36 @@ public sealed class Keystore
         return AddAccount(new WalletAccount(NewId("a"), name, derived.Address, secretId, next, DateTimeOffset.UtcNow));
     }
 
+    // Addresses of a mnemonic at indices from, from + 1, …, not added: the seed is derived once for all of them.
+    internal IReadOnlyList<Address> AddressesOf(byte[] key, string secretId, uint from, int count)
+    {
+        var record = secrets.Single(s => s.Id == secretId);
+        if (record.Kind != SecretKind.Mnemonic) throw new InvalidOperationException("Адреса выводятся только из мнемоники.");
+        var seed = Mnemonic.ToSeed(OpenText(key, record));
+        try
+        {
+            var result = new List<Address>(count);
+            for (var i = 0; i < count; i++)
+            {
+                var child = HdKey.DerivePrivateKey(seed, HdKey.MinterAccountPath(from + (uint)i));
+                try { using var k = new PrivateKey(child); result.Add(k.Address); }
+                finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(child); }
+            }
+            return result;
+        }
+        finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(seed); }
+    }
+
+    // A chosen index of a mnemonic, such as one used in another wallet; an index already here is refused.
+    internal WalletAccount AddIndex(byte[] key, string secretId, uint index, string name)
+    {
+        var record = secrets.Single(s => s.Id == secretId);
+        if (record.Kind != SecretKind.Mnemonic) throw new InvalidOperationException("Адреса выводятся только из мнемоники.");
+        if (accounts.Any(a => a.SecretId == secretId && a.Index == index)) throw new InvalidOperationException("Этот адрес фразы уже в кошельке.");
+        using var derived = HdKey.FromMnemonic(OpenText(key, record), index);
+        return AddAccount(new WalletAccount(NewId("a"), name, derived.Address, secretId, index, DateTimeOffset.UtcNow));
+    }
+
     internal void Rename(string accountId, string name) { var i = accounts.FindIndex(a => a.Id == accountId); accounts[i] = accounts[i] with { Name = name }; Save(); }
 
     internal void Remove(string accountId)
@@ -269,6 +299,8 @@ public sealed class KeystoreSession : IDisposable
     public WalletAccount AddPrivateKey(ReadOnlySpan<byte> privateKey, string name) => Store.AddPrivateKey(Key, privateKey, name);
     public WalletAccount AddWatchOnly(Address address, string name) => Store.AddWatchOnly(address, name);
     public WalletAccount AddNextIndex(string secretId, string name) => Store.AddNextIndex(Key, secretId, name);
+    public IReadOnlyList<Address> AddressesOf(string secretId, uint from, int count) => Store.AddressesOf(Key, secretId, from, count);
+    public WalletAccount AddIndex(string secretId, uint index, string name) => Store.AddIndex(Key, secretId, index, name);
     public void Rename(string accountId, string name) => Store.Rename(accountId, name);
     public void Remove(string accountId) => Store.Remove(accountId);
     public string RevealMnemonic(string secretId) => Store.RevealMnemonic(Key, secretId);

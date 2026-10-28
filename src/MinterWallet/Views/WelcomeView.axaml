@@ -9,13 +9,15 @@
       <TextBlock Text="Minter Wallet" Classes="h1" HorizontalAlignment="Center" Margin="0,4,0,0" />
       <TextBlock Classes="muted prose" TextAlignment="Center" Margin="0,0,0,12"
                  Text="Ключи хранятся только на этом устройстве и зашифрованы вашим паролем. Кошелёк работает через ноду Minter или MinterGate." />
+      <TextBlock Classes="caption prose" TextAlignment="Center" Margin="0,-6,0,12"
+                 Text="Кошелёк сообщает нашему серверу анонимную статистику — сколько людей им пользуется, без адресов и сумм. Выключается в настройках." />
 
       <Button Classes="option primary" Command="{Binding Create}">
         <Grid ColumnDefinitions="Auto,*">
           <local:Icon Kind="plus" Width="22" Height="22" Margin="0,0,14,0" />
           <StackPanel Grid.Column="1" Spacing="2">
             <TextBlock Text="Создать кошелёк" FontWeight="SemiBold" FontSize="15" />
-            <TextBlock Text="Новая фраза восстановления из 12 слов" Opacity="0.85" FontSize="12" />
+            <TextBlock Text="Новая фраза восстановления из 12 или 24 слов" Opacity="0.85" FontSize="12" />
           </StackPanel>
         </Grid>
       </Button>

@@ -121,6 +121,23 @@
         <TextBlock Classes="caption prose" Text="Авто — четыре знака, у сумм меньше единицы — до первых значащих цифр. Точная сумма — в подсказке при наведении." />
       </StackPanel>
 
+      <StackPanel Spacing="6">
+        <TextBlock Text="Окно и трей" Classes="h2" />
+        <CheckBox IsChecked="{Binding MinimizeToTray}">
+          <TextBlock Classes="prose" Text="Сворачивать в трей: свёрнутое окно прячется в значок у часов" />
+        </CheckBox>
+        <CheckBox IsChecked="{Binding CloseToTray}">
+          <TextBlock Classes="prose" Text="Закрывать в трей: крестик прячет окно, а кошелёк продолжает работать (и автоблокировка тоже). Выйти совсем — «Выйти» в меню значка." />
+        </CheckBox>
+        <TextBlock Classes="caption prose" Margin="28,0,0,0" IsVisible="{Binding OnLinux}"
+                   Text="В некоторых средах Linux (например, GNOME без расширения AppIndicator) трея нет — тогда спрятанное окно не вернуть, и эти настройки лучше не включать." />
+      </StackPanel>
+      <StackPanel Spacing="6">
+        <CheckBox IsChecked="{Binding Telemetry}">
+          <TextBlock Classes="prose" Text="Анонимная статистика: кошелёк сообщает нашему гейту случайный номер установки, версию, систему, язык и сеть — без адресов, сумм и IP. По ней видно, сколько людей пользуется кошельком." />
+        </CheckBox>
+        <TextBlock Text="{Binding UsageText}" Classes="caption prose" Margin="28,0,0,0" />
+      </StackPanel>
       <CheckBox IsChecked="{Binding CheckUpdates}">
         <TextBlock Classes="prose" Text="Сообщать о новых версиях (кошелёк спрашивает GitHub при запуске)" />
       </CheckBox>

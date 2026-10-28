@@ -34,6 +34,7 @@ public partial class MainWindow : Window
             return true;
         };
         DataContext = shell;
+        shell.StartUsage();
         // Any input counts as activity for the auto-lock.
         AddHandler(PointerMovedEvent, (_, _) => Touch(shell), handledEventsToo: true);
         AddHandler(KeyDownEvent, (_, _) => Touch(shell), handledEventsToo: true);

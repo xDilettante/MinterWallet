@@ -8,6 +8,8 @@ internal static class Program
     public static string Version => typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
     // --data DIR keeps every file of the wallet in DIR (tests, several wallets side by side).
     public static string? DataDirectory { get; private set; }
+    // This process as the one wallet of its data directory (null: another one runs and was asked to show itself).
+    public static SingleInstance? Instance { get; private set; }
 
     [STAThread]
     public static int Main(string[] args)
@@ -15,7 +17,10 @@ internal static class Program
         if (args is ["--version"]) { Console.WriteLine($"MinterWallet {Version}"); return 0; }
         if (args is ["--self-test"]) return SelfTest();
         if (args is ["--data", var directory, ..]) DataDirectory = Path.GetFullPath(directory);
+        Instance = SingleInstance.Claim(DataDirectory);
+        if (Instance == null) return 0;
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        Instance.KeepAlive();
         return 0;
     }
 

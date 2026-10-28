@@ -92,6 +92,7 @@ public sealed class MainViewModel : ScreenModel
         Staking = new StakingViewModel(this);
         Tokens = new TokensViewModel(this);
         Multisig = new MultisigViewModel(this);
+        Hub = new BridgeViewModel(this);
         Validator = new ValidatorViewModel(this);
         History = new HistoryViewModel(this);
         AccountsPage = new AccountsViewModel(this);
@@ -166,6 +167,8 @@ public sealed class MainViewModel : ScreenModel
             foreach (var name in new[] { nameof(SectionIndex), nameof(IsOverview), nameof(IsSend), nameof(IsSwap), nameof(IsStaking), nameof(IsTokens), nameof(IsMultisig), nameof(IsHistory), nameof(IsAccounts), nameof(IsSettings) }) Changed(name);
             if (value == Section.History && History.Items.Count == 0) History.Load.Execute(null);
             if (value == Section.Tokens && !Tokens.HasMine) Tokens.Load.Execute(null);
+            if (value == Section.Multisig && Multisig.IsCreate) Multisig.StartCreating();
+            if (value == Section.Settings) _ = Settings.LoadUsageAsync();
         }
     }
     public int SectionIndex { get => (int)section; set { if (value >= 0) Section = (Section)value; } }
@@ -265,6 +268,7 @@ public sealed class MainViewModel : ScreenModel
     public StakingViewModel Staking { get; }
     public TokensViewModel Tokens { get; }
     public MultisigViewModel Multisig { get; }
+    public BridgeViewModel Hub { get; }
     public ValidatorViewModel Validator { get; }
     public HistoryViewModel History { get; }
     public SettingsViewModel Settings { get; }
@@ -411,7 +415,7 @@ public sealed class MainViewModel : ScreenModel
         foreach (var name in new[] { nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
         if (conflicts.Count > 0) Say("Тикер указывает на другой id монеты, чем раньше: " + string.Join("; ", conflicts) + ". Проверьте монету перед отправкой.", Tone.Warning);
         else if (Tone == Tone.Error) Say("");
-        Send.BalancesChanged(); Request.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); Validator.BalancesChanged(); Tokens.BalancesChanged(); IssueCheck.BalancesChanged(); Liquidity.BalancesChanged(); Orders.BalancesChanged();
+        Send.BalancesChanged(); Hub.BalancesChanged(); Request.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); Validator.BalancesChanged(); Tokens.BalancesChanged(); IssueCheck.BalancesChanged(); Liquidity.BalancesChanged(); Orders.BalancesChanged();
     }
 
     private static string EstimateDate(ChainStatus s, long height) => s.BlockTime.AddSeconds((height - s.Height) * 5).ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
@@ -488,7 +492,8 @@ public sealed class SendViewModel : ScreenModel
     public RelayCommand PickContact { get; }
     public string RecipientName { get => recipientName; set => Set(ref recipientName, value); }
     public bool IsNewRecipient => Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) && !main.Shell.AddressBook.IsKnown(a);
-    public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) { Changed(nameof(Multiple)); Changed(nameof(Single)); Changed(nameof(ByCheck)); } } }
+    public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) { Changed(nameof(Multiple)); Changed(nameof(Single)); Changed(nameof(ByCheck)); Changed(nameof(IsBridge)); } } }
+    public bool IsBridge => modeIndex == 3;
     public bool Multiple { get => modeIndex == 1; set => ModeIndex = value ? 1 : 0; }
     public bool Single => modeIndex == 0;
     public bool ByCheck { get => modeIndex == 2; set => ModeIndex = value ? 2 : 0; }
@@ -510,7 +515,9 @@ public sealed class SendViewModel : ScreenModel
     public AsyncCommand All { get; }
     public AsyncCommand Paste { get; }
 
-    public string RecipientCheck => !Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) ? (Recipient.Length == 0 ? "" : "Адрес — Mx и 40 шестнадцатеричных символов.")
+    public string RecipientCheck => !Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a)
+        ? (Recipient.Length == 0 ? "" : Bridge.RecipientProblem(Recipient.Trim()) == null
+            ? "Это адрес в Ethereum или BSC, а не в Minter. Чтобы вывести туда монеты, откройте вкладку «В BSC / Ethereum»." : "Адрес — Mx и 40 шестнадцатеричных символов.")
         : main.LookalikeOf(a) is { } like ? MainViewModel.LookalikeWarning(like)
         : main.Shell.AddressBook.NameOf(a) is { Length: > 0 } n ? $"Из адресной книги: {n}" : main.Shell.AddressBook.IsKnown(a) ? "Вы уже отправляли на этот адрес."
         : "Новый получатель: в подтверждении сверьте адрес целиком, а не только выделенные начало и конец.";
@@ -1182,6 +1189,39 @@ public sealed class SettingsViewModel : ScreenModel
     public string RepeatPassword { get => repeatPassword; set { Set(ref repeatPassword, value); Changed(nameof(PasswordHint)); } }
     public string PasswordHint => NewPassword.Length == 0 ? "" : Passwords.Hint(NewPassword, RepeatPassword);
     public AsyncCommand ChangePassword { get; }
+    public bool MinimizeToTray
+    {
+        get => main.Shell.Settings.MinimizeToTray;
+        set { if (value == main.Shell.Settings.MinimizeToTray) return; main.Shell.Settings.MinimizeToTray = value; main.Shell.Settings.Save(main.Shell.DataDirectory); Changed(); }
+    }
+    public bool CloseToTray
+    {
+        get => main.Shell.Settings.CloseToTray;
+        set { if (value == main.Shell.Settings.CloseToTray) return; main.Shell.Settings.CloseToTray = value; main.Shell.Settings.Save(main.Shell.DataDirectory); Changed(); }
+    }
+    public bool OnLinux => OperatingSystem.IsLinux();
+
+    public bool Telemetry
+    {
+        get => main.Shell.Settings.Telemetry;
+        set { if (value == main.Shell.Settings.Telemetry) return; main.Shell.Settings.Telemetry = value; main.Shell.Settings.Save(main.Shell.DataDirectory); Changed(); }
+    }
+    private string usageText = "";
+    public string UsageText { get => usageText; private set => Set(ref usageText, value); }
+
+    // Everyone's pings counted at the gate: how many use the wallet now, today, this month, ever.
+    public async Task LoadUsageAsync()
+    {
+        if (main.Shell.UsageEndpoint is not { } endpoint) { UsageText = ""; return; }
+        try
+        {
+            using var usage = new UsageClient(endpoint);
+            var s = await usage.StatsAsync();
+            UsageText = $"Кошельком пользуются: сейчас {Display.Integer(s.Online)}, за сутки {Display.Integer(s.Day)}, за 30 дней {Display.Integer(s.Month)}; всего установок {Display.Integer(s.Total)}.";
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { UsageText = ""; }
+    }
+
     public bool CheckUpdates
     {
         get => main.Shell.Settings.CheckUpdates;

@@ -132,6 +132,7 @@
           <ListBoxItem Content="Импорт фразы" />
           <ListBoxItem Content="Ключ" />
           <ListBoxItem Content="Просмотр" />
+          <ListBoxItem Content="Красивый адрес" />
         </ListBox>
         <Border Classes="card">
           <StackPanel Spacing="14">
@@ -140,10 +141,31 @@
               <TextBlock Text="{Binding DeriveHint}" Classes="muted prose" />
               <ComboBox ItemsSource="{Binding Phrases}" SelectedItem="{Binding Phrase}" HorizontalAlignment="Stretch" IsVisible="{Binding HasSeveralPhrases}"
                         AutomationProperties.Name="Фраза" />
+              <TextBlock Classes="caption prose" Text="Из одной фразы получается сколько угодно адресов: № 1, № 2, № 3… Все они восстанавливаются этой же фразой в любом кошельке Minter. «Создать адрес» добавит следующий номер; адрес, которым вы пользовались в другом кошельке, найдите в списке и добавьте." />
+              <Button Content="{Binding DerivedLabel}" Command="{Binding ShowDerived}" HorizontalAlignment="Left" />
+              <ItemsControl ItemsSource="{Binding Derived}" IsVisible="{Binding HasDerived}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="local:DerivedItem">
+                    <Grid ColumnDefinitions="52,*,Auto" Margin="0,4">
+                      <TextBlock Text="{Binding Number}" Classes="mono caption" VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="1" Spacing="1">
+                        <SelectableTextBlock Text="{Binding AddressText}" Classes="mono caption" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding State}" Classes="caption" />
+                      </StackPanel>
+                      <Button Grid.Column="2" Content="Добавить" IsVisible="{Binding CanAdd}" VerticalAlignment="Center" Margin="8,0,0,0"
+                              Command="{Binding $parent[ItemsControl].((local:AccountsViewModel)DataContext).AddDerived}" CommandParameter="{Binding}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
             </StackPanel>
             <!-- A new phrase -->
             <StackPanel Spacing="10" IsVisible="{Binding IsNewPhrase}">
-              <TextBlock Classes="muted prose" Text="Отдельный кошелёк со своей фразой из 12 слов. Сохраните её так, как вам удобно — запишите или скопируйте в менеджер паролей: по ней этот адрес восстанавливается на любом устройстве." />
+              <TextBlock Classes="muted prose" Text="Отдельный кошелёк со своей фразой. Сохраните её так, как вам удобно — запишите или скопируйте в менеджер паролей: по ней этот адрес восстанавливается на любом устройстве." />
+              <ListBox Classes="segmented" SelectedIndex="{Binding NewWordCountIndex}" HorizontalAlignment="Left" AutomationProperties.Name="Длина фразы">
+                <ListBoxItem Content="12 слов" />
+                <ListBoxItem Content="24 слова" />
+              </ListBox>
               <ItemsControl ItemsSource="{Binding NewWords}">
                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
@@ -174,11 +196,94 @@
               <TextBox Text="{Binding Secret}" Classes="mono revealPasswordButton" PlaceholderText="{Binding SecretPlaceholder}" IsVisible="{Binding IsKey}" PasswordChar="•" />
               <views:NoticeBar Classes="inline" Text="{Binding SecretCheck}" Tone="{Binding SecretTone}" />
             </StackPanel>
-            <StackPanel>
+            <!-- A vanity address -->
+            <Panel IsVisible="{Binding IsVanity}">
+              <StackPanel Spacing="12" DataContext="{Binding Vanity}" x:DataType="local:VanityViewModel">
+                <TextBlock Classes="muted prose" Text="Адрес, в котором есть нужные вам символы. Кошелёк перебирает случайные ключи или фразы на этом компьютере, пока не найдёт подходящий; ничего никуда не отправляется. Ограничений нет — кошелёк честно покажет шансы и время." />
+                <StackPanel>
+                  <TextBlock Text="Шаблон" Classes="label" />
+                  <ComboBox SelectedIndex="{Binding TemplateIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Шаблон">
+                    <ComboBoxItem Content="Символы в начале — Mxcafe…" />
+                    <ComboBoxItem Content="Символы в конце — Mx…beef" />
+                    <ComboBoxItem Content="В начале и в конце — Mxcafe…beef" />
+                    <ComboBoxItem Content="Где угодно — Mx…c0ffee…" />
+                    <ComboBoxItem Content="Своя маска с ? и * — Mxdead*00*beef" />
+                    <ComboBoxItem Content="Одинаковые символы подряд — Mx7777777…" />
+                    <ComboBoxItem Content="Одинаковые начало и конец — Mx1234…1234" />
+                    <ComboBoxItem Content="Зеркальные края — Mx1234…4321" />
+                  </ComboBox>
+                </StackPanel>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                  <StackPanel IsVisible="{Binding UsesStart}"><TextBlock Text="Начало — сразу после Mx" Classes="label" /><TextBox Text="{Binding StartText}" Classes="mono" PlaceholderText="cafe" AutomationProperties.Name="Начало адреса" /></StackPanel>
+                  <StackPanel Grid.Column="1" IsVisible="{Binding UsesEnd}"><TextBlock Text="Конец" Classes="label" /><TextBox Text="{Binding EndText}" Classes="mono" PlaceholderText="beef" AutomationProperties.Name="Конец адреса" /></StackPanel>
+                  <StackPanel IsVisible="{Binding UsesAnywhere}"><TextBlock Text="Где угодно в адресе" Classes="label" /><TextBox Text="{Binding AnywhereText}" Classes="mono" PlaceholderText="c0ffee" AutomationProperties.Name="Где угодно в адресе" /></StackPanel>
+                </Grid>
+                <StackPanel IsVisible="{Binding UsesMask}" Spacing="6">
+                  <TextBlock Text="Маска — все 40 символов после Mx" Classes="label" />
+                  <TextBox Text="{Binding MaskText}" Classes="mono" PlaceholderText="dead*beef" AutomationProperties.Name="Маска адреса" />
+                  <TextBlock Classes="caption prose" Text="? — любой один символ, * — любые символы. Маска сравнивается со всем адресом: cafe* — начало, *beef — конец, cafe*beef — оба края, *c0ffee* — где угодно, ??77??* — 77 на третьем и четвёртом месте." />
+                </StackPanel>
+                <StackPanel IsVisible="{Binding UsesRepeat}">
+                  <TextBlock Text="Где" Classes="label" />
+                  <ListBox Classes="segmented" SelectedIndex="{Binding RepeatPlaceIndex}" HorizontalAlignment="Left" AutomationProperties.Name="Где повтор">
+                    <ListBoxItem Content="В начале" />
+                    <ListBoxItem Content="В конце" />
+                    <ListBoxItem Content="Где угодно" />
+                  </ListBox>
+                </StackPanel>
+                <StackPanel IsVisible="{Binding UsesCount}">
+                  <TextBlock Text="{Binding CountLabel}" Classes="label" />
+                  <NumericUpDown Value="{Binding Count}" Minimum="2" Maximum="20" Increment="1" FormatString="0" Width="130" HorizontalAlignment="Left" AutomationProperties.Name="Сколько символов" />
+                </StackPanel>
+                <TextBlock Classes="caption prose" Text="В адресе только цифры 0–9 и буквы a–f. Из них складываются слова: cafe, face, beef, babe, dead, fade, decade, deadbeef; цифры заменяют похожие буквы: c0ffee (0 вместо o), 1dea (1 вместо i), 5afe (5 вместо s)." />
+                <TextBlock Text="{Binding Preview}" Classes="mono" FontWeight="SemiBold" />
+                <views:NoticeBar Classes="inline" Text="{Binding Problem}" Tone="Error" />
+                <TextBlock Text="Что сделать" Classes="label" />
+                <ListBox Classes="segmented" SelectedIndex="{Binding KindIndex}" HorizontalAlignment="Left" AutomationProperties.Name="Ключ или фраза">
+                  <ListBoxItem Content="Ключ — быстро" />
+                  <ListBoxItem Content="Фраза из 12 слов" />
+                  <ListBoxItem Content="Фраза из 24 слов" />
+                </ListBox>
+                <TextBlock Classes="caption prose" Text="Ключ ищется примерно в тысячу раз быстрее, но восстановить его можно только самим ключом. Фраза — как обычная фраза восстановления, но искать её долго." />
+                <TextBlock Text="{Binding Odds}" Classes="prose" />
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <Button Content="Остановить" Command="{Binding Stop}" IsVisible="{Binding Running}" />
+                  <Button Content="Искать" Command="{Binding Start}" Classes="accent" MinWidth="130" />
+                </StackPanel>
+                <TextBlock Text="{Binding ProgressText}" Classes="caption mono" />
+                <Border Classes="well" IsVisible="{Binding HasFound}">
+                  <StackPanel Spacing="10">
+                    <SelectableTextBlock Text="{Binding Found}" Classes="mono" FontSize="15" TextWrapping="Wrap" />
+                    <StackPanel><TextBlock Text="Название" Classes="label" /><TextBox Text="{Binding Name}" AutomationProperties.Name="Название красивого счёта" /></StackPanel>
+                    <Button Content="Добавить в кошелёк" Command="{Binding Add}" Classes="accent" HorizontalAlignment="Right" />
+                  </StackPanel>
+                </Border>
+                <StackPanel Spacing="8" IsVisible="{Binding HasNotables}">
+                  <TextBlock Text="Попутно найдено" Classes="h2" />
+                  <TextBlock Classes="caption prose" Text="Красивые адреса, которые попались по дороге, хотя шаблону не подходят: повторы, слова, последовательности, одинаковые края. Самые редкие — сверху." />
+                  <ItemsControl ItemsSource="{Binding Notables}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="local:NotableItem">
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                          <StackPanel Spacing="1">
+                            <SelectableTextBlock Text="{Binding Address}" Classes="mono caption" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding What}" Classes="caption" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding RarityText}" Classes="caption" />
+                          </StackPanel>
+                          <Button Grid.Column="1" Content="Добавить" Command="{Binding Add}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+              </StackPanel>
+            </Panel>
+            <StackPanel IsVisible="{Binding IsPlainAdd}">
               <TextBlock Text="Название" Classes="label" />
               <TextBox Text="{Binding Name}" AutomationProperties.Name="Название нового счёта" />
             </StackPanel>
-            <Button Content="{Binding AddLabel}" Command="{Binding Add}" Classes="accent" HorizontalAlignment="Right" MinWidth="150" />
+            <Button Content="{Binding AddLabel}" Command="{Binding Add}" Classes="accent" HorizontalAlignment="Right" MinWidth="150" IsVisible="{Binding IsPlainAdd}" />
           </StackPanel>
         </Border>
       </StackPanel>

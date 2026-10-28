@@ -16,12 +16,13 @@ public sealed class WelcomeViewModel(Shell shell) : Observable
 
 public sealed record PhraseWord(int Number, string Word);
 
-// New wallet: the 12 words (copy or write them down, as the user prefers), an optional check of three of them that can
+// New wallet: 12 or 24 words (copy or write them down, as the user prefers), an optional check of three of them that can
 // be skipped, then the password. Nothing here blocks the user: the phrase stays available later in the settings.
 public sealed class CreateWalletViewModel : ScreenModel
 {
     private readonly Shell shell;
-    private readonly string mnemonic = Mnemonic.Generate(12);
+    private string mnemonic = Mnemonic.Generate(12);
+    private int wordCountIndex;
     private int step = 1;
     private string answer1 = "", answer2 = "", answer3 = "", password = "", repeat = "";
     private bool busy, verified;
@@ -29,8 +30,8 @@ public sealed class CreateWalletViewModel : ScreenModel
     public CreateWalletViewModel(Shell shell)
     {
         this.shell = shell;
-        Words = mnemonic.Split(' ').Select((w, i) => new PhraseWord(i + 1, w)).ToArray();
-        Ask = Enumerable.Range(0, 12).OrderBy(_ => RandomNumberGenerator.GetInt32(1000)).Take(3).Order().ToArray();
+        Words = []; Ask = [];
+        UsePhrase();
         Next = new Command(() => { Say(""); Step = 2; });
         Back = new Command(() => { Say(""); if (Step > 1) Step--; else shell.ShowWelcome(); });
         Copy = new AsyncCommand(CopyAsync, Fail);
@@ -39,8 +40,28 @@ public sealed class CreateWalletViewModel : ScreenModel
         Finish = new AsyncCommand(FinishAsync, Fail, () => !Busy);
     }
 
-    public IReadOnlyList<PhraseWord> Words { get; }
-    public int[] Ask { get; }
+    public IReadOnlyList<PhraseWord> Words { get; private set; }
+    public int[] Ask { get; private set; }
+
+    // 12 words (128 bits, as most wallets make) or 24 (256 bits); a new phrase on each change, before anything is saved.
+    public int WordCountIndex
+    {
+        get => wordCountIndex;
+        set
+        {
+            if (value < 0 || !Set(ref wordCountIndex, value)) return;
+            mnemonic = Mnemonic.Generate(value == 1 ? 24 : 12);
+            UsePhrase();
+        }
+    }
+
+    private void UsePhrase()
+    {
+        Words = mnemonic.Split(' ').Select((w, i) => new PhraseWord(i + 1, w)).ToArray();
+        Ask = Enumerable.Range(0, Words.Count).OrderBy(_ => RandomNumberGenerator.GetInt32(1000)).Take(3).Order().ToArray();
+        answer1 = answer2 = answer3 = ""; verified = false;
+        foreach (var n in new[] { nameof(Words), nameof(Ask), nameof(Ask1), nameof(Ask2), nameof(Ask3), nameof(CheckHint), nameof(Answer1), nameof(Answer2), nameof(Answer3) }) Changed(n);
+    }
     public string Ask1 => $"Слово № {Ask[0] + 1}";
     public string Ask2 => $"Слово № {Ask[1] + 1}";
     public string Ask3 => $"Слово № {Ask[2] + 1}";
@@ -92,7 +113,7 @@ public sealed class CreateWalletViewModel : ScreenModel
     private void Answer(ref string field, string value, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
     {
         var words = Display.PhraseWords(value);
-        if (words.Length == 12)
+        if (words.Length == Words.Count)
         {
             answer1 = words[Ask[0]]; answer2 = words[Ask[1]]; answer3 = words[Ask[2]];
             Changed(nameof(Answer1)); Changed(nameof(Answer2)); Changed(nameof(Answer3));

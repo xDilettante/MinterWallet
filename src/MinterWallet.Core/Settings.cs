@@ -38,6 +38,13 @@ public sealed class WalletSettings
     public bool CheckUpdates { get; set; } = true;
     // «Вид»: Mx addresses in groups of four instead of one piece, and amounts with every decimal instead of a few.
     public bool GroupAddresses { get; set; }
+    // Anonymous usage counts at the project's gate (UsageClient): on unless turned off; the install's random id.
+    public bool Telemetry { get; set; } = true;
+    // The tray: a minimized window hides into it, the close button hides the window there (the wallet keeps running).
+    // On by default on Windows; on Linux some desktops have no tray, where a hidden window could not be brought back.
+    public bool MinimizeToTray { get; set; } = OperatingSystem.IsWindows();
+    public bool CloseToTray { get; set; } = OperatingSystem.IsWindows();
+    public string? InstallId { get; set; }
     public bool AllDecimals { get; set; }
     public string? LastAccountId { get; set; }
 

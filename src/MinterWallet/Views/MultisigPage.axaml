@@ -18,16 +18,44 @@
       <!-- Create -->
       <StackPanel Spacing="14" IsVisible="{Binding IsCreate}">
         <Border Classes="card">
-          <StackPanel Spacing="14">
-            <StackPanel>
-              <TextBlock Text="Участники" Classes="label" />
-              <TextBox Text="{Binding Members}" Classes="mono" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" PlaceholderText="Mx… 1&#10;Mx… 1&#10;Mx… 2" AutomationProperties.Name="Участники" />
-              <TextBlock Text="Каждый участник — с новой строки: адрес и вес (без веса — 1). Свой адрес не забудьте." Classes="caption" Margin="0,6,0,0" />
+          <StackPanel Spacing="12">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding TotalText}" Classes="caption" VerticalAlignment="Center" />
+              <TextBlock Text="Участники и их вес" Classes="h2" />
+            </DockPanel>
+            <TextBlock Classes="caption prose" Text="Вес — сколько «голосов» у участника. Обычно у всех по 1; больше — у того, чья подпись важнее." />
+            <ItemsControl ItemsSource="{Binding MemberRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:MemberRow">
+                  <StackPanel Spacing="4" Margin="0,0,0,10">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                      <TextBox Text="{Binding Address}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Адрес участника" />
+                      <NumericUpDown Grid.Column="1" Value="{Binding Weight}" Minimum="1" Maximum="1023" Increment="1" FormatString="0" Width="120"
+                                     ToolTip.Tip="Вес участника" AutomationProperties.Name="Вес участника" />
+                      <Button Grid.Column="2" Classes="icon" Command="{Binding Remove}" ToolTip.Tip="Убрать участника" AutomationProperties.Name="Убрать участника">
+                        <local:Icon Kind="close" Width="16" Height="16" />
+                      </Button>
+                    </Grid>
+                    <views:NoticeBar Classes="inline" Text="{Binding Hint}" Tone="{Binding HintTone}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Command="{Binding AddMember}">
+                <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="plus" Width="16" Height="16" /><TextBlock Text="Добавить участника" /></StackPanel>
+              </Button>
+              <ComboBox ItemsSource="{Binding Known}" SelectedItem="{Binding Pick}" PlaceholderText="Из счетов и контактов…" MinWidth="240" AutomationProperties.Name="Из счетов и контактов" />
             </StackPanel>
-            <StackPanel>
-              <TextBlock Text="Порог — сколько веса нужно для траты" Classes="label" />
-              <TextBox Text="{Binding Threshold}" Classes="mono" Width="120" HorizontalAlignment="Left" AutomationProperties.Name="Порог" />
+            <Border Classes="divider" />
+            <TextBlock Text="Сколько веса нужно, чтобы потратить" Classes="label" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <NumericUpDown Value="{Binding ThresholdValue}" Minimum="1" Maximum="32736" Increment="1" FormatString="0" Width="130" AutomationProperties.Name="Порог" />
+              <Button Content="Все вместе" Command="{Binding SetThreshold}" CommandParameter="all" />
+              <Button Content="Большинство" Command="{Binding SetThreshold}" CommandParameter="most" />
+              <Button Content="Любой участник" Command="{Binding SetThreshold}" CommandParameter="any" />
             </StackPanel>
+            <TextBlock Text="{Binding ThresholdText}" Classes="prose" FontWeight="SemiBold" />
           </StackPanel>
         </Border>
         <Button Content="Создать общий счёт" Command="{Binding Create}" Classes="accent" HorizontalAlignment="Right" MinWidth="170" />

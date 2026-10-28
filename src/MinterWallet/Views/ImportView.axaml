@@ -21,9 +21,9 @@
               </Button>
               <TextBlock Text="{Binding SecretLabel}" Classes="label" Margin="0" VerticalAlignment="Center" />
             </DockPanel>
-            <TextBox Text="{Binding Secret}" Classes="mono" PlaceholderText="{Binding SecretPlaceholder}" IsVisible="{Binding !HidesSecret}"
+            <TextBox local:AutoFocus.IsEnabled="True" Text="{Binding Secret}" Classes="mono" PlaceholderText="{Binding SecretPlaceholder}" IsVisible="{Binding !HidesSecret}"
                      AcceptsReturn="{Binding IsPhrase}" TextWrapping="Wrap" MinHeight="{Binding SecretHeight}" />
-            <TextBox Text="{Binding Secret}" Classes="mono revealPasswordButton" PlaceholderText="{Binding SecretPlaceholder}" IsVisible="{Binding HidesSecret}"
+            <TextBox local:AutoFocus.IsEnabled="True" Text="{Binding Secret}" Classes="mono revealPasswordButton" PlaceholderText="{Binding SecretPlaceholder}" IsVisible="{Binding HidesSecret}"
                      PasswordChar="•" />
             <views:NoticeBar Classes="inline" Text="{Binding SecretCheck}" Tone="{Binding SecretTone}" />
           </StackPanel>

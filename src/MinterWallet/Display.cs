@@ -76,7 +76,7 @@ public static class Display
         if (words.Length == 0) return "";
         var unknown = words.Where(w => !Known.Value.Contains(w)).Distinct().Take(3).ToArray();
         if (unknown.Length > 0) return (unknown.Length == 1 ? "Нет такого слова в словаре BIP39: " : "Нет таких слов в словаре BIP39: ") + string.Join(", ", unknown);
-        if (words.Length is not (12 or 15 or 18 or 21 or 24)) return $"{Words(words.Length)} — нужно 12 или 24.";
+        if (words.Length is not (12 or 15 or 18 or 21 or 24)) return $"{Words(words.Length)} — нужно 12, 15, 18, 21 или 24.";
         return Mnemonic.IsValid(string.Join(' ', words)) ? null : "Слова есть в словаре, но контрольная сумма не сходится: проверьте порядок и каждое слово.";
     }
 

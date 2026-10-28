@@ -14,6 +14,9 @@ var groups = new (string Name, Func<Task> Run)[]
     ("history beyond the gate", HistoryCursorChecks.Run),
     ("updates", UpdateChecks.Run),
     ("tls certificate switch", TlsChecks.Run),
+    ("vanity addresses", VanityChecks.Run),
+    ("minter hub withdrawals", BridgeChecks.Run),
+    ("usage pings", UsageChecks.Run),
 };
 
 var failed = 0;

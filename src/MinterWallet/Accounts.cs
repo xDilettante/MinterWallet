@@ -4,7 +4,15 @@ using MinterWallet.Core;
 
 namespace MinterWallet;
 
-public enum AddKind { Derive, NewPhrase, ImportPhrase, ImportKey, Watch }
+public enum AddKind { Derive, NewPhrase, ImportPhrase, ImportKey, Watch, Vanity }
+
+// An address of a phrase by its number (index + 1): in the wallet already, used elsewhere, or never used.
+public sealed record DerivedItem(uint Index, Address Address, string State, bool InWallet)
+{
+    public string Number => $"№ {Index + 1}";
+    public string AddressText => Address.ToString();
+    public bool CanAdd => !InWallet;
+}
 
 // A recovery phrase already in the key store, named after the accounts made from it.
 public sealed record PhraseSource(string SecretId, string Title)
@@ -30,6 +38,9 @@ public sealed class AccountsViewModel : ScreenModel
         this.main = main;
         Add = new Command(AddNow);
         Paste = new AsyncCommand(PasteAsync, Fail);
+        Vanity = new VanityViewModel(main);
+        ShowDerived = new AsyncCommand(ShowDerivedAsync, Fail);
+        AddDerived = new RelayCommand(p => { if (p is DerivedItem item) AddDerivedNow(item); });
         CopyNewPhrase = new AsyncCommand(() => Copy(newPhrase, "Фраза скопирована. Сохраните её там, где её никто не увидит."), Fail);
         Rename = new Command(RenameNow);
         Reveal = new AsyncCommand(RevealAsync, Fail);
@@ -64,13 +75,16 @@ public sealed class AccountsViewModel : ScreenModel
             if (value < 0 || !Set(ref addIndex, value)) return;
             Secret = ""; Say("");
             if (Kind == AddKind.NewPhrase && newPhrase.Length == 0) NewPhrase();
-            foreach (var n in new[] { nameof(IsDerive), nameof(IsNewPhrase), nameof(IsImport), nameof(IsKey), nameof(IsPlainSecret), nameof(SecretLabel), nameof(SecretPlaceholder), nameof(SecretHeight), nameof(AddLabel) }) Changed(n);
+            foreach (var n in new[] { nameof(IsDerive), nameof(IsNewPhrase), nameof(IsImport), nameof(IsKey), nameof(IsPlainSecret), nameof(IsVanity), nameof(IsPlainAdd), nameof(SecretLabel), nameof(SecretPlaceholder), nameof(SecretHeight), nameof(AddLabel) }) Changed(n);
         }
     }
     public AddKind Kind => (AddKind)addIndex;
     public bool IsDerive => Kind == AddKind.Derive;
     public bool IsNewPhrase => Kind == AddKind.NewPhrase;
     public bool IsImport => Kind is AddKind.ImportPhrase or AddKind.ImportKey or AddKind.Watch;
+    public bool IsVanity => Kind == AddKind.Vanity;
+    public bool IsPlainAdd => Kind != AddKind.Vanity;
+    public VanityViewModel Vanity { get; }
     public bool IsKey => Kind == AddKind.ImportKey;
     public bool IsPlainSecret => Kind is AddKind.ImportPhrase or AddKind.Watch;
     private ImportKind ImportAs => Kind switch { AddKind.ImportKey => ImportKind.PrivateKey, AddKind.Watch => ImportKind.WatchOnly, _ => ImportKind.Mnemonic };
@@ -80,7 +94,14 @@ public sealed class AccountsViewModel : ScreenModel
     public string AddLabel => Kind switch { AddKind.Derive => "Создать адрес", AddKind.NewPhrase => "Добавить кошелёк", _ => "Добавить" };
 
     public ObservableCollection<PhraseSource> Phrases { get; } = [];
-    public PhraseSource? Phrase { get => phrase; set => Set(ref phrase, value); }
+    public PhraseSource? Phrase { get => phrase; set { if (!Set(ref phrase, value)) return; Derived.Clear(); derivedNext = 0; Changed(nameof(HasDerived)); } }
+
+    // The phrase's addresses by number, ten at a time, with what each is: so an address used in another wallet can be
+    // added back by its number.
+    public ObservableCollection<DerivedItem> Derived { get; } = [];
+    public bool HasDerived => Derived.Count > 0;
+    public string DerivedLabel => Derived.Count == 0 ? "Показать адреса этой фразы" : "Ещё 10";
+    private uint derivedNext;
     public bool HasPhrases => Phrases.Count > 0;
     public bool HasSeveralPhrases => Phrases.Count > 1;
     public string DeriveHint => Phrases.Count == 0 ? "В кошельке пока нет фразы восстановления. Создайте новую или импортируйте свою."
@@ -105,6 +126,8 @@ public sealed class AccountsViewModel : ScreenModel
     public Command Add { get; }
     public AsyncCommand Paste { get; }
     public AsyncCommand CopyNewPhrase { get; }
+    public AsyncCommand ShowDerived { get; }
+    public RelayCommand AddDerived { get; }
     public Command Rename { get; }
     public AsyncCommand Reveal { get; }
     public AsyncCommand CopyPhrase { get; }
@@ -134,9 +157,12 @@ public sealed class AccountsViewModel : ScreenModel
     // Opens the "add" panel on the kind that fits: the next address of a phrase when there is one.
     public void StartAdding() => AddIndex = (int)(HasPhrases ? AddKind.Derive : AddKind.NewPhrase);
 
+    private int newWordCountIndex;
+    public int NewWordCountIndex { get => newWordCountIndex; set { if (value >= 0 && Set(ref newWordCountIndex, value)) NewPhrase(); } }
+
     private void NewPhrase()
     {
-        newPhrase = Mnemonic.Generate(12);
+        newPhrase = Mnemonic.Generate(newWordCountIndex == 1 ? 24 : 12);
         NewWords = newPhrase.Split(' ').Select((w, i) => new PhraseWord(i + 1, w)).ToArray();
     }
 
@@ -152,6 +178,47 @@ public sealed class AccountsViewModel : ScreenModel
         var text = main.Shell.PasteText == null ? null : await main.Shell.PasteText();
         if (string.IsNullOrWhiteSpace(text)) { Say("В буфере обмена нет текста.", Tone.Warning); return; }
         Secret = Secrets.Clean(ImportAs, text);
+    }
+
+    private async Task ShowDerivedAsync()
+    {
+        if (Phrase is not { } source) { Say("В кошельке нет фразы: создайте новую или импортируйте.", Tone.Error); return; }
+        var session = main.Shell.Session!;
+        var addresses = session.AddressesOf(source.SecretId, derivedNext, 10);
+        var wallet = await main.WalletAsync();
+        Say("Проверяю, какие адреса использовались…", Tone.Progress);
+        for (var i = 0; i < addresses.Count; i++)
+        {
+            var a = addresses[i];
+            var mine = main.Accounts.FirstOrDefault(x => x.Account.Address == a);
+            string state;
+            if (mine != null) state = $"в кошельке: «{mine.Name}»";
+            else
+            {
+                try { var s = await wallet.Backend.AccountAsync(a); state = s.Nonce > 0 || s.Balances.Count > 0 ? "есть монеты или транзакции" : "не использовался"; }
+                catch (Exception e) when (e is HttpRequestException or ChainApiException or TaskCanceledException) { state = "не проверен"; }
+            }
+            Derived.Add(new DerivedItem(derivedNext + (uint)i, a, state, mine != null));
+        }
+        derivedNext += (uint)addresses.Count;
+        Changed(nameof(HasDerived)); Changed(nameof(DerivedLabel));
+        Say("");
+    }
+
+    private void AddDerivedNow(DerivedItem item)
+    {
+        if (Phrase is not { } source || item.InWallet) return;
+        try
+        {
+            var title = Name.Trim().Length > 0 ? Name.Trim() : $"Адрес № {item.Index + 1}";
+            var account = main.Shell.Session!.AddIndex(source.SecretId, item.Index, title);
+            Name = "";
+            var at = Derived.IndexOf(item);
+            if (at >= 0) Derived[at] = item with { InWallet = true, State = $"в кошельке: «{account.Name}»" };
+            main.LoadAccounts(account.Id);
+            Say($"Добавлен счёт «{account.Name}»: {Display.Address(account.Address)}. Он уже выбран.", Tone.Success);
+        }
+        catch (InvalidOperationException e) { Fail(e); }
     }
 
     private void AddNow()

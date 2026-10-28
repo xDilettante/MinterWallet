@@ -27,6 +27,7 @@
           <SolidColorBrush x:Key="Success" Color="#45C083" />
           <SolidColorBrush x:Key="SuccessSubtle" Color="#1F45C083" />
           <SolidColorBrush x:Key="Warning" Color="#E5A83A" />
+          <SolidColorBrush x:Key="Prefix" Color="#F59A3C" />
           <SolidColorBrush x:Key="WarningSubtle" Color="#22E5A83A" />
           <SolidColorBrush x:Key="Danger" Color="#F0675C" />
           <SolidColorBrush x:Key="DangerSubtle" Color="#24F0675C" />
@@ -78,6 +79,7 @@
           <SolidColorBrush x:Key="Success" Color="#1E8A4F" />
           <SolidColorBrush x:Key="SuccessSubtle" Color="#1A1E8A4F" />
           <SolidColorBrush x:Key="Warning" Color="#A86A00" />
+          <SolidColorBrush x:Key="Prefix" Color="#C2570C" />
           <SolidColorBrush x:Key="WarningSubtle" Color="#1FA86A00" />
           <SolidColorBrush x:Key="Danger" Color="#C8382E" />
           <SolidColorBrush x:Key="DangerSubtle" Color="#1AC8382E" />

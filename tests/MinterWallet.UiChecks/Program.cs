@@ -19,6 +19,8 @@ using MinterWallet.Core;
 // history with the older part from the Minter explorer, the gate's coin list for a swap. Nothing is signed.
 if (args is not ["--devnet" or "--mainnet", var url]) { Console.WriteLine("Usage: MinterWallet.UiChecks --devnet http://WSL-IP:38843 | --mainnet https://GATE"); return 2; }
 var mainnet = args[0] == "--mainnet";
+// The checks' wallets send no usage pings to the project's gate.
+Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
 var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", mainnet ? "ui-mainnet" : "ui-checks"));
 Directory.CreateDirectory(output);
 var session = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
@@ -120,7 +122,7 @@ public static class UiScenario
         main.Section = Section.Send;
         main.Send.SendNow.Execute(null);
         await Until(() => main.Send.Tone == Tone.Error ? main : null, "a validation notice");
-        Scan("send"); Shot("en-send");
+        Scan("send"); Shot("en-send"); main.Send.ModeIndex = 3; Scan("send, bridge"); main.Send.ModeIndex = 0;
         main.Send.ModeIndex = 1; main.Multisend.Lines = "Mx1 2"; Scan("multisend");
         main.Send.ModeIndex = 2; Scan("send by check");
         main.Send.ModeIndex = 0;
@@ -197,6 +199,18 @@ public static class UiScenario
             main.Section = Section.Overview; main.ShowReceive = true;
             Shot("mainnet-receive");
             Check(main.Balances.Where(b => b.Coin.Id != 0 && b.BipValue.IsZero).All(b => b.BipText == $"нет оценки в {main.BaseSymbol}"), "a token without a price says so");
+            // Out to BSC through Minter Hub, not sent: the bridge's live work gives the gas estimate; the own address there.
+            main.Section = Section.Send; main.Send.ModeIndex = 3;
+            Check(main.Hub.IsAvailable, "the bridge is offered on mainnet");
+            main.Hub.Coin = new BalanceItem(new CoinRef(3494, "USDTBSC"), Units.ParseCoins("50"), 0, main.BaseSymbol);
+            Check(main.Hub.NetworkIndex == (int)BridgeNetwork.Bsc, "USDTBSC goes to BSC only");
+            main.Hub.Amount = "20";
+            await Until(() => main.Hub.Estimate.Contains("Мост удержит 1 % — 0.2 USDTBSC", StringComparison.Ordinal) && !main.Hub.Estimate.Contains("не ответил", StringComparison.Ordinal) ? main : null,
+                "the bridge's fees from its latest withdrawals", 60, () => main.Hub.Estimate);
+            main.Hub.Own.Execute(null);
+            Check(main.Hub.Recipient == Bridge.OwnAddress(main.Selected!.Account.Address) && main.Hub.RecipientCheck.StartsWith("Это ваш адрес в BSC", StringComparison.Ordinal), "the account's own address on BSC");
+            Shot("mainnet-bridge");
+            Console.WriteLine($"Bridge estimate: {main.Hub.Estimate.Replace('\n', ' ')}");
             Console.WriteLine($"PASS ui mainnet: {main.Balances.Count} coins with dollars ({main.TotalUsd}), {main.History.Items.Count} history items " +
                 $"({main.History.Items.Count(x => x.FromExplorer)} from the explorer below {shell.GateIndexFrom}), coin list from the gate; screens in {output}");
             return 0;
@@ -294,6 +308,43 @@ public static class UiScenario
         Check(main.IsAccounts && accounts.IsDerive, "the + button opens adding the next address of the phrase");
         accounts.Add.Execute(null);
         using (var key = HdKey.FromMnemonic(phrase, 1)) Check(main.Selected!.Account.Address == key.Address && main.Accounts.Count == 2, "second address of the phrase, selected");
+        // The phrase's addresses by number: № 1 and № 2 in the wallet, № 6 added by its number.
+        accounts.ShowDerived.Execute(null);
+        await Until(() => accounts.Derived.Count == 10 ? main : null, "the phrase's first ten addresses", 30, () => accounts.Status);
+        Check(accounts.Derived[0].InWallet && accounts.Derived[1].InWallet && !accounts.Derived[5].InWallet, "which addresses are in the wallet");
+        accounts.AddDerived.Execute(accounts.Derived[5]);
+        using (var key = HdKey.FromMnemonic(phrase, 5)) Check(main.Selected!.Account.Address == key.Address && main.Selected.Account.Index == 5 && main.Accounts.Count == 3, "address № 6 added by its number");
+        Shot("accounts-derived");
+        // A vanity address: a key whose address starts with "ab", then a 12-word phrase whose address ends with "c".
+        accounts.AddIndex = (int)AddKind.Vanity;
+        accounts.Vanity.TemplateIndex = 0; accounts.Vanity.StartText = "AB";
+        Check(accounts.Vanity.StartText == "ab" && accounts.Vanity.Problem == "" && accounts.Vanity.Preview == "Mxab…", "the vanity pattern, lower-cased");
+        accounts.Vanity.StartText = "xyz";
+        Check(accounts.Vanity.Problem.StartsWith("«x»", StringComparison.Ordinal), "letters beyond a–f refused");
+        accounts.Vanity.StartText = "ab";
+        accounts.Vanity.Start.Execute(null);
+        await Until(() => accounts.Vanity.HasFound ? main : null, "a vanity key found", 60, () => accounts.Vanity.Status + " " + accounts.Vanity.ProgressText);
+        Check(accounts.Vanity.Found.StartsWith("Mxab", StringComparison.Ordinal), "the found address starts with Mxab");
+        Shot("accounts-vanity");
+        var vanityKey = accounts.Vanity.Found;
+        accounts.Vanity.Add.Execute(null);
+        Check(main.Selected!.Account.Address.ToString() == vanityKey && main.Accounts.Count == 4, "the vanity key added and selected");
+        accounts.Vanity.TemplateIndex = 1; accounts.Vanity.EndText = "c"; accounts.Vanity.KindIndex = 1;
+        accounts.Vanity.Start.Execute(null);
+        await Until(() => accounts.Vanity.HasFound ? main : null, "a vanity phrase found", 120, () => accounts.Vanity.Status + " " + accounts.Vanity.ProgressText);
+        Check(accounts.Vanity.Found.EndsWith("c", StringComparison.Ordinal), "the found phrase's address ends with c");
+        accounts.Vanity.Add.Execute(null);
+        Check(main.Accounts.Count == 5 && main.Shell.Store!.KindOf(main.Selected!.Account) == SecretKind.Mnemonic, "the vanity phrase added as a phrase");
+        // A mask: "a" first, "b" third, anything after; and the odds of a long one are shown, not refused.
+        accounts.Vanity.TemplateIndex = 4; accounts.Vanity.KindIndex = 0; accounts.Vanity.MaskText = "a?b*";
+        Check(accounts.Vanity.Problem == "", "a valid mask");
+        accounts.Vanity.Start.Execute(null);
+        await Until(() => accounts.Vanity.HasFound ? main : null, "an address by the mask", 60, () => accounts.Vanity.Status);
+        Check(accounts.Vanity.Found[2] == 'a' && accounts.Vanity.Found[4] == 'b', $"the mask a?b* matched: {accounts.Vanity.Found}");
+        accounts.Vanity.TemplateIndex = 0; accounts.Vanity.StartText = "deadbeefcafe";
+        await Until(() => accounts.Vanity.Odds.Contains("Вероятность найти за минуту", StringComparison.Ordinal) ? main : null, "the odds of a long beginning", 30, () => accounts.Vanity.Odds);
+        Check(accounts.Vanity.Problem == "" && accounts.Vanity.Odds.Contains("практически недостижим", StringComparison.Ordinal), "a long pattern is allowed with its odds");
+        Shot("accounts-vanity-odds");
         accounts.AddIndex = (int)AddKind.NewPhrase;
         accounts.CopyNewPhrase.Execute(null);
         await Until(() => clipboard != phrase ? main : null, "new phrase copied");
@@ -309,7 +360,7 @@ public static class UiScenario
         await Until(() => accounts.SecretTone == Tone.Success ? main : null, "watch address pasted");
         accounts.Name = "Чужой адрес";
         accounts.Add.Execute(null);
-        Check(main.IsWatchOnly && main.Accounts.Count == 4, "watch-only account added");
+        Check(main.IsWatchOnly && main.Accounts.Count == 7, "watch-only account added");
         accounts.RenameTo = "Наблюдение";
         accounts.Rename.Execute(null);
         Check(main.AccountName == "Наблюдение", "account renamed");
@@ -320,7 +371,7 @@ public static class UiScenario
         accounts.Remove.Execute(null);
         Check(accounts.ConfirmingRemove, "removal asks first");
         accounts.Remove.Execute(null);
-        await Until(() => main.Accounts.Count == 3 ? main : null, "account removed", 30, () => accounts.Status);
+        await Until(() => main.Accounts.Count == 6 ? main : null, "account removed", 30, () => accounts.Status);
         window.Close();
     }
 
@@ -353,7 +404,7 @@ public static class UiScenario
         await Until(() => main.Balances.Count > 0 ? main : null, "balances from the devnet");
         Check(main.Selected!.Account.Address.ToString() == "Mx37980a12b1be0855384b8d4f24b2d7957f680149", "imported address");
         Shot("overview");
-        Check(Marked(main.AddressText) is ["Mx3798", "0149"], "overview address with its beginning and end highlighted");
+        Check(Marked(main.AddressText) is ["Mx", "3798", "0149"], "overview address: the prefix and its beginning and end highlighted");
         main.ToggleReceive.Execute(null);
         Check(main.ShowReceive, "receive panel");
         Shot("receive");
@@ -371,8 +422,15 @@ public static class UiScenario
         Check(main.Request.QrText == main.Address, "the bare address again without an amount");
         main.ToggleReceive.Execute(null);
 
-        // Send 1.5 to test account C with a payload: confirmation shows the address in one piece and the amount.
+        // An 0x address in an ordinary transfer points to the bridge tab; the bridge itself is mainnet only.
         main.Section = Section.Send;
+        main.Send.Recipient = "0xdd56ab2926e580c5cbd788549fb10976aafb0826";
+        Check(main.Send.RecipientCheck.StartsWith("Это адрес в Ethereum или BSC", StringComparison.Ordinal), "an 0x address in a Minter transfer explained");
+        main.Send.ModeIndex = 3;
+        Check(main.Hub.IsUnavailable && !main.Hub.SendNow.CanExecute(null), "the bridge is not offered on a devnet");
+        main.Send.ModeIndex = 0;
+
+        // Send 1.5 to test account C with a payload: confirmation shows the address in one piece and the amount.
         main.Send.Recipient = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
         main.Send.Amount = "1,5"; main.Send.Payload = "из интерфейса ✓";
         Check(main.Send.IsNewRecipient, "new recipient can be named");
@@ -582,7 +640,11 @@ public static class UiScenario
         var other = main.Accounts.First(x => x.Name == "Получатель чека").Account.Address;
         main.Section = Section.Multisig;
         main.Multisig.ModeIndex = 0;
-        main.Multisig.Members = $"{b}\n{other} 1"; main.Multisig.Threshold = "2";
+        Check(main.Multisig.MemberRows is [{ } first, { Address: "" }] && first.Address == b.ToString(), "this account first among the members");
+        main.Multisig.Pick = main.Multisig.Known.First(k => k.Address == other);
+        Check(main.Multisig.MemberRows[1].Address == other.ToString() && main.Multisig.MemberRows[1].HintTone == Tone.Success, "the other member picked from the accounts");
+        main.Multisig.SetThreshold.Execute("all");
+        Check(main.Multisig.ThresholdValue == 2 && main.Multisig.ThresholdText == "Тратить можно, только когда подпишут все 2.", $"threshold in words: {main.Multisig.ThresholdText}");
         main.Multisig.Create.Execute(null);
         await Until(() => main.Multisig.HasCreated ? main : null, "shared account created", 90, () => main.Multisig.Status);
         var shared = Address.Parse(main.Multisig.Created);
@@ -658,12 +720,35 @@ public static class UiScenario
         Check(saved.GroupAddresses && saved.AllDecimals, "the «Вид» switches saved");
         main.Section = Section.Overview;
         await Until(() => main.Balances.Count > 1 ? main : null, "balances read again");
-        Check(Marked(main.AddressText) is ["Mx 3798", "0149"], "grouped address with its edges highlighted");
+        Check(Marked(main.AddressText) is ["Mx", " 3798", "0149"], "grouped address with its prefix and edges highlighted");
         Shot("overview-grouped");
         main.Settings.AddressIndex = 0; main.Settings.DecimalsIndex = 0;
         Dispatcher.UIThread.RunJobs();
         Check(!Display.GroupAddresses && !Display.AllDecimals && main.AddressText == "Mx37980a12b1be0855384b8d4f24b2d7957f680149", "back to the address in one piece");
         await Until(() => main.Balances.Count > 1 ? main : null, "balances read again");
+
+        // The tray: a minimized window hides into it and comes back; the close button hides it too.
+        var tray = new TrayHost(Application.Current!, new Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime(), window!, shell);
+        main.Settings.MinimizeToTray = true; main.Settings.CloseToTray = true;
+        window!.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
+        Check(!window.IsVisible, "a minimized window hides into the tray");
+        tray.Show(); Dispatcher.UIThread.RunJobs();
+        Check(window.IsVisible && window.WindowState == WindowState.Normal, "the tray brings the window back");
+        window.Close(); Dispatcher.UIThread.RunJobs();
+        Check(!window.IsVisible, "the close button hides the window into the tray");
+        tray.Show(); Dispatcher.UIThread.RunJobs();
+        Check(window.IsVisible, "and it comes back from there");
+        // A second launch on the same data directory shows the running wallet instead of starting another.
+        var instanceDir = Directory.CreateTempSubdirectory("minterwallet-instance-").FullName;
+        var firstInstance = SingleInstance.Claim(instanceDir)!;
+        var shown = false;
+        firstInstance.Listen(() => shown = true);
+        SingleInstance? secondInstance = null;
+        var launch = new Thread(() => secondInstance = SingleInstance.Claim(instanceDir));
+        launch.Start();
+        while (launch.IsAlive) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(50); }
+        await Until(() => shown ? main : null, "the running wallet asked to show itself", 10);
+        Check(secondInstance == null, "no second wallet on one data directory");
 
         // The light theme, then lock and unlock with the password.
         main.Section = Section.Overview;
@@ -676,6 +761,8 @@ public static class UiScenario
         await Until(() => main.Settings.Status.StartsWith("Пароль изменён", StringComparison.Ordinal) ? main : null, "password changed", 30, () => main.Settings.Status);
         main.LockNow.Execute(null);
         var unlock = (UnlockViewModel)shell.Page;
+        Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
+        Check(window!.FocusManager?.GetFocusedElement() is TextBox { PasswordChar: '•' }, "the password field has the focus on the lock screen");
         Shot("locked");
         unlock.Password = Password;
         unlock.Unlock.Execute(null);

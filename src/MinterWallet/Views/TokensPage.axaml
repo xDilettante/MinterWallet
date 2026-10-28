@@ -81,18 +81,35 @@
             </DockPanel>
             <Grid ColumnDefinitions="*,2*" ColumnSpacing="12">
               <StackPanel><TextBlock Text="Тикер" Classes="label" /><TextBox Text="{Binding Symbol}" Classes="mono" PlaceholderText="MYTOKEN" MaxLength="10" IsReadOnly="{Binding Recreating}" /></StackPanel>
-              <StackPanel Grid.Column="1"><TextBlock Text="Название" Classes="label" /><TextBox Text="{Binding Name}" PlaceholderText="Например, Мой токен" /></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Название (до 64 байт)" Classes="label" /><TextBox Text="{Binding Name}" PlaceholderText="Например, Мой токен" /></StackPanel>
             </Grid>
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-              <StackPanel><TextBlock Text="Начальный выпуск" Classes="label" /><TextBox Text="{Binding Initial}" Classes="mono" PlaceholderText="1000000" /></StackPanel>
-              <StackPanel Grid.Column="1" IsVisible="{Binding Mintable}"><TextBlock Text="Предел выпуска (необязательно)" Classes="label" /><TextBox Text="{Binding MaxSupply}" Classes="mono" PlaceholderText="без предела" /></StackPanel>
-            </Grid>
+            <TextBlock Text="{Binding TickerHint}" Classes="caption prose" />
             <CheckBox IsChecked="{Binding Mintable}"><TextBlock Classes="prose" Text="Можно выпускать ещё (только владелец)" /></CheckBox>
             <CheckBox IsChecked="{Binding Burnable}"><TextBlock Classes="prose" Text="Можно сжигать (любой держатель — свои)" /></CheckBox>
-            <TextBlock Text="{Binding Cost}" Classes="caption prose" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <StackPanel><TextBlock Text="Начальный выпуск" Classes="label" /><TextBox Text="{Binding Initial}" Classes="mono" PlaceholderText="1000000" /></StackPanel>
+              <StackPanel Grid.Column="1" IsVisible="{Binding Mintable}"><TextBlock Text="Предел выпуска (необязательно)" Classes="label" /><TextBox Text="{Binding MaxSupply}" Classes="mono" PlaceholderText="1 000 000 000 000 000" /></StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding SupplyHint}" Classes="caption prose" />
+            <TextBlock Text="{Binding Cost}" Classes="prose" FontWeight="SemiBold" />
           </StackPanel>
         </Border>
         <Button Content="{Binding CreateLabel}" Command="{Binding Create}" Classes="accent" HorizontalAlignment="Right" MinWidth="150" />
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Правила сети Minter для токенов" Classes="h2" />
+            <TextBlock Classes="caption prose" Text="• Тикер — 3–10 заглавных латинских букв и цифр, первая — буква; занятый тикер взять нельзя." />
+            <TextBlock Classes="caption prose" Text="• Название — до 64 байт (кириллица — 2 байта на букву)." />
+            <TextBlock Classes="caption prose" Text="• У токена 18 знаков после точки. Начальный выпуск — от 0.000000000000000001 до предела." />
+            <TextBlock Classes="caption prose" Text="• Предел выпуска — не больше 1 000 000 000 000 000 (10¹⁵). Если выпускать ещё нельзя, предел равен начальному выпуску навсегда." />
+            <TextBlock Classes="caption prose" Text="• Довыпускать может только владелец; сжигать — любой держатель свои токены, если это разрешено." />
+            <TextBlock Classes="caption prose" Text="• Владелец может передать владение или пересоздать токен с новыми параметрами — старый останется у держателей под тикером с номером версии." />
+            <TextBlock Text="Цена создания по длине тикера" Classes="label" Margin="0,6,0,0" />
+            <ItemsControl ItemsSource="{Binding Prices}">
+              <ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" Classes="mono caption" /></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
       </StackPanel>
 
       <!-- A new pool -->

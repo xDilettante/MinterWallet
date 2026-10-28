@@ -7,6 +7,34 @@ using MinterWallet.Core;
 
 namespace MinterWallet;
 
+// One member of a shared account being created: an address (typed, or picked from the accounts and contacts) and a weight.
+public sealed class MemberRow : Observable
+{
+    private readonly MultisigViewModel owner;
+    private string address = "";
+    private decimal? weight = 1;
+
+    public MemberRow(MultisigViewModel owner, string address = "")
+    {
+        this.owner = owner;
+        this.address = address;
+        Remove = new Command(() => owner.RemoveMember(this));
+    }
+
+    public string Address { get => address; set { if (!Set(ref address, value.Trim())) return; owner.MembersChanged(); } }
+    public decimal? Weight { get => weight; set { if (!Set(ref weight, value)) return; owner.MembersChanged(); } }
+    public uint WeightValue => (uint)Math.Clamp(weight ?? 1, 1, 1023);
+    public string Hint => owner.HintOf(this);
+    public Tone HintTone => owner.ToneOf(this);
+    public Command Remove { get; }
+    public void Refresh() { Changed(nameof(Hint)); Changed(nameof(HintTone)); }
+}
+
+public sealed record KnownAddress(string Name, Address Address)
+{
+    public override string ToString() => $"{Name} · {Core.History.Short(Address)}";
+}
+
 public sealed record SignerItem(string Name, string Address, uint Weight, bool Signed)
 {
     public string Caption => Signed ? $"вес {Weight} · подписал" : $"вес {Weight}";
@@ -19,16 +47,25 @@ public sealed class MultisigViewModel : ScreenModel
 {
     private readonly MainViewModel main;
     private int modeIndex;
-    private string members = "", threshold = "2", created = "", account = "", accountInfo = "", recipient = "", amount = "", payload = "", text = "", textInfo = "", copyLabel = "Копировать";
+    private string created = "", account = "", accountInfo = "", recipient = "", amount = "", payload = "", text = "", textInfo = "", copyLabel = "Копировать";
     private CoinChoice? coin;
     private Transaction? tx;
     private MultisigInfo? info;
     private uint signedWeight;
     private ulong usedNonce;
 
+    private decimal? thresholdValue = 2;
+
     public MultisigViewModel(MainViewModel main)
     {
         this.main = main;
+        AddMember = new Command(() => { MemberRows.Add(new MemberRow(this)); MembersChanged(); });
+        SetThreshold = new RelayCommand(p => ThresholdValue = p switch
+        {
+            "all" => Total,
+            "most" => Total / 2 + 1,
+            _ => MemberRows.Count == 0 ? 1 : MemberRows.Min(r => r.WeightValue),
+        });
         Create = new AsyncCommand(CreateAsync, Fail);
         WatchCreated = new Command(() =>
         {
@@ -49,13 +86,85 @@ public sealed class MultisigViewModel : ScreenModel
         Paste = new AsyncCommand(async () => { if (main.Shell.PasteText != null && await main.Shell.PasteText() is { } t) Text = t.Trim(); }, Fail);
     }
 
-    public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) { Changed(nameof(IsCreate)); Changed(nameof(IsTransaction)); } } }
+    public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) { Changed(nameof(IsCreate)); Changed(nameof(IsTransaction)); if (value == 0) StartCreating(); } } }
     public bool IsCreate => modeIndex == 0;
     public bool IsTransaction => modeIndex == 1;
 
-    // Creating
-    public string Members { get => members; set => Set(ref members, value); }
-    public string Threshold { get => threshold; set => Set(ref threshold, value); }
+    // Creating: the members as rows, this account first; the threshold with its meaning in words.
+    public ObservableCollection<MemberRow> MemberRows { get; } = [];
+    public ObservableCollection<KnownAddress> Known { get; } = [];
+    public KnownAddress? Pick
+    {
+        get => null;
+        set
+        {
+            if (value == null) return;
+            var empty = MemberRows.FirstOrDefault(r => r.Address.Length == 0);
+            if (MemberRows.Any(r => string.Equals(r.Address, value.Address.ToString(), StringComparison.OrdinalIgnoreCase))) return;
+            if (empty != null) empty.Address = value.Address.ToString(); else { MemberRows.Add(new MemberRow(this, value.Address.ToString())); MembersChanged(); }
+            Changed();
+        }
+    }
+    public Command AddMember { get; }
+    public RelayCommand SetThreshold { get; }
+    public decimal? ThresholdValue { get => thresholdValue; set { if (Set(ref thresholdValue, value)) Changed(nameof(ThresholdText)); } }
+    public uint Total => (uint)MemberRows.Sum(r => (long)r.WeightValue);
+    public string TotalText => $"Сумма весов: {Total}";
+    public string ThresholdText
+    {
+        get
+        {
+            var need = (uint)Math.Max(1, ThresholdValue ?? 1);
+            var rows = MemberRows.Where(r => r.Address.Length > 0).ToList();
+            if (rows.Count < 2) return "Добавьте хотя бы двух участников.";
+            if (need > Total) return $"Порог {need} больше суммы весов {Total}: такой счёт никогда не сможет ничего отправить.";
+            if (rows.All(r => r.WeightValue == rows[0].WeightValue))
+            {
+                var k = (int)Math.Ceiling(need / (double)rows[0].WeightValue);
+                return k == rows.Count ? $"Тратить можно, только когда подпишут все {rows.Count}." : k == 1 ? "Тратить может любой участник в одиночку." : $"Тратить можно, когда подпишут любые {k} из {rows.Count}.";
+            }
+            var alone = rows.Where(r => r.WeightValue >= need).Select(Name).ToList();
+            return alone.Count > 0 ? $"Нужен вес {need} из {Total}. В одиночку может: {string.Join(", ", alone)}." : $"Нужен вес {need} из {Total}: подписи нескольких участников, чьи веса в сумме не меньше {need}.";
+        }
+    }
+
+    public void MembersChanged()
+    {
+        foreach (var r in MemberRows) r.Refresh();
+        Changed(nameof(Total)); Changed(nameof(TotalText)); Changed(nameof(ThresholdText));
+    }
+
+    public void RemoveMember(MemberRow row) { MemberRows.Remove(row); MembersChanged(); }
+
+    private string Name(MemberRow row) => Minter.Protocol.Address.TryParse(row.Address, out var a) ? NameOf(a) ?? Core.History.Short(a) : row.Address;
+    private string? NameOf(Address a) => main.Accounts.FirstOrDefault(x => x.Account.Address == a)?.Name is { } n ? n : main.Shell.AddressBook.NameOf(a) is { Length: > 0 } c ? c : null;
+
+    public string HintOf(MemberRow row)
+    {
+        if (row.Address.Length == 0) return "Вставьте адрес Mx… или выберите из счетов и контактов.";
+        if (!Minter.Protocol.Address.TryParse(row.Address, out var a)) return "Адрес — Mx и 40 шестнадцатеричных символов.";
+        if (MemberRows.TakeWhile(r => r != row).Any(r => string.Equals(r.Address, row.Address, StringComparison.OrdinalIgnoreCase))) return "Этот адрес уже есть выше.";
+        if (main.LookalikeOf(a) is { } like) return MainViewModel.LookalikeWarning(like);
+        if (main.Selected?.Account.Address == a) return $"Это вы — «{main.Selected.Name}».";
+        return NameOf(a) is { } name ? $"«{name}»." : "Адрес не из ваших счетов и контактов: сверьте его с участником.";
+    }
+
+    public Tone ToneOf(MemberRow row) =>
+        row.Address.Length == 0 ? Tone.None
+        : !Minter.Protocol.Address.TryParse(row.Address, out var a) || MemberRows.TakeWhile(r => r != row).Any(r => string.Equals(r.Address, row.Address, StringComparison.OrdinalIgnoreCase)) || main.LookalikeOf(a) != null ? Tone.Error
+        : NameOf(a) != null ? Tone.Success : Tone.Warning;
+
+    // This account first, an empty row for the next member, and the accounts and contacts to pick from.
+    public void StartCreating()
+    {
+        Known.Clear();
+        foreach (var a in main.Accounts) Known.Add(new KnownAddress(a.Name, a.Account.Address));
+        foreach (var c in main.Contacts) if (Minter.Protocol.Address.TryParse(c.Address, out var ca) && Known.All(k => k.Address != ca)) Known.Add(new KnownAddress(c.Name, ca));
+        if (MemberRows.Count > 0) return;
+        if (main.Selected is { } me) MemberRows.Add(new MemberRow(this, me.Account.Address.ToString()));
+        MemberRows.Add(new MemberRow(this));
+        MembersChanged();
+    }
     public string Created { get => created; private set { Set(ref created, value); Changed(nameof(HasCreated)); } }
     public bool HasCreated => Created.Length > 0;
     public AsyncCommand Create { get; }
@@ -87,21 +196,17 @@ public sealed class MultisigViewModel : ScreenModel
     public AsyncCommand Copy { get; }
     public AsyncCommand Paste { get; }
 
-    // "Mx… [вес]" per line, the weight 1 when left out.
     private string? ParseMembers(out List<Address> addresses, out List<uint> weights)
     {
         addresses = []; weights = [];
         var number = 0;
-        foreach (var line in Members.Split('\n'))
+        foreach (var row in MemberRows)
         {
             number++;
-            var parts = line.Split([' ', '\t', ';', ','], StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) continue;
-            if (parts.Length > 2 || !Minter.Protocol.Address.TryParse(parts[0], out var a)) return $"Строка {number}: нужно «Mx… [вес]».";
-            uint w = 1;
-            if (parts.Length == 2 && (!uint.TryParse(parts[1], out w) || w is 0 or > 1023)) return $"Строка {number}: вес — целое число от 1 до 1023.";
-            if (addresses.Contains(a)) return $"Строка {number}: этот адрес уже есть.";
-            addresses.Add(a); weights.Add(w);
+            if (row.Address.Length == 0) continue;
+            if (!Minter.Protocol.Address.TryParse(row.Address, out var a)) return $"Участник {number}: адрес — Mx и 40 шестнадцатеричных символов.";
+            if (addresses.Contains(a)) return $"Участник {number}: этот адрес уже есть.";
+            addresses.Add(a); weights.Add(row.WeightValue);
         }
         if (addresses.Count < 2) return "Нужно хотя бы два участника.";
         if (addresses.Count > 32) return "Не больше 32 участников.";
@@ -111,7 +216,8 @@ public sealed class MultisigViewModel : ScreenModel
     private async Task CreateAsync()
     {
         if (ParseMembers(out var addresses, out var weights) is { } problem) { Say(problem, Tone.Error); return; }
-        if (!uint.TryParse(Threshold.Trim(), out var need) || need == 0) { Say("Порог — целое число больше нуля.", Tone.Error); return; }
+        var need = (uint)Math.Max(0, ThresholdValue ?? 0);
+        if (need == 0) { Say("Порог — целое число больше нуля.", Tone.Error); return; }
         var total = weights.Aggregate(0u, (s, w) => s + w);
         if (need > total) { Say($"Порог {need} больше суммы весов {total}: такой счёт никогда не сможет ничего отправить.", Tone.Error); return; }
         var me = main.Selected!.Account.Address;
@@ -258,5 +364,5 @@ public sealed class MultisigViewModel : ScreenModel
         Sign.Refresh(); SendNow.Refresh();
     }
 
-    public void AccountChanged() => Refresh();
+    public void AccountChanged() { Refresh(); MembersChanged(); }
 }

@@ -33,6 +33,40 @@ public sealed class ExplorerClient : IDisposable
         return names;
     }
 
+    // The latest transactions at the bridge's Minter address (newest first): withdrawals and the bridge's multisends.
+    public async Task<IReadOnlyList<BridgeTx>> BridgeActivityAsync(int pages = 2, CancellationToken ct = default)
+    {
+        var result = new List<BridgeTx>();
+        for (var page = 1; page <= pages; page++)
+        {
+            using var reply = await http.GetAsync($"addresses/{Bridge.Multisig}/transactions?page={page.ToString(CultureInfo.InvariantCulture)}", ct);
+            reply.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct));
+            foreach (var t in doc.RootElement.GetProperty("data").EnumerateArray())
+            {
+                var type = t.GetProperty("type").GetInt32();
+                if (type is not ((int)TxType.Send or (int)TxType.Multisend)) continue;
+                var data = t.GetProperty("data");
+                var payload = t.TryGetProperty("payload", out var p) && p.GetString() is { Length: > 0 } b64 ? DecodePayload(b64) : "";
+                var outs = type == (int)TxType.Multisend
+                    ? data.GetProperty("list").EnumerateArray().Select(o => new BridgeOut(Address.Parse(o.GetProperty("to").GetString()!), o.GetProperty("coin").GetProperty("id").GetUInt32(),
+                        Units.ParseCoins(o.GetProperty("value").GetString()!))).ToList()
+                    : [];
+                result.Add(new BridgeTx(t.GetProperty("hash").GetString() ?? "", t.GetProperty("height").GetInt64(),
+                    DateTimeOffset.Parse(t.GetProperty("timestamp").GetString()!, CultureInfo.InvariantCulture), type, Address.Parse(t.GetProperty("from").GetString()!),
+                    type == (int)TxType.Send ? data.GetProperty("coin").GetProperty("id").GetUInt32() : 0,
+                    type == (int)TxType.Send ? Units.ParseCoins(data.GetProperty("value").GetString()!) : 0, payload, outs));
+            }
+        }
+        return result;
+    }
+
+    private static string DecodePayload(string base64)
+    {
+        try { return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(base64)); }
+        catch (FormatException) { return ""; }
+    }
+
     // One page (50 transactions, newest first) and whether more pages follow.
     public async Task<(IReadOnlyList<TxRecord> Records, bool More)> HistoryAsync(Address address, int page, CancellationToken ct = default)
     {

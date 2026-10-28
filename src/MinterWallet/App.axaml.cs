@@ -11,11 +11,18 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         Localization.Attach();
+        AddressMarks.Attach();
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.MainWindow = new MainWindow();
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var window = new MainWindow();
+            desktop.MainWindow = window;
+            var tray = new TrayHost(this, desktop, window, (Shell)window.DataContext!);
+            Program.Instance?.Listen(tray.Show);
+        }
         base.OnFrameworkInitializationCompleted();
     }
 

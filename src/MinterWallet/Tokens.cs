@@ -64,7 +64,16 @@ public sealed class TokensViewModel : ScreenModel
         costTimer.Tick += async (_, _) => { costTimer.Stop(); await CostAsync(); };
     }
 
-    public int ModeIndex { get => modeIndex; set { if (value >= 0 && Set(ref modeIndex, value)) foreach (var n in new[] { nameof(IsMine), nameof(IsCreate), nameof(IsPool) }) Changed(n); } }
+    public int ModeIndex
+    {
+        get => modeIndex;
+        set
+        {
+            if (value < 0 || !Set(ref modeIndex, value)) return;
+            foreach (var n in new[] { nameof(IsMine), nameof(IsCreate), nameof(IsPool) }) Changed(n);
+            if (value == 1 && Prices.Count == 0) _ = LoadPricesAsync();
+        }
+    }
     public bool IsMine => modeIndex == 0;
     public bool IsCreate => modeIndex == 1;
     public bool IsPool => modeIndex == 2;
@@ -106,6 +115,50 @@ public sealed class TokensViewModel : ScreenModel
     public bool Mintable { get => mintable; set { if (Set(ref mintable, value)) InputChanged(); } }
     public bool Burnable { get => burnable; set { if (Set(ref burnable, value)) InputChanged(); } }
     public string Cost { get => cost; private set => Set(ref cost, value); }
+    public ObservableCollection<string> Prices { get; } = [];
+
+    // What the ticker field and the two supply fields mean right now, before anything is sent.
+    public string TickerHint => Symbol.Length == 0 ? "3–10 заглавных латинских букв и цифр, первая — буква. Короче тикер — дороже."
+        : CoinSymbol.IsValidTicker(Symbol) ? $"{Symbol}: {Symbol.Length} {Chars(Symbol.Length)}." : "Тикер — от 3 до 10 заглавных латинских букв и цифр, первая — буква.";
+    public string SupplyHint
+    {
+        get
+        {
+            if (Initial.Trim().Length == 0) return "Начальный выпуск придёт на этот счёт. У токена 18 знаков после точки, как у BIP.";
+            BigInteger first, max;
+            try { first = Units.ParseCoins(Initial.Trim().Replace(',', '.')); } catch (FormatException) { return "Начальный выпуск — число."; }
+            if (first.Sign <= 0) return "Начальный выпуск должен быть больше нуля.";
+            if (!Mintable) return $"Выпуск закрыт: всего будет ровно {Display.Amount(first)}, больше не выпустить никогда.";
+            if (MaxSupply.Trim().Length == 0) max = MaxSupplyLimit;
+            else try { max = Units.ParseCoins(MaxSupply.Trim().Replace(',', '.')); } catch (FormatException) { return "Предел выпуска — число."; }
+            if (max > MaxSupplyLimit) return "Предел выпуска — не больше 1 000 000 000 000 000 (10¹⁵): так устроена сеть.";
+            if (max < first) return "Предел выпуска меньше начального.";
+            return $"Сейчас выпустится {Display.Amount(first)}; позже владелец сможет довыпустить ещё до {Display.Amount(max - first)} — всего не больше {Display.Amount(max)}.";
+        }
+    }
+
+    private static string Chars(int n) => n % 10 == 1 && n % 100 != 11 ? "символ" : n % 10 is >= 2 and <= 4 && n % 100 is < 12 or > 14 ? "символа" : "символов";
+
+    // The network's price of a token by the length of its ticker: one estimate through the source, the others in proportion.
+    private async Task LoadPricesAsync()
+    {
+        if (main.Selected == null) return;
+        try
+        {
+            var wallet = await main.WalletAsync();
+            var prices = await wallet.Backend.PricesAsync();
+            ITxData Probe(int length) => new CreateTokenData("", CoinSymbol.FromString(new string('A', length)), 1, 1, false, false);
+            var preview = await wallet.PreviewAsync(main.Selected.Account, Probe(7));
+            if (preview.PriceInVoteCoin.IsZero) return;
+            Prices.Clear();
+            foreach (var (length, label) in new[] { (3, "3 символа"), (4, "4 символа"), (5, "5 символов"), (6, "6 символов"), (7, "7–10 символов") })
+            {
+                var price = Commission.WithGasPrice(Commission.Price(Probe(length), 0, prices), preview.GasPrice) * preview.Commission / preview.PriceInVoteCoin;
+                Prices.Add($"{label} — ≈ {Display.Amount(price, 2)} {preview.CommissionCoin.Symbol}");
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or ChainApiException or TaskCanceledException) { }
+    }
     public bool Recreating => recreating;
     public string CreateTitle => recreating ? $"Пересоздать {Symbol}" : "Новый токен";
     public string CreateLabel => recreating ? "Пересоздать" : "Создать токен";
@@ -213,6 +266,7 @@ public sealed class TokensViewModel : ScreenModel
 
     private void InputChanged()
     {
+        Changed(nameof(TickerHint)); Changed(nameof(SupplyHint));
         Cost = "";
         costTimer?.Stop();
         if (CoinSymbol.IsValidTicker(Symbol)) costTimer?.Start();

@@ -32,6 +32,36 @@ public sealed class Shell : Observable
     public Func<Uri, Task>? OpenUrl { get; set; }
     // Saves a text file the user names (suggested name, contents); false when they cancel.
     public Func<string, string, Task<bool>>? SaveText { get; set; }
+    // Where the anonymous usage pings go (the project's gate); null: nowhere (MINTERWALLET_USAGE_URL=off, the checks).
+    public Uri? UsageEndpoint { get; set; } = UsageClient.Endpoint();
+    private Avalonia.Threading.DispatcherTimer? usageTimer;
+
+    // A ping now and every 5 minutes while the wallet is open, locked or not, unless turned off in the settings.
+    public void StartUsage()
+    {
+        if (usageTimer != null) return;
+        usageTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
+        usageTimer.Tick += (_, _) => _ = PingAsync();
+        usageTimer.Start();
+        _ = PingAsync();
+    }
+
+    private async Task PingAsync()
+    {
+        if (!Settings.Telemetry || UsageEndpoint is not { } endpoint) return;
+        if (Settings.InstallId is not { Length: 32 })
+        {
+            Settings.InstallId = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+            Settings.Save(DataDirectory);
+        }
+        var network = Status?.Network is not { } n ? "unknown" : n.StartsWith("minter-mainnet", StringComparison.Ordinal) ? "mainnet" : "test";
+        try
+        {
+            using var usage = new UsageClient(endpoint);
+            await usage.PingAsync(Settings.InstallId, Program.Version, UsageClient.Os, Localization.English ? "en" : "ru", network);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+    }
 
     public Shell(string? dataDirectory = null)
     {
@@ -49,8 +79,12 @@ public sealed class Shell : Observable
     public void Show(object next) => Page = next;
 
     // The views of the current page built again (another language): the page's model and its state stay.
+    // Raised after the views are drawn again (a new language): the tray menu follows.
+    public event Action? Redrawn;
+
     public void Redraw()
     {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Redrawn?.Invoke());
         var current = page;
         Page = new object();
         Page = current;

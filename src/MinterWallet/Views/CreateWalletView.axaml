@@ -20,7 +20,15 @@
       <StackPanel Spacing="14" IsVisible="{Binding IsStep1}">
         <TextBlock Text="Фраза восстановления" Classes="h1" />
         <TextBlock Classes="muted prose"
-                   Text="Эти 12 слов — ключ ко всем средствам кошелька: по ним его можно восстановить на любом устройстве, и любой, кто их знает, может распорядиться средствами. Сохраните фразу так, как вам удобно — запишите или скопируйте в менеджер паролей." />
+                   Text="Эти слова — ключ ко всем средствам кошелька: по ним его можно восстановить на любом устройстве, и любой, кто их знает, может распорядиться средствами. Сохраните фразу так, как вам удобно — запишите или скопируйте в менеджер паролей." />
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <ListBox Classes="segmented" SelectedIndex="{Binding WordCountIndex}" AutomationProperties.Name="Длина фразы">
+            <ListBoxItem Content="12 слов" />
+            <ListBoxItem Content="24 слова" />
+          </ListBox>
+          <TextBlock Classes="caption prose" VerticalAlignment="Center" MaxWidth="360"
+                     Text="12 слов достаточно надёжны; 24 — с запасом. Восстанавливаются обе в любом кошельке Minter." />
+        </StackPanel>
         <Border Classes="card" Padding="12">
           <ItemsControl ItemsSource="{Binding Words}">
             <ItemsControl.ItemsPanel>
@@ -70,7 +78,7 @@
                    Text="Пароль шифрует ключи на этом устройстве (Argon2id, AES-256-GCM) и спрашивается при входе и перед каждой подписью. Забытый пароль не восстановить — но кошелёк всегда можно восстановить по фразе." />
         <Border Classes="card">
           <StackPanel Spacing="12">
-            <StackPanel><TextBlock Text="Пароль" Classes="label" /><TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
+            <StackPanel><TextBlock Text="Пароль" Classes="label" /><TextBox local:AutoFocus.IsEnabled="True" Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
             <StackPanel><TextBlock Text="Пароль ещё раз" Classes="label" /><TextBox Text="{Binding Repeat}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
             <TextBlock Text="{Binding PasswordHint}" Classes="caption" />
           </StackPanel>
