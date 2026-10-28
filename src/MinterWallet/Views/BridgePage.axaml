@@ -1,0 +1,152 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.BridgePage"
+             x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640">
+      <TextBlock Text="Мост" Classes="h1" />
+      <ListBox Classes="segmented" SelectedIndex="{Binding BridgeDirection}" AutomationProperties.Name="Направление">
+        <ListBoxItem Content="Вывести из Minter" />
+        <ListBoxItem Content="Ввести в Minter" />
+      </ListBox>
+
+      <!-- Out of Minter to Ethereum or BSC -->
+      <Panel IsVisible="{Binding BridgeOut}">
+      <StackPanel Spacing="18" DataContext="{Binding Hub}" x:DataType="local:BridgeViewModel">
+        <TextBlock Classes="muted prose" Text="Вывод монет Minter в Ethereum или BSC через мост Minter Hub: USDTE — в Ethereum, USDTBSC — в BSC, BIP — в обе сети, и другие. Мост берёт 1 % и плату за газ сети назначения." />
+        <views:NoticeBar Text="Мост Minter Hub работает только в основной сети Minter." Tone="Info" IsVisible="{Binding IsUnavailable}" />
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <StackPanel>
+                <TextBlock Text="Монета" Classes="label" />
+                <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" PlaceholderText="Нет монет, которые выводит мост" AutomationProperties.Name="Монета для вывода">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:BalanceItem">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="Сеть" Classes="label" />
+                <ListBox Classes="segmented" SelectedIndex="{Binding NetworkIndex}" AutomationProperties.Name="Сеть назначения">
+                  <ListBoxItem Content="Ethereum" />
+                  <ListBoxItem Content="BSC" />
+                </ListBox>
+              </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding NetworkHint}" Classes="caption prose" />
+            <StackPanel>
+              <DockPanel Margin="0,0,0,6">
+                <Button DockPanel.Dock="Right" Classes="link" Content="Мой адрес в этой сети" Command="{Binding Own}" />
+                <TextBlock Text="Получатель — адрес 0x…" Classes="label" Margin="0" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBox Text="{Binding Recipient}" Classes="mono" PlaceholderText="0x…" AutomationProperties.Name="Получатель в сети назначения" />
+              <views:NoticeBar Classes="inline" Text="{Binding RecipientCheck}" Tone="{Binding RecipientTone}" />
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Сумма" Classes="label" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Всё" Command="{Binding All}" Margin="8,0,0,0" />
+                <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Сумма вывода" />
+              </DockPanel>
+              <TextBlock Text="{Binding Available}" Classes="caption" Margin="0,6,0,0" />
+            </StackPanel>
+            <TextBlock Text="{Binding Estimate}" Classes="prose" />
+          </StackPanel>
+        </Border>
+        <Button Content="Продолжить" Command="{Binding SendNow}" Classes="accent" MinWidth="150" HorizontalAlignment="Right" />
+        <Border Classes="well" IsVisible="{Binding HasLink}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding Tracking}" Classes="prose" />
+            <Button Content="Открыть получателя в обозревателе сети" Command="{Binding OpenLink}" HorizontalAlignment="Left" />
+          </StackPanel>
+        </Border>
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+      </Panel>
+
+      <!-- Into Minter from Ethereum or BSC -->
+      <Panel IsVisible="{Binding BridgeIn}">
+      <StackPanel Spacing="18" DataContext="{Binding HubIn}" x:DataType="local:BridgeDepositViewModel">
+        <TextBlock Classes="muted prose" Text="Ввод монет из Ethereum или BSC в Minter через мост Minter Hub: с вашего адреса в той сети — у него тот же ключ, что у счёта. Газ платится в ETH или BNB с этого адреса, мост удерживает 1 %." />
+        <views:NoticeBar Text="Мост Minter Hub работает только в основной сети Minter." Tone="Info" IsVisible="{Binding IsUnavailable}" />
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <StackPanel>
+                <TextBlock Text="{Binding EvmAddressText}" Classes="label prose" />
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Classes="link" Margin="12,0,0,0" Command="{Binding CopyAddress}" AutomationProperties.Name="Скопировать адрес">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="Копировать" /></StackPanel>
+                  </Button>
+                  <SelectableTextBlock Text="{Binding EvmAddress}" Classes="mono" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="Сеть" Classes="label" />
+                <ListBox Classes="segmented" SelectedIndex="{Binding NetworkIndex}" AutomationProperties.Name="Сеть, из которой ввод">
+                  <ListBoxItem Content="Ethereum" />
+                  <ListBoxItem Content="BSC" />
+                </ListBox>
+              </StackPanel>
+            </Grid>
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="link" Margin="12,0,0,0" Command="{Binding Refresh}" AutomationProperties.Name="Обновить балансы">
+                <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="refresh" Width="16" Height="16" /><TextBlock Text="Обновить" /></StackPanel>
+              </Button>
+              <TextBlock Text="{Binding Balances}" Classes="caption prose" VerticalAlignment="Center" />
+            </DockPanel>
+            <StackPanel>
+              <TextBlock Text="Монета" Classes="label" />
+              <ComboBox ItemsSource="{Binding Tokens}" SelectedItem="{Binding Token}" HorizontalAlignment="Stretch" PlaceholderText="Нет монет, которые принимает мост" AutomationProperties.Name="Монета для ввода">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="local:DepositToken">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                        <TextBlock Text="→" Classes="muted" />
+                        <TextBlock Text="{Binding MinterSymbol}" />
+                      </StackPanel>
+                    </DockPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Сумма" Classes="label" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Всё" Command="{Binding All}" Margin="8,0,0,0" />
+                <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Сумма ввода" />
+              </DockPanel>
+              <TextBlock Text="{Binding Available}" Classes="caption prose" Margin="0,6,0,0" />
+            </StackPanel>
+            <StackPanel>
+              <DockPanel Margin="0,0,0,6">
+                <Button DockPanel.Dock="Right" Classes="link" Content="Этот счёт" Command="{Binding Own}" />
+                <TextBlock Text="Получатель в Minter" Classes="label" Margin="0" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBox Text="{Binding Recipient}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Получатель в Minter" />
+              <views:NoticeBar Classes="inline" Text="{Binding RecipientCheck}" Tone="{Binding RecipientTone}" />
+            </StackPanel>
+            <TextBlock Text="{Binding Estimate}" Classes="prose" />
+          </StackPanel>
+        </Border>
+        <Button Content="Продолжить" Command="{Binding SendNow}" Classes="accent" MinWidth="150" HorizontalAlignment="Right" />
+        <Border Classes="well" IsVisible="{Binding HasTracking}">
+          <TextBlock Text="{Binding Tracking}" Classes="prose" />
+        </Border>
+        <Button Content="Открыть транзакцию в обозревателе сети" Command="{Binding OpenLink}" HorizontalAlignment="Left" IsVisible="{Binding HasLink}" />
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+      </Panel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

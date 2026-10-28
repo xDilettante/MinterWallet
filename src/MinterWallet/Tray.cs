@@ -33,6 +33,7 @@ public sealed class TrayHost
         TrayIcon.SetIcons(app, [icon]);
         Retitle();
         shell.Redrawn += Retitle;
+        shell.Arrived += arrival => { var (title, text) = Shell.Describe(arrival); Notifier.Show(title, text); };
         window.PropertyChanged += (_, e) =>
         {
             if (e.Property == Window.WindowStateProperty && window.WindowState == WindowState.Minimized && shell.Settings.MinimizeToTray) window.Hide();

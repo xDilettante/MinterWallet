@@ -12,7 +12,7 @@
       </StackPanel>
       <StackPanel Spacing="4">
         <TextBlock Text="История" Classes="h1" />
-        <TextBlock Text="Кошелёк расшифровывает транзакции сам, из исходных байтов, а не из описания источника." Classes="muted prose" />
+        <TextBlock Text="Кошелёк расшифровывает транзакции сам, из исходных байтов. Нажмите на транзакцию — откроются подробности." Classes="muted prose" />
       </StackPanel>
     </DockPanel>
     <StackPanel Grid.Row="1" Spacing="8">
@@ -23,29 +23,57 @@
     <Panel Grid.Row="2">
       <DockPanel>
       <Button DockPanel.Dock="Bottom" Content="Показать ещё" Command="{Binding More}" IsVisible="{Binding HasMore}" HorizontalAlignment="Center" Margin="0,10,0,0" />
-      <ListBox Classes="rows" ItemsSource="{Binding Items}" AutomationProperties.Name="Транзакции">
+      <ListBox Classes="rows" ItemsSource="{Binding Items}" AutomationProperties.Name="Транзакции" x:Name="Transactions">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="local:HistoryItem">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="avatar" Classes.success="{Binding Incoming}" Classes.danger="{Binding Failed}" Width="32" Height="32">
-                <local:Icon Kind="{Binding Glyph}" Width="16" Height="16" />
+            <StackPanel Spacing="10">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="avatar" Classes.success="{Binding Incoming}" Classes.danger="{Binding Failed}" Width="32" Height="32" VerticalAlignment="Top">
+                  <local:Icon Kind="{Binding Glyph}" Width="16" Height="16" />
+                </Border>
+                <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock local:AddressMarks.Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasSubtitle}" />
+                  <TextBlock Text="{Binding Payload}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPayload}" />
+                  <TextBlock Text="{Binding FailedText}" Classes="caption" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" IsVisible="{Binding Failed}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2" MinWidth="120">
+                  <ItemsControl ItemsSource="{Binding Moves}" HorizontalAlignment="Right">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="local:MoveItem">
+                        <TextBlock Text="{Binding Text}" FontWeight="SemiBold" HorizontalAlignment="Right" Classes.up="{Binding Up}" Classes.down="{Binding Down}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock Text="{Binding CommissionText}" Classes="caption" HorizontalAlignment="Right" IsVisible="{Binding HasCommission}" />
+                  <TextBlock Text="{Binding HeightText}" Classes="caption" HorizontalAlignment="Right" />
+                </StackPanel>
+              </Grid>
+              <Border Classes="well" IsVisible="{Binding Expanded}" Margin="44,0,0,0">
+                <StackPanel Spacing="8">
+                  <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="local:DetailRow">
+                        <Grid ColumnDefinitions="130,*" ColumnSpacing="12">
+                          <TextBlock Text="{Binding Label}" Classes="muted" FontSize="13" />
+                          <SelectableTextBlock Grid.Column="1" local:AddressMarks.Text="{Binding Value}" FontSize="13" TextWrapping="Wrap" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <WrapPanel ItemSpacing="8" LineSpacing="8">
+                    <Button Command="{Binding $parent[ListBox].((local:HistoryViewModel)DataContext).CopyHash}" CommandParameter="{Binding Hash}">
+                      <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="copy" Width="14" Height="14" /><TextBlock Text="Скопировать хеш" /></StackPanel>
+                    </Button>
+                    <Button Command="{Binding $parent[ListBox].((local:HistoryViewModel)DataContext).OpenInExplorer}" CommandParameter="{Binding Hash}"
+                            IsVisible="{Binding $parent[ListBox].((local:HistoryViewModel)DataContext).OnMainnet}">
+                      <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="search" Width="14" Height="14" /><TextBlock Text="Открыть в обозревателе" /></StackPanel>
+                    </Button>
+                  </WrapPanel>
+                </StackPanel>
               </Border>
-              <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="2">
-                <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding Payload}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPayload}" />
-                <TextBlock Text="{Binding FailedText}" Classes="caption" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" IsVisible="{Binding Failed}" />
-              </StackPanel>
-              <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
-                <TextBlock Text="{Binding HeightText}" Classes="caption" HorizontalAlignment="Right" />
-                <Button Classes="link" HorizontalAlignment="Right" ToolTip.Tip="{Binding Hash}"
-                        Command="{Binding $parent[ListBox].((local:HistoryViewModel)DataContext).CopyHash}" CommandParameter="{Binding Hash}">
-                  <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock Text="{Binding HashShort}" Classes="mono" FontSize="12" />
-                    <local:Icon Kind="copy" Width="12" Height="12" />
-                  </StackPanel>
-                </Button>
-              </StackPanel>
-            </Grid>
+            </StackPanel>
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>

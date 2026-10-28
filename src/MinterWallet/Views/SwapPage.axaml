@@ -185,15 +185,23 @@
       </Border>
 
       <Border Classes="card" IsVisible="{Binding HasQuote}">
-        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="20" RowSpacing="10">
+        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="20" RowSpacing="10">
+          <Panel Grid.Column="2" Grid.RowSpan="2" Width="22" Height="22" VerticalAlignment="Top" ToolTip.Tip="Расчёт обновляется каждые 5 секунд">
+            <Ellipse Stroke="{DynamicResource Line}" StrokeThickness="2" />
+            <Arc Stroke="{DynamicResource Accent}" StrokeThickness="2" StartAngle="-90" SweepAngle="{Binding QuoteAngle}" IsVisible="{Binding QuoteCounting}" />
+            <local:Icon Kind="loader" Width="13" Height="13" Classes="spin" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Requoting}" />
+          </Panel>
           <TextBlock Text="Маршрут" Classes="muted" />
           <SelectableTextBlock Grid.Column="1" Text="{Binding QuoteRoute}" TextWrapping="Wrap" />
           <TextBlock Grid.Row="1" Text="{Binding QuoteExpectedLabel}" Classes="muted" />
-          <SelectableTextBlock Grid.Row="1" Grid.Column="1" Text="{Binding QuoteExpected}" Classes="mono" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+            <SelectableTextBlock Text="{Binding QuoteExpected}" Classes="mono" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding QuoteDelta}" Classes="caption" Classes.up="{Binding QuoteDeltaUp}" Classes.down="{Binding QuoteDeltaDown}" IsVisible="{Binding HasQuoteDelta}" />
+          </StackPanel>
           <TextBlock Grid.Row="2" Text="Гарантия сети" Classes="muted" />
-          <SelectableTextBlock Grid.Row="2" Grid.Column="1" Text="{Binding QuoteLimit}" Classes="mono" TextWrapping="Wrap" />
-          <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Classes="caption prose"
-                     Text="Оценка — от источника. Если цена уйдёт дальше гарантии, транзакция не выполнится и спишется только комиссия." />
+          <SelectableTextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding QuoteLimit}" Classes="mono" TextWrapping="Wrap" />
+          <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Classes="caption prose"
+                     Text="Оценка — от источника, обновляется каждые 5 секунд. Если цена уйдёт дальше гарантии, транзакция не выполнится и спишется только комиссия." />
         </Grid>
       </Border>
 

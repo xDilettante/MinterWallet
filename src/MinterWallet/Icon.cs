@@ -16,6 +16,7 @@ public sealed class Icon : Control
         ["wallet"] = Geometry.Parse("M3 7 H19 A2 2 0 0 1 21 9 V18 A2 2 0 0 1 19 20 H5 A2 2 0 0 1 3 18 Z M3 7 V6 A2 2 0 0 1 5 4 H16 M16 13.5 H17"),
         ["send"] = Geometry.Parse("M7 17 L17 7 M9 7 H17 V15"),
         ["receive"] = Geometry.Parse("M17 7 L7 17 M15 17 H7 V9"),
+        ["bridge"] = Geometry.Parse("M3 17 H21 M3 9 H21 M5 9 V17 M19 9 V17 M5 9 C8 13 16 13 19 9"),
         ["swap"] = Geometry.Parse("M4 8 H18 M14 4 L18 8 L14 12 M20 16 H6 M10 12 L6 16 L10 20"),
         ["stake"] = Geometry.Parse("M12 3 L21 8 L12 13 L3 8 Z M3 12.5 L12 17.5 L21 12.5 M3 16.5 L12 21.5 L21 16.5"),
         ["history"] = Geometry.Parse("M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 Z M12 7 V12 L15.5 14"),

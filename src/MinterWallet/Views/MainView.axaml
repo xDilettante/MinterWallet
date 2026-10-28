@@ -22,9 +22,9 @@
                   Margin="0,0,0,18" AutomationProperties.Name="Счёт">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="local:AccountItem">
-              <StackPanel Spacing="1">
-                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding Caption}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
+              <StackPanel Spacing="1" Classes.child="{Binding IsChild}">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Caption}" Classes="caption" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </DataTemplate>
           </ComboBox.ItemTemplate>
@@ -40,10 +40,21 @@
                 <TextBlock Text="{Binding BlockText}" Classes="caption" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="сертификат не проверяется" FontSize="12" Foreground="{DynamicResource Warning}" IsVisible="{Binding CertificateUnchecked}" TextWrapping="Wrap" />
               </StackPanel>
-              <Button Grid.Column="2" Classes="icon" Command="{Binding Refresh}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить"
-                      VerticalAlignment="Center"><local:Icon Kind="refresh" Width="16" Height="16" /></Button>
+              <Button Grid.Column="2" Classes="icon" Command="{Binding Refresh}" ToolTip.Tip="Обновить сейчас (само — каждые 5 секунд)" AutomationProperties.Name="Обновить"
+                      VerticalAlignment="Center" Padding="4">
+                <Panel Width="24" Height="24">
+                  <Ellipse Stroke="{DynamicResource Line}" StrokeThickness="2" />
+                  <Arc Stroke="{DynamicResource Accent}" StrokeThickness="2" StartAngle="-90" SweepAngle="{Binding CountdownAngle}" IsVisible="{Binding Counting}" />
+                  <local:Icon Kind="refresh" Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Counting}" />
+                  <local:Icon Kind="loader" Width="14" Height="14" Classes="spin" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Reading}" />
+                </Panel>
+              </Button>
             </Grid>
           </Border>
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="6,0,0,0" IsVisible="{Binding HasUsageLine}" ToolTip.Tip="{Binding UsageTip}">
+            <local:Icon Kind="users" Width="13" Height="13" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding UsageLine}" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" />
+          </StackPanel>
           <Button Classes="ghost" Command="{Binding LockNow}" HorizontalAlignment="Stretch" Padding="12,9">
             <StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="lock" /><TextBlock Text="Заблокировать" /></StackPanel>
           </Button>
@@ -53,6 +64,7 @@
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="wallet" /><TextBlock Text="Обзор" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="send" /><TextBlock Text="Отправить" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="swap" /><TextBlock Text="Обмен" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="bridge" /><TextBlock Text="Мост" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="stake" /><TextBlock Text="Стейкинг" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="coin" /><TextBlock Text="Токены" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="key" /><TextBlock Text="Общий счёт" /></StackPanel></ListBoxItem>
@@ -68,6 +80,7 @@
       <views:OverviewPage IsVisible="{Binding IsOverview}" />
       <views:SendPage IsVisible="{Binding IsSend}" />
       <views:SwapPage IsVisible="{Binding IsSwap}" />
+      <views:BridgePage IsVisible="{Binding IsBridge}" />
       <views:StakingPage IsVisible="{Binding IsStaking}" />
       <views:TokensPage IsVisible="{Binding IsTokens}" />
       <views:MultisigPage IsVisible="{Binding IsMultisig}" />

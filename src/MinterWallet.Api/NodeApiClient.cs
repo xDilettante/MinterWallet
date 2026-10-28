@@ -117,7 +117,9 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
     {
         using var content = new StringContent($"{{\"tx\":\"0x{tx.ToHex()}\"}}", Encoding.UTF8, "application/json");
         using var reply = await http.PostAsync("send_transaction", content, ct);
-        var j = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct)).RootElement;
+        JsonElement j;
+        try { j = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct)).RootElement; }
+        catch (JsonException) { throw new ChainApiException((int)reply.StatusCode, $"{(int)reply.StatusCode}: ответ не JSON"); }
         if (j.TryGetProperty("error", out var error))   // CheckTx refusals come back as errors with the transaction code
             return new BroadcastResult((uint)ParseU64(error.GetProperty("code")), error.GetProperty("message").GetString() ?? "", tx.Hash);
         return new BroadcastResult((uint)U64(j, "code"), j.TryGetProperty("log", out var log) ? log.GetString() ?? "" : "", Str(j, "hash"));

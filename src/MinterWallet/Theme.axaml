@@ -295,6 +295,17 @@
   <Style Selector="views|NoticeBar.inline SelectableTextBlock#Message"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
   <Style Selector="views|NoticeBar.inline local|Icon#Glyph"><Setter Property="Width" Value="14" /><Setter Property="Height" Value="14" /><Setter Property="Margin" Value="0,1,6,0" /></Style>
   <Style Selector="views|NoticeBar.inline Button#Close"><Setter Property="IsVisible" Value="False" /></Style>
+  <!-- The accounts page: the current account's card outlined, its addresses as rows to click. -->
+  <Style Selector="Border.card.active"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+  <Style Selector="Button.addressRow">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0,1,0,0" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="CornerRadius" Value="0" /><Setter Property="Padding" Value="20,10" />
+  </Style>
+  <Style Selector="Button.addressRow.current"><Setter Property="Background" Value="{DynamicResource AccentSubtle}" /></Style>
+  <Style Selector="ComboBoxItem StackPanel.child"><Setter Property="Margin" Value="14,0,0,0" /></Style>
+  <!-- Amounts that went the user's way (green) or against it (red): price changes, incoming and outgoing sums. -->
+  <Style Selector="TextBlock.up, SelectableTextBlock.up"><Setter Property="Foreground" Value="{DynamicResource Success}" /></Style>
+  <Style Selector="TextBlock.down, SelectableTextBlock.down"><Setter Property="Foreground" Value="{DynamicResource Danger}" /></Style>
   <Style Selector="local|Icon.spin">
     <Setter Property="RenderTransform"><RotateTransform /></Setter>
     <Style.Animations>

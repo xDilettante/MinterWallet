@@ -44,6 +44,10 @@ public sealed class WalletSettings
     // On by default on Windows; on Linux some desktops have no tray, where a hidden window could not be brought back.
     public bool MinimizeToTray { get; set; } = OperatingSystem.IsWindows();
     public bool CloseToTray { get; set; } = OperatingSystem.IsWindows();
+    // A notification of the system when coins come to any of the wallet's addresses; staking rewards (every hour or so)
+    // only when asked for.
+    public bool NotifyIncoming { get; set; } = true;
+    public bool NotifyRewards { get; set; }
     public string? InstallId { get; set; }
     public bool AllDecimals { get; set; }
     public string? LastAccountId { get; set; }

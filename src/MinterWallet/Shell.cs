@@ -24,6 +24,15 @@ public sealed class Shell : Observable
     public long GateIndexFrom { get; private set; }
     public ExplorerClient Explorer => explorer ??= new ExplorerClient();
     private ExplorerClient? explorer;
+    // Ethereum and BSC nodes for the bridge's deposits, and the bridge's coin list (read once per run).
+    public EvmClient EvmOf(BridgeNetwork network) => evm[(int)network] ??= new EvmClient(EvmClient.DefaultEndpoints(network));
+    private readonly EvmClient?[] evm = new EvmClient?[2];
+    private Task? bridgeTokens;
+    public Task LoadBridgeTokensAsync() => bridgeTokens ??= Task.Run(async () =>
+    {
+        try { using var api = new BridgeApiClient(); Bridge.Use(await api.TokensAsync()); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException) { bridgeTokens = null; }
+    });
 
     // Asks the user to confirm and re-enter the password; set by the window (null in tests).
     public Func<ConfirmRequest, Task<string?>>? Confirm { get; set; }
@@ -61,6 +70,56 @@ public sealed class Shell : Observable
             await usage.PingAsync(Settings.InstallId, Program.Version, UsageClient.Os, Localization.English ? "en" : "ru", network);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+    }
+
+    // Coins coming to the wallet's addresses, looked for every 5 seconds while the wallet runs (locked too, once a
+    // source is connected; only a new block brings more requests). Raised on the UI thread; the tray turns it into a
+    // notification of the system.
+    public event Action<Arrival>? Arrived;
+    // The window is on the screen (not hidden in the tray or minimized): only then the open page reads every few seconds.
+    public bool WindowShown { get; set; } = true;
+    // The open page reads by itself every few seconds; off in the checks, which drive every read.
+    public bool AutoRefresh { get; set; } = true;
+    private Avalonia.Threading.DispatcherTimer? incomeTimer;
+    private IncomeWatch? income;
+    private bool watching;
+
+    public void StartWatching()
+    {
+        if (incomeTimer != null) return;
+        incomeTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        incomeTimer.Tick += (_, _) => _ = WatchAsync();
+        incomeTimer.Start();
+    }
+
+    public async Task WatchAsync()
+    {
+        if (watching || !Settings.NotifyIncoming || Store is not { } store || Backend is not { } backend) return;
+        if (income?.Backend != backend) income = new IncomeWatch(backend);
+        watching = true;
+        try
+        {
+            var arrivals = await income.CheckAsync(store.Accounts);
+            foreach (var arrival in arrivals)
+                if (arrival.Kind != ArrivalKind.Reward || Settings.NotifyRewards) Arrived?.Invoke(arrival);
+            // The open account's balances follow at once.
+            if (Page is MainViewModel main && arrivals.Any(a => a.Account.Address == main.Selected?.Account.Address)) main.Refresh.Execute(null);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or System.Text.Json.JsonException or FormatException or KeyNotFoundException) { }
+        finally { watching = false; }
+    }
+
+    // The notification's two lines, in the interface's language.
+    public static (string Title, string Text) Describe(Arrival a)
+    {
+        var amount = $"{Display.Amount(a.Amount)} {a.Coin.Symbol}";
+        return a.Kind switch
+        {
+            ArrivalKind.Transfer => (Localization.Text($"Пришло {amount}"), Localization.Text($"На счёт «{a.Account.Name}» от {History.Short(a.From!.Value)}")),
+            ArrivalKind.Bridge => (Localization.Text($"Пришло {amount}"), Localization.Text($"На счёт «{a.Account.Name}» через мост Minter Hub")),
+            ArrivalKind.Reward => (Localization.Text($"Награда {amount}"), Localization.Text($"Счёт «{a.Account.Name}»: награда за стейкинг")),
+            _ => (Localization.Text($"Зачислено {amount}"), Localization.Text($"На счёт «{a.Account.Name}»")),
+        };
     }
 
     public Shell(string? dataDirectory = null)

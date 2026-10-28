@@ -35,6 +35,11 @@ public partial class MainWindow : Window
         };
         DataContext = shell;
         shell.StartUsage();
+        shell.StartWatching();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty || e.Property == WindowStateProperty) shell.WindowShown = IsVisible && WindowState != WindowState.Minimized;
+        };
         // Any input counts as activity for the auto-lock.
         AddHandler(PointerMovedEvent, (_, _) => Touch(shell), handledEventsToo: true);
         AddHandler(KeyDownEvent, (_, _) => Touch(shell), handledEventsToo: true);

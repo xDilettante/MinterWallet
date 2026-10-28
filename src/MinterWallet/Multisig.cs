@@ -320,7 +320,7 @@ public sealed class MultisigViewModel : ScreenModel
         var outcome = await wallet.SendMultisigAsync(tx, new Progress<TxOutcome>(o => Say($"Отправлено {o.Hash}, ждём блок…", Tone.Progress)));
         switch (outcome.State)
         {
-            case TxState.Included: Say($"Готово: блок {Display.Integer(outcome.Height)}, {outcome.Hash}", Tone.Success); break;
+            case TxState.Included: Say($"Готово — выполнено в блоке {Display.Integer(outcome.Height)}. Хеш: {outcome.Hash}", Tone.Success); break;
             case TxState.FailedInBlock: Say($"Транзакция попала в блок {Display.Integer(outcome.Height)}, но не выполнена (код {outcome.Code}): {outcome.Log}. Комиссия списана.", Tone.Error); break;
             case TxState.Rejected: Say($"Сеть отклонила (код {outcome.Code}): {outcome.Log}. Ничего не списано.", Tone.Error); break;
             default: Say(outcome.Log, Tone.Warning); break;

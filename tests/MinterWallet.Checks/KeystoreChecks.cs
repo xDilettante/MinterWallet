@@ -51,9 +51,20 @@ internal static class KeystoreChecks
         Assert.True(!text.Contains("abandon") && !text.Contains(Convert.ToHexStringLower(TestKeys.Bytes(1))), "no secret in the clear");
         Assert.True(File.Exists(path + ".bak") && !File.Exists(path + ".tmp"), "atomic write keeps a backup");
 
-        // Reload from disk: same accounts, keys sign, wrong password refused.
+        // The phrase is one account with a name of its own, apart from its addresses' names.
+        session.RenameSecret(first.SecretId!, "Семейный");
+        Assert.True(store.NameOf(first.SecretId!) == "Семейный" && store.Accounts.First(a => a.Id == first.Id).Name == "Основной", "the phrase renamed, its address keeps its name");
+
+        // Reload from disk: same accounts and names, keys sign, wrong password refused.
         var loaded = Keystore.Load(path);
         Assert.Equal(4, loaded.Accounts.Count, "accounts reloaded");
+        Assert.True(loaded.NameOf(first.SecretId!) == "Семейный" && loaded.NameOf(imported.SecretId!) == "Ключ", "account names reloaded");
+        // A store written before accounts had names: each phrase is named after its first address.
+        var old = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        foreach (var secretNode in old["secrets"]!.AsArray()) secretNode!.AsObject().Remove("name");
+        var oldPath = Path.Combine(temp.Path, "old-" + Keystore.FileName);
+        File.WriteAllText(oldPath, old.ToJsonString());
+        Assert.Equal("Основной", Keystore.Load(oldPath).NameOf(first.SecretId!), "an old store's phrase named after its first address");
         Assert.Throws<WrongPasswordException>(() => loaded.Unlock("не тот пароль"), "wrong password");
         using (var reopened = loaded.Unlock("пароль-кошелька"))
         {

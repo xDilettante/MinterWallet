@@ -31,7 +31,9 @@ public sealed class AsyncCommand(Func<Task> run, Action<Exception> onError, Func
     private bool running;
     public event EventHandler? CanExecuteChanged;
     public bool CanExecute(object? parameter) => !running && (canRun?.Invoke() ?? true);
-    public async void Execute(object? parameter)
+    public async void Execute(object? parameter) => await RunAsync();
+    // The same, for a caller that waits for it (nothing happens while it already runs).
+    public async Task RunAsync()
     {
         if (running) return;
         running = true; Refresh();

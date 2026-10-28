@@ -41,6 +41,9 @@ public sealed class Keystore
     private Sealed verifier;
     private readonly List<SecretRecord> secrets = [];
     private readonly List<WalletAccount> accounts = [];
+    // The name of an account as a whole — a phrase with all its addresses, or a key — kept in the clear like the
+    // addresses' own names. A store written before it had names gets the name of each secret's first address.
+    private readonly Dictionary<string, string> secretNames = [];
     public IReadOnlyList<WalletAccount> Accounts => accounts;
     public string Path => path;
 
@@ -71,10 +74,15 @@ public sealed class Keystore
         if (kdf.MemoryKiB < 8 * 1024 || kdf.Iterations < 1 || kdf.Parallelism < 1 || kdf.Salt.Length < 16) throw new InvalidDataException("Key derivation parameters are too weak.");
         var store = new Keystore(path, kdf, ReadSealed(root["verifier"]!));
         foreach (var s in root["secrets"]!.AsArray())
+        {
             store.secrets.Add(new SecretRecord((string)s!["id"]!, Enum.Parse<SecretKind>((string)s["kind"]!), ReadSealed(s)));
+            if ((string?)s["name"] is { Length: > 0 } name) store.secretNames[(string)s["id"]!] = name;
+        }
         foreach (var a in root["accounts"]!.AsArray())
             store.accounts.Add(new WalletAccount((string)a!["id"]!, (string)a["name"]!, Address.Parse((string)a["address"]!),
                 (string?)a["secret"], (uint)a["index"]!, DateTimeOffset.Parse((string)a["created"]!, System.Globalization.CultureInfo.InvariantCulture)));
+        foreach (var secret in store.secrets.Where(x => !store.secretNames.ContainsKey(x.Id)))
+            store.secretNames[secret.Id] = store.accounts.Where(a => a.SecretId == secret.Id).OrderBy(a => a.Index).FirstOrDefault()?.Name ?? "Счёт";
         return store;
     }
 
@@ -94,7 +102,11 @@ public sealed class Keystore
         var normalized = string.Join(' ', Mnemonic.Split(mnemonic));
         var existing = FindMnemonic(key, normalized);
         var secretId = existing ?? NewId("s");
-        if (existing == null) secrets.Add(new SecretRecord(secretId, SecretKind.Mnemonic, Seal(key, Encoding.UTF8.GetBytes(normalized), Aad(secretId, SecretKind.Mnemonic))));
+        if (existing == null)
+        {
+            secrets.Add(new SecretRecord(secretId, SecretKind.Mnemonic, Seal(key, Encoding.UTF8.GetBytes(normalized), Aad(secretId, SecretKind.Mnemonic))));
+            secretNames[secretId] = name;
+        }
         using var derived = HdKey.FromMnemonic(normalized, index);
         return AddAccount(new WalletAccount(NewId("a"), name, derived.Address, secretId, index, DateTimeOffset.UtcNow));
     }
@@ -104,6 +116,7 @@ public sealed class Keystore
         using var parsed = new PrivateKey(privateKey);
         var secretId = NewId("s");
         secrets.Add(new SecretRecord(secretId, SecretKind.PrivateKey, Seal(key, privateKey, Aad(secretId, SecretKind.PrivateKey))));
+        secretNames[secretId] = name;
         return AddAccount(new WalletAccount(NewId("a"), name, parsed.Address, secretId, 0, DateTimeOffset.UtcNow));
     }
 
@@ -152,11 +165,24 @@ public sealed class Keystore
 
     internal void Rename(string accountId, string name) { var i = accounts.FindIndex(a => a.Id == accountId); accounts[i] = accounts[i] with { Name = name }; Save(); }
 
+    // The account a secret makes (a phrase with its addresses, a key); a watched address is its own account.
+    public string NameOf(string secretId) => secretNames.GetValueOrDefault(secretId, "Счёт");
+    internal void RenameSecret(string secretId, string name) { if (secrets.Any(x => x.Id == secretId)) { secretNames[secretId] = name; Save(); } }
+
+    // The whole account: every address of the secret, and the secret itself.
+    internal void RemoveSecret(string secretId)
+    {
+        accounts.RemoveAll(a => a.SecretId == secretId);
+        secrets.RemoveAll(x => x.Id == secretId);
+        secretNames.Remove(secretId);
+        Save();
+    }
+
     internal void Remove(string accountId)
     {
         var account = accounts.Single(a => a.Id == accountId);
         accounts.Remove(account);
-        if (account.SecretId != null && accounts.All(a => a.SecretId != account.SecretId)) secrets.RemoveAll(s => s.Id == account.SecretId);
+        if (account.SecretId != null && accounts.All(a => a.SecretId != account.SecretId)) { secrets.RemoveAll(s => s.Id == account.SecretId); secretNames.Remove(account.SecretId); }
         Save();
     }
 
@@ -211,7 +237,7 @@ public sealed class Keystore
             ["format"] = Format, ["version"] = 1,
             ["kdf"] = new JsonObject { ["algorithm"] = "argon2id", ["version"] = 19, ["memoryKiB"] = kdf.MemoryKiB, ["iterations"] = kdf.Iterations, ["parallelism"] = kdf.Parallelism, ["salt"] = Convert.ToBase64String(kdf.Salt) },
             ["verifier"] = WriteSealed(verifier),
-            ["secrets"] = new JsonArray(secrets.Select(s => (JsonNode)new JsonObject { ["id"] = s.Id, ["kind"] = s.Kind.ToString(), ["nonce"] = s.Box.Nonce, ["ciphertext"] = s.Box.Ciphertext, ["tag"] = s.Box.Tag }).ToArray()),
+            ["secrets"] = new JsonArray(secrets.Select(s => (JsonNode)new JsonObject { ["id"] = s.Id, ["kind"] = s.Kind.ToString(), ["name"] = NameOf(s.Id), ["nonce"] = s.Box.Nonce, ["ciphertext"] = s.Box.Ciphertext, ["tag"] = s.Box.Tag }).ToArray()),
             ["accounts"] = new JsonArray(accounts.Select(a => (JsonNode)new JsonObject
             {
                 ["id"] = a.Id, ["name"] = a.Name, ["address"] = a.Address.ToString(), ["secret"] = a.SecretId, ["index"] = a.Index,
@@ -302,6 +328,8 @@ public sealed class KeystoreSession : IDisposable
     public IReadOnlyList<Address> AddressesOf(string secretId, uint from, int count) => Store.AddressesOf(Key, secretId, from, count);
     public WalletAccount AddIndex(string secretId, uint index, string name) => Store.AddIndex(Key, secretId, index, name);
     public void Rename(string accountId, string name) => Store.Rename(accountId, name);
+    public void RenameSecret(string secretId, string name) => Store.RenameSecret(secretId, name);
+    public void RemoveSecret(string secretId) => Store.RemoveSecret(secretId);
     public void Remove(string accountId) => Store.Remove(accountId);
     public string RevealMnemonic(string secretId) => Store.RevealMnemonic(Key, secretId);
     public PrivateKey OpenKey(WalletAccount account) => Store.OpenKey(Key, account);

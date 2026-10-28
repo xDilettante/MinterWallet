@@ -8,85 +8,150 @@
     <StackPanel Margin="32,28,32,32" Spacing="24" MaxWidth="720">
       <StackPanel Spacing="4">
         <TextBlock Text="Счета" Classes="h1" />
-        <TextBlock Classes="muted prose" Text="Все адреса этого кошелька. Щелчок по адресу делает его текущим. Ниже можно создать новый адрес или добавить существующий." />
+        <TextBlock Classes="muted prose" Text="Счёт — это фраза восстановления, ключ или адрес для просмотра. У фразы может быть сколько угодно адресов: № 1, № 2, № 3… — все они восстанавливаются этой же фразой. Щелчок по адресу делает его текущим." />
       </StackPanel>
       <views:NoticeBar Text="{Binding AccountsPage.Status}" Tone="{Binding AccountsPage.Tone}" />
 
-      <!-- The list: picking a row switches the current account. -->
-      <ListBox Classes="rows" ItemsSource="{Binding Accounts}" SelectedItem="{Binding Selected}" AutomationProperties.Name="Счета">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="local:AccountItem">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Classes="avatar" Width="34" Height="34"><local:Icon Kind="{Binding Glyph}" Width="17" Height="17" /></Border>
-              <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="1">
-                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <TextBlock local:AddressMarks.Text="{Binding AddressText}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-              <Border Grid.Column="2" Classes="badge neutral" VerticalAlignment="Center"><TextBlock Text="{Binding Kind}" /></Border>
-            </Grid>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-
-      <!-- The current account -->
-      <StackPanel Spacing="10" DataContext="{Binding AccountsPage}" x:DataType="local:AccountsViewModel">
-        <TextBlock Text="Текущий счёт" Classes="h2" />
-        <Border Classes="card">
-          <StackPanel Spacing="14">
-            <TextBlock Text="{Binding SelectedKind}" Classes="caption prose" />
-            <StackPanel>
-              <TextBlock Text="Название" Classes="label" />
-              <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Переименовать" Command="{Binding Rename}" Margin="8,0,0,0" />
-                <TextBox Text="{Binding RenameTo}" AutomationProperties.Name="Название счёта" />
-              </DockPanel>
-            </StackPanel>
-            <StackPanel Spacing="10" IsVisible="{Binding SelectedHasPhrase}">
-              <Border Classes="divider" />
-              <TextBlock Text="Фраза восстановления" Classes="label" Margin="0" />
-              <Button Command="{Binding Reveal}" HorizontalAlignment="Left" IsVisible="{Binding !PhraseShown}">
-                <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="eye" Width="16" Height="16" /><TextBlock Text="Показать фразу…" /></StackPanel>
-              </Button>
-              <StackPanel Spacing="10" IsVisible="{Binding PhraseShown}">
-                <ItemsControl ItemsSource="{Binding ShownWords}">
-                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <!-- A card per account; the current address's account shows its tools. -->
+      <ItemsControl ItemsSource="{Binding AccountsPage.Groups}" AutomationProperties.Name="Счета">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="14" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="local:AccountGroup">
+            <Border Classes="card" Padding="0" Classes.active="{Binding IsActive}">
+              <StackPanel>
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,16,20,10">
+                  <Border Classes="avatar" Width="36" Height="36"><local:Icon Kind="{Binding Glyph}" Width="18" Height="18" /></Border>
+                  <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="1">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="16" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Caption}" Classes="caption" />
+                  </StackPanel>
+                  <Border Grid.Column="2" Classes="badge" VerticalAlignment="Center" IsVisible="{Binding IsActive}"><TextBlock Text="текущий" /></Border>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Addresses}">
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="local:PhraseWord">
-                      <Border Classes="word">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                          <TextBlock Text="{Binding Number}" Classes="caption mono" Width="18" TextAlignment="Right" VerticalAlignment="Center" />
-                          <TextBlock Text="{Binding Word}" Classes="mono" FontWeight="Medium" />
-                        </StackPanel>
-                      </Border>
+                    <DataTemplate x:DataType="local:AddressRow">
+                      <Button Classes="addressRow" Classes.current="{Binding IsCurrent}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                              Command="{Binding $parent[UserControl].((local:MainViewModel)DataContext).AccountsPage.Pick}" CommandParameter="{Binding Item}">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <StackPanel Spacing="1">
+                            <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                            <TextBlock local:AddressMarks.Text="{Binding AddressText}" Classes="caption mono" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <local:Icon Grid.Column="1" Kind="check" Width="16" Height="16" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" IsVisible="{Binding IsCurrent}" />
+                        </Grid>
+                      </Button>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button Command="{Binding CopyPhrase}">
-                    <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="Копировать" /></StackPanel>
-                  </Button>
-                  <Button Content="Скрыть" Command="{Binding HidePhrase}" />
-                </StackPanel>
-              </StackPanel>
-            </StackPanel>
-            <Border Classes="divider" />
-            <StackPanel Spacing="10">
-              <Button Classes="link" Command="{Binding Remove}" HorizontalAlignment="Left" IsVisible="{Binding !ConfirmingRemove}">
-                <TextBlock Text="Удалить этот счёт из кошелька" FontSize="13" />
-              </Button>
-              <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="12,10" IsVisible="{Binding ConfirmingRemove}">
-                <StackPanel Spacing="10">
-                  <TextBlock Text="{Binding RemoveWarning}" Classes="prose" />
-                  <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                    <Button Content="Отмена" Command="{Binding CancelRemove}" />
-                    <Button Content="Удалить…" Command="{Binding Remove}" />
+
+                <!-- The tools of the current account -->
+                <Panel IsVisible="{Binding IsActive}">
+                <StackPanel Spacing="14" Margin="20,12,20,20"
+                            DataContext="{Binding $parent[UserControl].((local:MainViewModel)DataContext).AccountsPage}" x:DataType="local:AccountsViewModel">
+                  <StackPanel Spacing="10" IsVisible="{Binding ActiveIsPhrase}">
+                    <WrapPanel ItemSpacing="8" LineSpacing="8">
+                      <Button Command="{Binding NextAddress}" Classes="accent">
+                        <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="plus" Width="16" Height="16" /><TextBlock Text="Новый адрес" /></StackPanel>
+                      </Button>
+                      <Button Command="{Binding ShowDerived}">
+                        <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="search" Width="16" Height="16" /><TextBlock Text="{Binding DerivedLabel}" /></StackPanel>
+                      </Button>
+                      <Button Command="{Binding Reveal}" IsVisible="{Binding !PhraseShown}">
+                        <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="eye" Width="16" Height="16" /><TextBlock Text="Показать фразу…" /></StackPanel>
+                      </Button>
+                    </WrapPanel>
+                    <TextBlock Classes="caption prose" Text="«Новый адрес» добавит следующий номер. Адрес, которым вы пользовались в другом кошельке с этой фразой, найдите в «Адресах фразы по номеру» и верните одной кнопкой." />
+                    <ItemsControl ItemsSource="{Binding Derived}" IsVisible="{Binding HasDerived}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:DerivedItem">
+                          <Grid ColumnDefinitions="52,*,Auto" Margin="0,4">
+                            <TextBlock Text="{Binding Number}" Classes="caption" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Spacing="1">
+                              <SelectableTextBlock Text="{Binding AddressText}" Classes="mono caption" TextWrapping="Wrap" />
+                              <TextBlock Text="{Binding State}" Classes="caption" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="Добавить" IsVisible="{Binding CanAdd}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                    Command="{Binding $parent[ItemsControl].((local:AccountsViewModel)DataContext).AddDerived}" CommandParameter="{Binding}" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Spacing="10" IsVisible="{Binding PhraseShown}">
+                      <ItemsControl ItemsSource="{Binding ShownWords}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="local:PhraseWord">
+                            <Border Classes="word">
+                              <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock Text="{Binding Number}" Classes="caption mono" Width="18" TextAlignment="Right" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Word}" Classes="mono" FontWeight="Medium" />
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Command="{Binding CopyPhrase}">
+                          <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="Копировать" /></StackPanel>
+                        </Button>
+                        <Button Content="Скрыть" Command="{Binding HidePhrase}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </StackPanel>
+
+                  <Border Classes="divider" />
+                  <StackPanel>
+                    <TextBlock Text="Название счёта" Classes="label" />
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Content="Переименовать" Command="{Binding RenameGroup}" Margin="8,0,0,0" />
+                      <TextBox Text="{Binding GroupRenameTo}" AutomationProperties.Name="Название счёта" />
+                    </DockPanel>
+                  </StackPanel>
+                  <StackPanel Spacing="6" IsVisible="{Binding ActiveIsPhrase}">
+                    <TextBlock Text="{Binding CurrentTitle}" Classes="label" Margin="0" />
+                    <TextBlock Text="{Binding SelectedKind}" Classes="caption prose" />
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Content="Сохранить" Command="{Binding Rename}" Margin="8,0,0,0" />
+                      <TextBox Text="{Binding RenameTo}" PlaceholderText="Название адреса, например «Сбережения»" AutomationProperties.Name="Название адреса" />
+                    </DockPanel>
+                  </StackPanel>
+                  <TextBlock Text="{Binding SelectedKind}" Classes="caption prose" IsVisible="{Binding !ActiveIsPhrase}" />
+
+                  <StackPanel Spacing="8">
+                    <WrapPanel ItemSpacing="16">
+                      <Button Classes="link" Command="{Binding Remove}" IsVisible="{Binding !ConfirmingRemove}">
+                        <TextBlock Text="{Binding RemoveLabel}" FontSize="13" />
+                      </Button>
+                      <Button Classes="link" Command="{Binding RemoveGroup}" IsVisible="{Binding CanRemoveAddress}">
+                        <TextBlock Text="Удалить счёт целиком…" FontSize="13" />
+                      </Button>
+                    </WrapPanel>
+                    <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="12,10" IsVisible="{Binding ConfirmingRemove}">
+                      <StackPanel Spacing="10">
+                        <TextBlock Text="{Binding RemoveWarning}" Classes="prose" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                          <Button Content="Отмена" Command="{Binding CancelRemove}" />
+                          <Button Content="Удалить…" Command="{Binding Remove}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="12,10" IsVisible="{Binding ConfirmingGroupRemove}">
+                      <StackPanel Spacing="10">
+                        <TextBlock Text="{Binding GroupRemoveWarning}" Classes="prose" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                          <Button Content="Отмена" Command="{Binding CancelRemove}" />
+                          <Button Content="Удалить счёт…" Command="{Binding RemoveGroup}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
                   </StackPanel>
                 </StackPanel>
-              </Border>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-      </StackPanel>
+                </Panel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
 
       <!-- Address book -->
       <StackPanel Spacing="10">
@@ -126,8 +191,8 @@
       <!-- Adding -->
       <StackPanel Spacing="10" DataContext="{Binding AccountsPage}" x:DataType="local:AccountsViewModel">
         <TextBlock Text="Добавить счёт" Classes="h2" />
+        <TextBlock Classes="caption prose" Text="Новый адрес той же фразы добавляется в её карточке выше. Здесь — отдельный счёт: новая фраза, ваша фраза или ключ, адрес для просмотра или красивый адрес." />
         <ListBox Classes="segmented" SelectedIndex="{Binding AddIndex}" AutomationProperties.Name="Как добавить">
-          <ListBoxItem Content="Новый адрес" />
           <ListBoxItem Content="Новая фраза" />
           <ListBoxItem Content="Импорт фразы" />
           <ListBoxItem Content="Ключ" />
@@ -136,29 +201,6 @@
         </ListBox>
         <Border Classes="card">
           <StackPanel Spacing="14">
-            <!-- The next address of a phrase already in the wallet -->
-            <StackPanel Spacing="10" IsVisible="{Binding IsDerive}">
-              <TextBlock Text="{Binding DeriveHint}" Classes="muted prose" />
-              <ComboBox ItemsSource="{Binding Phrases}" SelectedItem="{Binding Phrase}" HorizontalAlignment="Stretch" IsVisible="{Binding HasSeveralPhrases}"
-                        AutomationProperties.Name="Фраза" />
-              <TextBlock Classes="caption prose" Text="Из одной фразы получается сколько угодно адресов: № 1, № 2, № 3… Все они восстанавливаются этой же фразой в любом кошельке Minter. «Создать адрес» добавит следующий номер; адрес, которым вы пользовались в другом кошельке, найдите в списке и добавьте." />
-              <Button Content="{Binding DerivedLabel}" Command="{Binding ShowDerived}" HorizontalAlignment="Left" />
-              <ItemsControl ItemsSource="{Binding Derived}" IsVisible="{Binding HasDerived}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="local:DerivedItem">
-                    <Grid ColumnDefinitions="52,*,Auto" Margin="0,4">
-                      <TextBlock Text="{Binding Number}" Classes="mono caption" VerticalAlignment="Center" />
-                      <StackPanel Grid.Column="1" Spacing="1">
-                        <SelectableTextBlock Text="{Binding AddressText}" Classes="mono caption" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding State}" Classes="caption" />
-                      </StackPanel>
-                      <Button Grid.Column="2" Content="Добавить" IsVisible="{Binding CanAdd}" VerticalAlignment="Center" Margin="8,0,0,0"
-                              Command="{Binding $parent[ItemsControl].((local:AccountsViewModel)DataContext).AddDerived}" CommandParameter="{Binding}" />
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
             <!-- A new phrase -->
             <StackPanel Spacing="10" IsVisible="{Binding IsNewPhrase}">
               <TextBlock Classes="muted prose" Text="Отдельный кошелёк со своей фразой. Сохраните её так, как вам удобно — запишите или скопируйте в менеджер паролей: по ней этот адрес восстанавливается на любом устройстве." />
@@ -280,7 +322,7 @@
               </StackPanel>
             </Panel>
             <StackPanel IsVisible="{Binding IsPlainAdd}">
-              <TextBlock Text="Название" Classes="label" />
+              <TextBlock Text="Название счёта" Classes="label" />
               <TextBox Text="{Binding Name}" AutomationProperties.Name="Название нового счёта" />
             </StackPanel>
             <Button Content="{Binding AddLabel}" Command="{Binding Add}" Classes="accent" HorizontalAlignment="Right" MinWidth="150" IsVisible="{Binding IsPlainAdd}" />

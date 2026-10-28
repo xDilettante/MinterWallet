@@ -41,18 +41,32 @@ public sealed class SendQueue(IChainBackend backend, TimeSpan? inclusionTimeout 
             var nonce = (await backend.AccountAsync(sender, ct)).Nonce + 1;
             var tx = build(nonce);
             if (tx.Sender() != sender) throw new InvalidOperationException("Транзакция подписана не тем счётом.");
-            var sent = await backend.SendAsync(tx, ct);
-            if (sent.Code != 0) return new TxOutcome(TxState.Rejected, tx.Hash, Code: sent.Code, Log: sent.Log);
+            var answered = true;
+            try
+            {
+                var sent = await backend.SendAsync(tx, ct);
+                if (sent.Code != 0) return new TxOutcome(TxState.Rejected, tx.Hash, Code: sent.Code, Log: sent.Log);
+            }
+            catch (Exception e) when (!ct.IsCancellationRequested && AnswerLost(e))
+            {
+                // The source may have taken the transaction and lost only its answer (a gate still writing to slow peers, a
+                // dropped connection): the transaction is looked for by its hash like any other.
+                answered = false;
+            }
             progress?.Report(new TxOutcome(TxState.Sent, tx.Hash));
             var deadline = DateTime.UtcNow + timeout;
             while (DateTime.UtcNow < deadline)
             {
                 await Task.Delay(poll, ct);
-                var record = await backend.TransactionAsync(tx.Hash, ct);
+                TxRecord? record;
+                try { record = await backend.TransactionAsync(tx.Hash, ct); }
+                catch (Exception e) when (!ct.IsCancellationRequested && Transient(e)) { continue; }   // one slow answer is not the outcome
                 if (record == null) continue;
                 return new TxOutcome(record.Code == 0 ? TxState.Included : TxState.FailedInBlock, tx.Hash, record.Height, record.Code, record.Log);
             }
-            return new TxOutcome(TxState.Lost, tx.Hash, Log: "Транзакция не попала в блок за отведённое время; она может ещё оставаться в мемпуле.");
+            return new TxOutcome(TxState.Lost, tx.Hash, Log: answered
+                ? "Транзакция не попала в блок за отведённое время; она может ещё оставаться в мемпуле."
+                : "Источник не ответил на отправку, и в блоках транзакции пока нет. Если она не дошла до сети, баланс не изменится — тогда отправьте ещё раз.");
         }
         finally
         {
@@ -64,6 +78,19 @@ public sealed class SendQueue(IChainBackend backend, TimeSpan? inclusionTimeout 
             turn.SetResult();
         }
     }
+
+    // The request may have reached the source: a timeout, a connection cut after sending, a proxy's "gateway timeout".
+    // Not when the connection never opened (refused, no such host, TLS): then nothing was sent.
+    private static bool AnswerLost(Exception e) => e switch
+    {
+        TaskCanceledException or IOException => true,
+        HttpRequestException { HttpRequestError: HttpRequestError.ResponseEnded or HttpRequestError.InvalidResponse } => true,
+        HttpRequestException { HttpRequestError: HttpRequestError.Unknown, InnerException: IOException } => true,
+        ChainApiException api => api.Code == 504,
+        _ => false,
+    };
+
+    private static bool Transient(Exception e) => e is TaskCanceledException or IOException or HttpRequestException or ChainApiException;
 }
 
 public sealed class GasPriceTooHighException(uint required, uint cap)
@@ -173,6 +200,13 @@ public sealed class WalletService(IChainBackend backend, KeystoreSession session
         var coin = await Backend.CoinAsync(gasCoin, ct);
         var price = Commission.WithGasPrice(Commission.Price(data, payload.Length, prices), gasPrice);
         return (tx, new TxPreview(data, gasCoin, gasPrice, payload, commission, new CoinRef(gasCoin, coin?.Symbol ?? $"#{gasCoin}"), price, prices.Coin));
+    }
+
+    // An Ethereum or BSC transaction (the bridge's deposits) signed by the account's key: the same address there.
+    public byte[] SignEvm(WalletAccount account, EvmTx tx, ulong chainId)
+    {
+        using var key = session.OpenKey(account);
+        return tx.Sign(key, chainId);
     }
 
     public void SignMultisig(WalletAccount member, Transaction tx)

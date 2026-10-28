@@ -47,7 +47,7 @@ public sealed class BridgeViewModel : ScreenModel
     public int NetworkIndex { get => networkIndex; set { if (value >= 0 && Set(ref networkIndex, value)) { Changed(nameof(NetworkHint)); Changed(nameof(RecipientCheck)); _ = EstimateAsync(); } } }
     public BridgeNetwork Network => (BridgeNetwork)networkIndex;
     public string NetworkHint => Coin == null ? "" : Bridge.TokenOf(Coin.Coin.Id, Network) is { } t
-        ? $"{Coin.Symbol} придёт в {Bridge.NameOf(Network)} как {(t.Contract == null ? $"родная монета сети ({t.Denom.ToUpperInvariant()})" : $"токен {t.Contract}")}."
+        ? $"{Coin.Symbol} придёт в {Bridge.NameOf(Network)} как токен {t.Denom.ToUpperInvariant()} (контракт {t.Contract})."
         : $"{Coin.Symbol} через мост уходит только в {string.Join(" и ", Bridge.NetworksOf(Coin.Coin.Id).Select(Bridge.NameOf))}.";
     public string Recipient { get => recipient; set { if (Set(ref recipient, value.Trim())) { Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); } } }
     public string RecipientCheck
@@ -130,7 +130,7 @@ public sealed class BridgeViewModel : ScreenModel
         var net = Bridge.NameOf(Network);
         var rows = new List<(string, string)>
         {
-            ("Куда", $"{net} — через мост Minter Hub"), ("Получатель", to), ("Монета", $"{c.Symbol} (id {c.Coin.Id}) → {(token.Contract ?? token.Denom.ToUpperInvariant())}"),
+            ("Куда", $"{net} — через мост Minter Hub"), ("Получатель", to), ("Монета", $"{c.Symbol} (id {c.Coin.Id}) → {token.Denom.ToUpperInvariant()} ({token.Contract})"),
             ("Отправляете", $"{Units.FormatCoins(value)} {c.Symbol}"), ("Мост удержит", $"1 % — {Units.FormatCoins(Bridge.HubFee(value))} {c.Symbol} — и газ в {net}"),
             ("Адрес моста", Bridge.Multisig.ToString()),
         };

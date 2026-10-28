@@ -50,6 +50,16 @@ internal static class QueueChecks
         var failed = await queue.SubmitAsync(b.Address, Builder(b));
         Assert.Equal((TxState.FailedInBlock, 302u), (failed.State, failed.Code), "failed in block");
 
+        // The source takes the transaction but its answer times out (a gate still writing to slow peers), and a status
+        // poll times out once: the transaction is found by its hash, not reported as a failure.
+        chain.FailInBlock = 0; chain.LoseAnswer = true; chain.Flaky = 2;
+        var unanswered = await queue.SubmitAsync(a.Address, Builder(a));
+        Assert.Equal(TxState.Included, unanswered.State, "included although the answer to the send was lost");
+        chain.Swallow = true;
+        var unanswered2 = await queue.SubmitAsync(a.Address, Builder(a));
+        Assert.True(unanswered2.State == TxState.Lost && unanswered2.Log.Contains("не ответил", StringComparison.Ordinal), "an unanswered send that never lands says so");
+        chain.Swallow = false; chain.LoseAnswer = false; chain.Flaky = 0;
+
         // A transaction signed by another key is never sent for this sender.
         await Assert.ThrowsAsync<InvalidOperationException>(() => queue.SubmitAsync(a.Address, Builder(b)), "wrong signer");
     }
@@ -139,7 +149,8 @@ internal sealed class FakeChain : IChainBackend
     private readonly ConcurrentDictionary<Address, string> inMempool = new();
     public TimeSpan Delay = TimeSpan.FromMilliseconds(30);
     public uint Refuse, FailInBlock;
-    public bool Swallow;
+    public bool Swallow, LoseAnswer;
+    public int Flaky;
     public int Code113;
     public IEnumerable<ulong> Nonces(Address a) => nonces.GetValueOrDefault(a) ?? [];
 
@@ -154,10 +165,12 @@ internal sealed class FakeChain : IChainBackend
         if (!inMempool.TryAdd(sender, tx.Hash)) { Interlocked.Increment(ref Code113); return Task.FromResult(new BroadcastResult(113, "already in mempool", tx.Hash)); }
         if (!Swallow) pending[tx.Hash] = (DateTime.UtcNow + Delay, tx);
         else inMempool.TryRemove(sender, out _);
+        if (LoseAnswer) throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.");
         return Task.FromResult(new BroadcastResult(0, "", tx.Hash));
     }
     public Task<TxRecord?> TransactionAsync(string hash, CancellationToken ct = default)
     {
+        if (Interlocked.Decrement(ref Flaky) >= 0) throw new TaskCanceledException("slow answer");
         if (!pending.TryGetValue(hash, out var p) || DateTime.UtcNow < p.At) return Task.FromResult<TxRecord?>(null);
         var sender = p.Tx.Sender();
         if (pending.TryRemove(hash, out _))

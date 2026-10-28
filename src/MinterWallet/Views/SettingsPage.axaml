@@ -133,6 +133,16 @@
                    Text="В некоторых средах Linux (например, GNOME без расширения AppIndicator) трея нет — тогда спрятанное окно не вернуть, и эти настройки лучше не включать." />
       </StackPanel>
       <StackPanel Spacing="6">
+        <TextBlock Text="Уведомления" Classes="h2" />
+        <CheckBox IsChecked="{Binding NotifyIncoming}">
+          <TextBlock Classes="prose" Text="Сообщать о поступлениях: когда на любой счёт кошелька приходят монеты, система показывает уведомление — сколько, чего и от кого. Работает, пока кошелёк открыт или в трее, даже заблокированный." />
+        </CheckBox>
+        <CheckBox IsChecked="{Binding NotifyRewards}" IsEnabled="{Binding NotifyIncoming}" Margin="28,0,0,0">
+          <TextBlock Classes="prose" Text="И о наградах за стейкинг (они приходят примерно раз в час)" />
+        </CheckBox>
+        <TextBlock Classes="caption prose" Margin="28,0,0,0" IsVisible="{Binding OnLinux}" Text="В Linux уведомления показывает notify-send (пакет libnotify-bin)." />
+      </StackPanel>
+      <StackPanel Spacing="6">
         <CheckBox IsChecked="{Binding Telemetry}">
           <TextBlock Classes="prose" Text="Анонимная статистика: кошелёк сообщает нашему гейту случайный номер установки, версию, систему, язык и сеть — без адресов, сумм и IP. По ней видно, сколько людей пользуется кошельком." />
         </CheckBox>

@@ -15,5 +15,12 @@ public partial class SendPage : UserControl
             ContactsList.SelectedItem = null;
             ContactsButton.Flyout?.Hide();
         };
+        // A contact picked for a multisend becomes a row.
+        MultisendContacts.SelectionChanged += (_, _) =>
+        {
+            if (MultisendContacts.SelectedItem is not ContactItem contact || DataContext is not MainViewModel main) return;
+            main.Multisend.PickContact.Execute(contact);
+            MultisendContacts.SelectedItem = null;
+        };
     }
 }

@@ -85,6 +85,8 @@ public static class History
     public static string Short(Address a) { var s = a.ToString(); return $"{s[..6]}…{s[^4..]}"; }
     public static string Short(Pubkey p) { var s = p.ToString(); return $"{s[..6]}…{s[^4..]}"; }
 
+    public static string PayloadText(byte[] payload) => DecodePayload(payload);
+
     private static string DecodePayload(byte[] payload)
     {
         try { return new UTF8Encoding(false, true).GetString(payload); }

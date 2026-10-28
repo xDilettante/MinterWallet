@@ -97,7 +97,7 @@ public static class UiScenario
     private static async Task English(string url, string data)
     {
         Settings(data, url, "dark", "devnet", "en");
-        var shell = new Shell(data) { Confirm = _ => Task.FromResult<string?>(Password) };
+        var shell = new Shell(data) { Confirm = _ => Task.FromResult<string?>(Password), AutoRefresh = false };
         window = new MainWindow(shell) { Width = 1100, Height = 720 };
         window.Show();
         Check(Localization.English, "the language setting chose English");
@@ -122,7 +122,9 @@ public static class UiScenario
         main.Section = Section.Send;
         main.Send.SendNow.Execute(null);
         await Until(() => main.Send.Tone == Tone.Error ? main : null, "a validation notice");
-        Scan("send"); Shot("en-send"); main.Send.ModeIndex = 3; Scan("send, bridge"); main.Send.ModeIndex = 0;
+        Scan("send"); Shot("en-send");
+        main.Section = Section.Bridge; Scan("bridge, out"); main.BridgeDirection = 1; Scan("bridge, in"); Shot("en-bridge-in"); main.BridgeDirection = 0;
+        main.Section = Section.Send;
         main.Send.ModeIndex = 1; main.Multisend.Lines = "Mx1 2"; Scan("multisend");
         main.Send.ModeIndex = 2; Scan("send by check");
         main.Send.ModeIndex = 0;
@@ -171,7 +173,7 @@ public static class UiScenario
         try
         {
             Settings(data, url, "dark", "MinterGate");
-            var shell = new Shell(data);
+            var shell = new Shell(data) { AutoRefresh = false };
             window = new MainWindow(shell) { Width = 1100, Height = 720 };
             window.Show();
             ((WelcomeViewModel)shell.Page).Watch.Execute(null);
@@ -199,18 +201,33 @@ public static class UiScenario
             main.Section = Section.Overview; main.ShowReceive = true;
             Shot("mainnet-receive");
             Check(main.Balances.Where(b => b.Coin.Id != 0 && b.BipValue.IsZero).All(b => b.BipText == $"нет оценки в {main.BaseSymbol}"), "a token without a price says so");
+            // The refresh of every few seconds: the source's height read, the ring back to its start.
+            await main.PulseAsync();
+            Check(!main.Reading && main.CountdownAngle == 0 && main.BlockText.Length > 0, "a refresh pulse against the gate");
             // Out to BSC through Minter Hub, not sent: the bridge's live work gives the gas estimate; the own address there.
-            main.Section = Section.Send; main.Send.ModeIndex = 3;
+            main.Section = Section.Bridge; main.BridgeDirection = 0;
+            await shell.LoadBridgeTokensAsync(); await Task.Delay(500); Dispatcher.UIThread.RunJobs();   // the bridge's own coin list, then the coins on offer
+            Check(Bridge.Tokens.Count(t => t.Network == BridgeNetwork.Bsc) >= 20 && Bridge.NetworksOf(0).Count() == 2, "the bridge's coin list read from hub.mnst.club");
             Check(main.Hub.IsAvailable, "the bridge is offered on mainnet");
-            main.Hub.Coin = new BalanceItem(new CoinRef(3494, "USDTBSC"), Units.ParseCoins("50"), 0, main.BaseSymbol);
+            // A coin this address does not hold, offered as if it did (the list behind the picker too, or the picker drops it).
+            var usdtBsc = new BalanceItem(new CoinRef(3494, "USDTBSC"), Units.ParseCoins("50"), 0, main.BaseSymbol);
+            main.Hub.Coins.Add(usdtBsc); main.Hub.Coin = usdtBsc;
             Check(main.Hub.NetworkIndex == (int)BridgeNetwork.Bsc, "USDTBSC goes to BSC only");
             main.Hub.Amount = "20";
             await Until(() => main.Hub.Estimate.Contains("Мост удержит 1 % — 0.2 USDTBSC", StringComparison.Ordinal) && !main.Hub.Estimate.Contains("не ответил", StringComparison.Ordinal) ? main : null,
-                "the bridge's fees from its latest withdrawals", 60, () => main.Hub.Estimate);
+                "the bridge's fees from its latest withdrawals", 60, () => $"{main.Hub.Coin?.Symbol} {main.Hub.Network} {main.Hub.Amount}: {main.Hub.Estimate}");
             main.Hub.Own.Execute(null);
             Check(main.Hub.Recipient == Bridge.OwnAddress(main.Selected!.Account.Address) && main.Hub.RecipientCheck.StartsWith("Это ваш адрес в BSC", StringComparison.Ordinal), "the account's own address on BSC");
             Shot("mainnet-bridge");
             Console.WriteLine($"Bridge estimate: {main.Hub.Estimate.Replace('\n', ' ')}");
+            // In from BSC, not sent: the account's address there, its balances read from BSC nodes, the account as the recipient.
+            main.BridgeDirection = 1;
+            Check(main.HubIn.IsAvailable && main.HubIn.EvmAddress == Bridge.OwnAddress(main.Selected!.Account.Address), "deposits offered from the account's own address");
+            Check(main.HubIn.Recipient == main.Selected!.Account.Address.ToString() && main.HubIn.RecipientCheck.StartsWith("Ваш счёт", StringComparison.Ordinal), "the account itself is the recipient");
+            await Until(() => main.HubIn.Balances.Contains("на газ", StringComparison.Ordinal) || main.HubIn.Balances.Contains("нет BNB", StringComparison.Ordinal) ? main : null,
+                "balances read from BSC", 60, () => main.HubIn.Balances + main.HubIn.Status);
+            Shot("mainnet-bridge-in");
+            Console.WriteLine($"Bridge deposit: {main.HubIn.Balances.Replace('\n', ' ')} ({main.HubIn.Tokens.Count} tokens)");
             Console.WriteLine($"PASS ui mainnet: {main.Balances.Count} coins with dollars ({main.TotalUsd}), {main.History.Items.Count} history items " +
                 $"({main.History.Items.Count(x => x.FromExplorer)} from the explorer below {shell.GateIndexFrom}), coin list from the gate; screens in {output}");
             return 0;
@@ -237,6 +254,7 @@ public static class UiScenario
         var clipboard = "";
         var shell = new Shell(data)
         {
+            AutoRefresh = false,
             Confirm = _ => Task.FromResult<string?>(Password),
             CopyText = text => { clipboard = text; return Task.CompletedTask; },
             PasteText = () => Task.FromResult<string?>(clipboard)
@@ -305,8 +323,8 @@ public static class UiScenario
         Shot("accounts-phrase");
         main.Section = Section.Overview;
         main.AddAddress.Execute(null);
-        Check(main.IsAccounts && accounts.IsDerive, "the + button opens adding the next address of the phrase");
-        accounts.Add.Execute(null);
+        Check(main.IsAccounts && accounts.ActiveIsPhrase && accounts.Groups.Count == 1, "the + button opens the accounts, the phrase's card with its tools");
+        accounts.NextAddress.Execute(null);
         using (var key = HdKey.FromMnemonic(phrase, 1)) Check(main.Selected!.Account.Address == key.Address && main.Accounts.Count == 2, "second address of the phrase, selected");
         // The phrase's addresses by number: № 1 and № 2 in the wallet, № 6 added by its number.
         accounts.ShowDerived.Execute(null);
@@ -314,6 +332,11 @@ public static class UiScenario
         Check(accounts.Derived[0].InWallet && accounts.Derived[1].InWallet && !accounts.Derived[5].InWallet, "which addresses are in the wallet");
         accounts.AddDerived.Execute(accounts.Derived[5]);
         using (var key = HdKey.FromMnemonic(phrase, 5)) Check(main.Selected!.Account.Address == key.Address && main.Selected.Account.Index == 5 && main.Accounts.Count == 3, "address № 6 added by its number");
+        // The three addresses are one account: renamed as a whole, an address named on its own.
+        Check(accounts.Groups is [{ IsPhrase: true, IsActive: true } only] && only.Addresses.Count == 3 && only.Addresses[2].IsCurrent, "the phrase's addresses under one account");
+        accounts.GroupRenameTo = "Основной"; accounts.RenameGroup.Execute(null);
+        accounts.RenameTo = "Сбережения"; accounts.Rename.Execute(null);
+        Check(main.AccountName == "Основной · № 6 · Сбережения" && main.Accounts[0].Title == "Основной · № 1", $"the account and the address named: {main.AccountName}");
         Shot("accounts-derived");
         // A vanity address: a key whose address starts with "ab", then a 12-word phrase whose address ends with "c".
         accounts.AddIndex = (int)AddKind.Vanity;
@@ -335,6 +358,7 @@ public static class UiScenario
         Check(accounts.Vanity.Found.EndsWith("c", StringComparison.Ordinal), "the found phrase's address ends with c");
         accounts.Vanity.Add.Execute(null);
         Check(main.Accounts.Count == 5 && main.Shell.Store!.KindOf(main.Selected!.Account) == SecretKind.Mnemonic, "the vanity phrase added as a phrase");
+        Check(accounts.Groups.Count == 3 && accounts.Groups[0].Addresses.Count == 3, "the vanity key and phrase are accounts of their own");
         // A mask: "a" first, "b" third, anything after; and the odds of a long one are shown, not refused.
         accounts.Vanity.TemplateIndex = 4; accounts.Vanity.KindIndex = 0; accounts.Vanity.MaskText = "a?b*";
         Check(accounts.Vanity.Problem == "", "a valid mask");
@@ -387,6 +411,7 @@ public static class UiScenario
         (string Name, string Text)? savedFile = null;
         var shell = new Shell(data)
         {
+            AutoRefresh = false,
             Confirm = request => { confirmations.Add(request); return Task.FromResult<string?>(answer); },
             SaveText = (name, text) => { savedFile = (name, text); return Task.FromResult(true); },
         };
@@ -422,15 +447,19 @@ public static class UiScenario
         Check(main.Request.QrText == main.Address, "the bare address again without an amount");
         main.ToggleReceive.Execute(null);
 
-        // An 0x address in an ordinary transfer points to the bridge tab; the bridge itself is mainnet only.
+        // An 0x address in an ordinary transfer points to the bridge section; the bridge itself is mainnet only.
         main.Section = Section.Send;
         main.Send.Recipient = "0xdd56ab2926e580c5cbd788549fb10976aafb0826";
         Check(main.Send.RecipientCheck.StartsWith("Это адрес в Ethereum или BSC", StringComparison.Ordinal), "an 0x address in a Minter transfer explained");
-        main.Send.ModeIndex = 3;
-        Check(main.Hub.IsUnavailable && !main.Hub.SendNow.CanExecute(null), "the bridge is not offered on a devnet");
-        main.Send.ModeIndex = 0;
+        main.Section = Section.Bridge;
+        Check(main.Hub.IsUnavailable && !main.Hub.SendNow.CanExecute(null) && main.HubIn.IsUnavailable && !main.HubIn.SendNow.CanExecute(null), "the bridge is not offered on a devnet");
+        main.Section = Section.Send;
 
         // Send 1.5 to test account C with a payload: confirmation shows the address in one piece and the amount.
+        // C watched as the wallet watches its own addresses: the arrival is seen with its sender (the node's tx index).
+        var watchC = new IncomeWatch(main.Shell.Backend!);
+        var accountC = new WalletAccount("c", "C", Minter.Protocol.Address.Parse("Mxf1e0f934a415d37018a318c779441143ba20f8d5"), null, 0, DateTimeOffset.UnixEpoch);
+        await watchC.CheckAsync([accountC]);
         main.Send.Recipient = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
         main.Send.Amount = "1,5"; main.Send.Payload = "из интерфейса ✓";
         Check(main.Send.IsNewRecipient, "new recipient can be named");
@@ -443,6 +472,9 @@ public static class UiScenario
         Check(confirm.Rows.Any(r => r.Label == "Сумма" && r.Value.StartsWith("1.5 MNT (id 0)", StringComparison.Ordinal)), "confirmation shows amount with coin id");
         Check(confirm.Warnings.Any(w => w.StartsWith("Новый получатель", StringComparison.Ordinal)), "new recipient warned");
         Shot("send-done");
+        var arrivedC = await watchC.CheckAsync([accountC]);
+        Check(arrivedC is [{ Kind: ArrivalKind.Transfer } toC] && toC.Amount == Units.ParseCoins("1.5") && toC.From == main.Selected!.Account.Address
+            && Shell.Describe(toC).Title == "Пришло 1.5 MNT", "the arrival at C seen with its sender");
         // An address with C's beginning and end but another middle: the substitution warning, in red.
         main.Send.Recipient = "Mxf1e" + new string('f', 34) + "8d5";
         Check(main.Send.RecipientTone == Tone.Error && main.Send.RecipientCheck.StartsWith("Адрес только похож на «Тестовый C» Mxf1e0…f8d5", StringComparison.Ordinal), "lookalike of a contact flagged");
@@ -555,6 +587,15 @@ public static class UiScenario
         main.Multisend.Lines = "Mxf1e0f934a415d37018a318c779441143ba20f8d5 0.1\nMx26a08b83ff690136b336c050e96d50178edd62de 0.2 MNT";
         Check(main.Multisend.SummaryTone == Tone.Success && main.Multisend.Summary.StartsWith("Получателей: 2", StringComparison.Ordinal), "multisend lines read while typing");
         Shot("multisend");
+        // The text becomes rows: each recipient checked (a contact, a new address), the sums against the balance.
+        main.Multisend.ModeIndex = 0;
+        Check(main.Multisend.IsRows && main.Multisend.Rows.Count == 2 && main.Multisend.Rows[0].CheckTone != Tone.Error && main.Multisend.Rows[1].Coin?.Symbol == "MNT"
+            && main.Multisend.Summary.StartsWith("Получателей: 2", StringComparison.Ordinal), "the list read into rows");
+        main.Multisend.AddRow.Execute(null);
+        main.Multisend.Rows[2].Address = "Mx123";
+        Check(main.Multisend.Rows[2].CheckTone == Tone.Error && main.Multisend.SummaryTone == Tone.Warning, "a broken row is pointed at");
+        main.Multisend.Rows[2].Remove.Execute(null);
+        Shot("multisend-rows");
         main.Multisend.SendNow.Execute(null);
         await Until(() => main.Multisend.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "multisend included", 90, () => main.Multisend.Status);
         // A check of 1 MNT from B, redeemed by a new account of the same wallet: a wrong password first, then the right
