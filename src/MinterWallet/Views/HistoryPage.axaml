@@ -7,6 +7,7 @@
   <Grid Margin="32,28,32,24" RowDefinitions="Auto,Auto,*" RowSpacing="14" DataContext="{Binding History}" x:DataType="local:HistoryViewModel">
     <DockPanel>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+        <Button Classes="icon" Command="{Binding Export}" ToolTip.Tip="Сохранить всю историю в CSV — для учёта и налогов" AutomationProperties.Name="Сохранить в CSV"><local:Icon Kind="download" /></Button>
         <Button Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить"><local:Icon Kind="refresh" /></Button>
       </StackPanel>
       <StackPanel Spacing="4">

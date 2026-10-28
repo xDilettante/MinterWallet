@@ -163,7 +163,11 @@
           </Grid>
           <StackPanel>
             <TextBlock Text="{Binding AmountLabel}" Classes="label" />
-            <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" />
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Всё" Command="{Binding All}" Margin="8,0,0,0"
+                      ToolTip.Tip="Продать весь баланс монеты: комиссия платится ею же и вычитается" />
+              <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" />
+            </DockPanel>
           </StackPanel>
           <StackPanel>
             <TextBlock Text="Допустимое проскальзывание" Classes="label" />

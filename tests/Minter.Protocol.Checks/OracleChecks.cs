@@ -128,6 +128,39 @@ internal static class OracleChecks
         }
     }
 
+    // Minter Links: the same text as minter-js-sdk prepareLink, and read back as decodeLink reads it.
+    public static void JsLinks()
+    {
+        var links = Fixtures.Js.GetProperty("links").EnumerateArray().ToArray();
+        Assert.True(links.Length >= 4, "js links present");
+        foreach (var l in links)
+        {
+            var name = l.GetProperty("name").GetString()!;
+            uint? Optional(string field) => l.TryGetProperty(field, out var v) ? v.GetUInt32() : null;
+            var send = new SendData(l.GetProperty("coin").GetUInt32(), Address.Parse(l.GetProperty("to").GetString()!), Units.ParseCoins(l.GetProperty("value").GetString()!));
+            var payload = l.TryGetProperty("payload", out var p) ? System.Text.Encoding.UTF8.GetBytes(p.GetString()!) : [];
+            var link = MinterLink.Of(send, payload) with { Nonce = Optional("nonce"), GasPrice = Optional("gasPrice"), GasCoin = Optional("gasCoin") };
+            var url = l.GetProperty("url").GetString()!;
+            Assert.Equal(url, link.ToString(), $"{name} link vs minter-js-sdk");
+            var back = MinterLink.Parse(url) ?? throw new InvalidOperationException($"{name}: link not read");
+            Assert.Equal(send, back.DecodeData(), $"{name} send read back");
+            Assert.Equal(Convert.ToHexString(payload), Convert.ToHexString(back.Payload), $"{name} payload read back");
+            Assert.Equal((link.Nonce, link.GasPrice, link.GasCoin), (back.Nonce, back.GasPrice, back.GasCoin), $"{name} gas settings read back");
+        }
+        foreach (var c in Fixtures.Js.GetProperty("checkLinks").EnumerateArray())
+        {
+            var raw = Convert.FromHexString(c.GetProperty("check").GetString()![2..]);
+            var password = c.GetProperty("password").GetString()!;
+            var link = new MinterLink(TxType.RedeemCheck, Rlp.List(Rlp.Bytes(raw), Rlp.Bytes([])), [], Password: password);
+            var url = c.GetProperty("url").GetString()!;
+            Assert.Equal(url, link.ToString(), "check link vs minter-js-sdk");
+            var back = MinterLink.Parse(url)!;
+            Assert.True(back.Check().SequenceEqual(raw) && back.Password == password, "check and password read back");
+        }
+        Assert.True(MinterLink.Parse("bip.to/tx/" + links[0].GetProperty("url").GetString()!.Split("/tx/")[1]) != null, "a link without the scheme");
+        Assert.True(MinterLink.Parse("https://bip.to/tx/not-rlp") == null && MinterLink.Parse("Mx7633980c000139dd3bd24a3f54e06474fa941e16") == null, "not a link");
+    }
+
     private static (Check Check, byte[] Proof, Address Redeemer, string Password) Issue(JsonElement c)
     {
         using var key = PrivateKey.FromHex(c.GetProperty("key").GetString()!);

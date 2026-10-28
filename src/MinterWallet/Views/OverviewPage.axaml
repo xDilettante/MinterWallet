@@ -58,7 +58,7 @@
 
       <Border Classes="card" IsVisible="{Binding ShowReceive}">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="24">
-          <local:QrView Text="{Binding Address}" Width="196" Height="196" VerticalAlignment="Top" />
+          <local:QrView Text="{Binding Request.QrText}" Width="196" Height="196" VerticalAlignment="Top" />
           <StackPanel Grid.Column="1" Spacing="12">
             <TextBlock Text="Получить" Classes="h2" />
             <TextBlock Classes="muted prose" Text="Отправьте на этот адрес монеты Minter — BIP или любые токены сети. Покажите QR-код или скопируйте адрес целиком; при отправке с другого устройства сверьте его целиком." />
@@ -66,6 +66,23 @@
             <Button Command="{Binding CopyAddress}" HorizontalAlignment="Left">
               <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="{Binding CopyLabel}" /></StackPanel>
             </Button>
+            <Border Classes="divider" Margin="0,6" />
+            <StackPanel Spacing="10" DataContext="{Binding Request}" x:DataType="local:PaymentRequestViewModel">
+              <TextBlock Text="Попросить сумму" Classes="label" Margin="0" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="Сумма" AutomationProperties.Name="Сумма" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" MinWidth="120" AutomationProperties.Name="Монета" />
+              </Grid>
+              <TextBox Text="{Binding Message}" PlaceholderText="Сообщение (необязательно)" AutomationProperties.Name="Сообщение" />
+              <views:NoticeBar Classes="inline" Text="{Binding Problem}" Tone="Warning" />
+              <StackPanel Spacing="8" IsVisible="{Binding HasLink}">
+                <TextBlock Classes="caption prose" Text="QR-код теперь — ссылка на перевод с этой суммой: её откроет кошелёк Minter. Ссылкой можно и просто поделиться." />
+                <SelectableTextBlock Text="{Binding Link}" Classes="mono caption" TextWrapping="Wrap" />
+                <Button Command="{Binding Copy}" HorizontalAlignment="Left">
+                  <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="{Binding CopyLabel}" /></StackPanel>
+                </Button>
+              </StackPanel>
+            </StackPanel>
             <Border Classes="divider" Margin="0,6" />
             <StackPanel Spacing="10" DataContext="{Binding RedeemCheck}" x:DataType="local:CheckRedeemViewModel">
               <DockPanel>

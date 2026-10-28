@@ -9,7 +9,7 @@ using MinterWallet.Core;
 
 namespace MinterWallet;
 
-public enum Section { Overview, Send, Swap, Staking, History, Accounts, Settings }
+public enum Section { Overview, Send, Swap, Staking, Tokens, Multisig, History, Accounts, Settings }
 
 public sealed record AccountItem(WalletAccount Account, string Kind, string Glyph)
 {
@@ -86,9 +86,13 @@ public sealed class MainViewModel : ScreenModel
         OpenUpdate = new AsyncCommand(async () => { if (updatePage != null && shell.OpenUrl != null) await shell.OpenUrl(updatePage); }, Fail);
         RemoveContact = new RelayCommand(item => { if (item is ContactItem c && Minter.Protocol.Address.TryParse(c.Address, out var a)) { shell.AddressBook.Remove(a); LoadContacts(); } });
         Send = new SendViewModel(this);
+        Request = new PaymentRequestViewModel(this);
         Multisend = new MultisendViewModel(this);
         Swap = new SwapViewModel(this);
         Staking = new StakingViewModel(this);
+        Tokens = new TokensViewModel(this);
+        Multisig = new MultisigViewModel(this);
+        Validator = new ValidatorViewModel(this);
         History = new HistoryViewModel(this);
         AccountsPage = new AccountsViewModel(this);
         Settings = new SettingsViewModel(this);
@@ -159,8 +163,9 @@ public sealed class MainViewModel : ScreenModel
         set
         {
             if (!Set(ref section, value)) return;
-            foreach (var name in new[] { nameof(SectionIndex), nameof(IsOverview), nameof(IsSend), nameof(IsSwap), nameof(IsStaking), nameof(IsHistory), nameof(IsAccounts), nameof(IsSettings) }) Changed(name);
+            foreach (var name in new[] { nameof(SectionIndex), nameof(IsOverview), nameof(IsSend), nameof(IsSwap), nameof(IsStaking), nameof(IsTokens), nameof(IsMultisig), nameof(IsHistory), nameof(IsAccounts), nameof(IsSettings) }) Changed(name);
             if (value == Section.History && History.Items.Count == 0) History.Load.Execute(null);
+            if (value == Section.Tokens && !Tokens.HasMine) Tokens.Load.Execute(null);
         }
     }
     public int SectionIndex { get => (int)section; set { if (value >= 0) Section = (Section)value; } }
@@ -168,6 +173,8 @@ public sealed class MainViewModel : ScreenModel
     public bool IsSend => section == Section.Send;
     public bool IsSwap => section == Section.Swap;
     public bool IsStaking => section == Section.Staking;
+    public bool IsTokens => section == Section.Tokens;
+    public bool IsMultisig => section == Section.Multisig;
     public bool IsHistory => section == Section.History;
     public bool IsAccounts => section == Section.Accounts;
     public bool IsSettings => section == Section.Settings;
@@ -179,8 +186,9 @@ public sealed class MainViewModel : ScreenModel
         {
             if (!Set(ref selected, value) || value == null) return;
             foreach (var name in new[] { nameof(Address), nameof(AddressText), nameof(CanSign), nameof(IsWatchOnly), nameof(AccountName) }) Changed(name);
+            Request?.Update();
             shell.Settings.LastAccountId = value.Account.Id; shell.Settings.Save(shell.DataDirectory);
-            History.Reset();
+            History.Reset(); Tokens?.Reset(); Multisig?.AccountChanged(); Validator?.Reset();
             AccountsPage.Reload();
             Refresh.Execute(null);
         }
@@ -205,6 +213,21 @@ public sealed class MainViewModel : ScreenModel
     public bool HasDelegations => Delegations.Count > 0;
     public bool HasFrozen => Frozen.Count > 0;
     public AccountState? State => state;
+
+    // The contact or own account an unknown address only looks like (AddressBook.LooksLike), as «name» Mx1234…abcd.
+    public string? LookalikeOf(Address to)
+    {
+        if (shell.AddressBook.IsKnown(to) || Accounts.Any(a => a.Account.Address == to)) return null;
+        foreach (var a in Accounts)
+            if (AddressBook.LooksLike(to, a.Account.Address)) return $"«{a.Name}» {Core.History.Short(a.Account.Address)}";
+        foreach (var e in shell.AddressBook.Entries)
+            if (Minter.Protocol.Address.TryParse(e.Address, out var known) && AddressBook.LooksLike(to, known))
+                return e.Name.Length > 0 ? $"«{e.Name}» {Core.History.Short(known)}" : Core.History.Short(known);
+        return null;
+    }
+
+    public static string LookalikeWarning(string like) =>
+        $"Адрес только похож на {like}: совпадают начало и конец, середина другая. Так выглядит подмена — мошенники присылают такие адреса мелкими переводами, чтобы их скопировали из истории. Проверьте, откуда вы взяли адрес.";
     public string? TotalExact => state == null ? null : $"{Units.FormatCoins(state.TotalBipValue)} {BaseSymbol}";
 
     public AsyncCommand Refresh { get; }
@@ -236,9 +259,13 @@ public sealed class MainViewModel : ScreenModel
     public bool IsLiquidity => tradeMode == 2;
     public CheckRedeemViewModel RedeemCheck { get; }
     public SendViewModel Send { get; }
+    public PaymentRequestViewModel Request { get; }
     public MultisendViewModel Multisend { get; }
     public SwapViewModel Swap { get; }
     public StakingViewModel Staking { get; }
+    public TokensViewModel Tokens { get; }
+    public MultisigViewModel Multisig { get; }
+    public ValidatorViewModel Validator { get; }
     public HistoryViewModel History { get; }
     public SettingsViewModel Settings { get; }
 
@@ -258,7 +285,7 @@ public sealed class MainViewModel : ScreenModel
         shell.Disconnect();
         catalog = null; catalogFrom = null; catalogSymbols = [];
         Connected = false; SourceName = shell.Settings.Source.Name; NetworkText = "подключение…"; BlockText = "";
-        Staking.Reset(); History.Reset(); Swap.Buy.Selected = null; Liquidity.Reset(); Orders.Reset();
+        Staking.Reset(); History.Reset(); Tokens.Reset(); Swap.Buy.Selected = null; Liquidity.Reset(); Orders.Reset();
     }
 
     // Coins to offer for a swap: the source's list when it is a MinterGate, otherwise the coins on the account.
@@ -384,7 +411,7 @@ public sealed class MainViewModel : ScreenModel
         foreach (var name in new[] { nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
         if (conflicts.Count > 0) Say("Тикер указывает на другой id монеты, чем раньше: " + string.Join("; ", conflicts) + ". Проверьте монету перед отправкой.", Tone.Warning);
         else if (Tone == Tone.Error) Say("");
-        Send.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); IssueCheck.BalancesChanged(); Liquidity.BalancesChanged(); Orders.BalancesChanged();
+        Send.BalancesChanged(); Request.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); Validator.BalancesChanged(); Tokens.BalancesChanged(); IssueCheck.BalancesChanged(); Liquidity.BalancesChanged(); Orders.BalancesChanged();
     }
 
     private static string EstimateDate(ChainStatus s, long height) => s.BlockTime.AddSeconds((height - s.Height) * 5).ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
@@ -465,7 +492,15 @@ public sealed class SendViewModel : ScreenModel
     public bool Multiple { get => modeIndex == 1; set => ModeIndex = value ? 1 : 0; }
     public bool Single => modeIndex == 0;
     public bool ByCheck { get => modeIndex == 2; set => ModeIndex = value ? 2 : 0; }
-    public string Recipient { get => recipient; set { Set(ref recipient, value); Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); Changed(nameof(IsNewRecipient)); } }
+    public string Recipient
+    {
+        get => recipient;
+        set
+        {
+            Set(ref recipient, value); Changed(nameof(RecipientCheck)); Changed(nameof(RecipientTone)); Changed(nameof(IsNewRecipient));
+            if (MinterLink.Parse(value) is { } link) Dispatcher.UIThread.Post(() => OpenLink(link));
+        }
+    }
     public BalanceItem? Coin { get => coin; set { Set(ref coin, value); Changed(nameof(Available)); } }
     public BalanceItem? GasCoin { get => gasCoin; set => Set(ref gasCoin, value); }
     public string Amount { get => amount; set => Set(ref amount, value); }
@@ -476,10 +511,11 @@ public sealed class SendViewModel : ScreenModel
     public AsyncCommand Paste { get; }
 
     public string RecipientCheck => !Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) ? (Recipient.Length == 0 ? "" : "Адрес — Mx и 40 шестнадцатеричных символов.")
+        : main.LookalikeOf(a) is { } like ? MainViewModel.LookalikeWarning(like)
         : main.Shell.AddressBook.NameOf(a) is { Length: > 0 } n ? $"Из адресной книги: {n}" : main.Shell.AddressBook.IsKnown(a) ? "Вы уже отправляли на этот адрес."
         : "Новый получатель: в подтверждении сверьте адрес целиком, а не только выделенные начало и конец.";
     public Tone RecipientTone => !Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) ? (Recipient.Length == 0 ? Tone.None : Tone.Error)
-        : main.Shell.AddressBook.IsKnown(a) ? Tone.Success : Tone.Warning;
+        : main.LookalikeOf(a) != null ? Tone.Error : main.Shell.AddressBook.IsKnown(a) ? Tone.Success : Tone.Warning;
 
     public void BalancesChanged()
     {
@@ -495,6 +531,34 @@ public sealed class SendViewModel : ScreenModel
         var text = main.Shell.PasteText == null ? null : await main.Shell.PasteText();
         if (string.IsNullOrWhiteSpace(text)) { Say("В буфере обмена нет текста.", Tone.Warning); return; }
         Recipient = text.Trim();
+    }
+
+    // A Minter Link (bip.to): a transfer fills the form to be checked and sent; a check goes to the receive panel.
+    public void OpenLink(MinterLink link)
+    {
+        if (link.Type == TxType.Send && link.DecodeData() is SendData send)
+        {
+            ModeIndex = 0;
+            Recipient = send.To.ToString();
+            Coin = Coins.FirstOrDefault(c => c.Coin.Id == send.Coin);
+            Amount = Units.FormatCoins(send.Value);
+            Payload = Encoding.UTF8.GetString(link.Payload);
+            if (link.GasCoin is { } g && Coins.FirstOrDefault(c => c.Coin.Id == g) is { } gas) GasCoin = gas;
+            if (Coin == null) Say($"По ссылке просят {Units.FormatCoins(send.Value)} {main.Symbol(send.Coin)} (id {send.Coin}), а этой монеты на счёте нет.", Tone.Warning);
+            else Say($"Заполнено по ссылке: {Units.FormatCoins(send.Value)} {Coin.Symbol} на {Core.History.Short(send.To)}. Проверьте и отправьте.", Tone.Info);
+        }
+        else if (link.Type == TxType.RedeemCheck)
+        {
+            Recipient = "";
+            main.RedeemCheck.Text = link.ToString();
+            main.Section = Section.Overview;
+            main.ShowReceive = true;
+        }
+        else
+        {
+            Recipient = "";
+            Say($"Ссылка на операцию другого типа ({(int)link.Type}): по ссылкам кошелёк открывает переводы и чеки.", Tone.Warning);
+        }
     }
 
     // Everything of the coin; when the commission is paid in the same coin it is subtracted first.
@@ -521,6 +585,7 @@ public sealed class SendViewModel : ScreenModel
         if (!MainViewModel.TryAmount(Amount, this, out var value)) return;
         var data = new SendData(Coin.Coin.Id, to, value);
         var warnings = new List<string>();
+        if (main.LookalikeOf(to) is { } like) warnings.Add(MainViewModel.LookalikeWarning(like));
         if (!main.Shell.AddressBook.IsKnown(to)) warnings.Add("Новый получатель. У адресов Minter нет контрольной суммы: опечатка или подмена в буфере обмена дадут другой действительный адрес. Сверьте адрес целиком: мошенники подбирают адреса с теми же началом и концом.");
         if (to == main.Selected!.Account.Address) warnings.Add("Перевод самому себе.");
         var outcome = await main.ConfirmAndSendAsync("Перевод", data, GasCoin?.Coin.Id ?? 0, MainViewModel.Utf8(Payload),
@@ -589,7 +654,8 @@ public sealed class MultisendViewModel : ScreenModel
     {
         if (Parse(out var items) is { } problem) { Say(problem, Tone.Error); return; }
         if (items.Count == 0) { Say("Добавьте хотя бы одного получателя.", Tone.Error); return; }
-        var warnings = items.Where(i => !main.Shell.AddressBook.IsKnown(i.To)).Select(i => $"Новый получатель {Display.Address(i.To)}").Take(10).ToList();
+        var warnings = items.Select(i => main.LookalikeOf(i.To) is { } like ? $"{Display.Address(i.To)}: {MainViewModel.LookalikeWarning(like)}" : null).OfType<string>().ToList();
+        warnings.AddRange(items.Where(i => !main.Shell.AddressBook.IsKnown(i.To)).Select(i => $"Новый получатель {Display.Address(i.To)}").Take(10));
         var rows = items.Select((i, k) => ($"{k + 1}.", $"{Display.Address(i.To)}\n{Units.FormatCoins(i.Value)} {main.Symbol(i.Coin)} (id {i.Coin})")).ToList();
         var outcome = await main.ConfirmAndSendAsync("Мультисенд", new MultisendData(items), 0, [], rows, warnings, this);
         if (outcome?.Succeeded == true) foreach (var i in items) main.Shell.AddressBook.Remember(i.To);
@@ -603,14 +669,16 @@ public sealed class SwapViewModel : ScreenModel
     private readonly DispatcherTimer quoteTimer;
     private BalanceItem? sell;
     private string amount = "", slippage = "1";
-    private bool exactInput = true;
-    private (ITxData Data, string Route, string Expected, string Limit)? planned;
+    private bool exactInput = true, sellAll;
+    private (ITxData Data, string Route, string Expected, string Limit, uint GasCoin, string? Selling)? planned;
 
     public SwapViewModel(MainViewModel main)
     {
         this.main = main;
         Estimate = new AsyncCommand(EstimateAsync, Fail);
         SwapNow = new AsyncCommand(SwapAsync, Fail, () => planned != null);
+        // "Всё": the whole balance, kept whole when the balance changes, until the amount is edited or another coin chosen.
+        All = new Command(() => { if (Sell == null) return; ExactInput = true; Amount = Units.FormatCoins(Sell.Value); sellAll = true; });
         Buy = new CoinPickerViewModel(() => main.CoinOptions(Sell?.Coin.Id), () => main.HasCatalog, main.LookupCoinAsync);
         Buy.SelectedChanged += InputChanged;
         // The quote follows the inputs: asked 0.7 s after the last change.
@@ -625,16 +693,18 @@ public sealed class SwapViewModel : ScreenModel
         get => sell;
         set
         {
+            if (value?.Coin.Id != sell?.Coin.Id) sellAll = false;
             if (!Set(ref sell, value)) return;
             Changed(nameof(Available));
+            if (sellAll && value != null) { amount = Units.FormatCoins(value.Value); Changed(nameof(Amount)); }
             if (value != null && Buy.Selected?.Id == value.Coin.Id) Buy.Selected = null;
             InputChanged();
         }
     }
-    public string Amount { get => amount; set { if (Set(ref amount, value)) InputChanged(); } }
+    public string Amount { get => amount; set { if (!Set(ref amount, value)) return; sellAll = false; InputChanged(); } }
     public string Slippage { get => slippage; set { if (!Set(ref slippage, value)) return; Changed(nameof(SlippageIndex)); InputChanged(); } }
     public int SlippageIndex { get => Array.IndexOf(Presets, Slippage.Replace(',', '.').Trim()); set { if (value >= 0) Slippage = Presets[value]; } }
-    public bool ExactInput { get => exactInput; set { if (!Set(ref exactInput, value)) return; Changed(nameof(ModeIndex)); Changed(nameof(AmountLabel)); InputChanged(); } }
+    public bool ExactInput { get => exactInput; set { if (!Set(ref exactInput, value)) return; sellAll = false; Changed(nameof(ModeIndex)); Changed(nameof(AmountLabel)); InputChanged(); } }
     public int ModeIndex { get => ExactInput ? 0 : 1; set { if (value >= 0) ExactInput = value == 0; } }
     public string AmountLabel => ExactInput ? "Сколько продать" : "Сколько купить";
     public string Available => Sell == null ? "" : $"Доступно: {Sell.AmountShort} {Sell.Symbol}";
@@ -645,6 +715,7 @@ public sealed class SwapViewModel : ScreenModel
     public string QuoteLimit => planned?.Limit ?? "";
     public AsyncCommand Estimate { get; }
     public AsyncCommand SwapNow { get; }
+    public Command All { get; }
 
     private bool Ready
     {
@@ -658,9 +729,16 @@ public sealed class SwapViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = Sell?.Coin.Id;
-        Coins.Clear();
+        var all = sellAll;
+        Coins.Clear();   // the list drops its selection here (Sell = null), which would end "Всё"
         foreach (var b in main.Balances) Coins.Add(b);
         Sell = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
+        if (all && Sell is { } same && same.Coin.Id == keep)
+        {
+            sellAll = true;
+            amount = Units.FormatCoins(same.Value); Changed(nameof(Amount));
+            InputChanged();
+        }
     }
 
     private void InputChanged()
@@ -689,51 +767,83 @@ public sealed class SwapViewModel : ScreenModel
         if (!decimal.TryParse(Slippage.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var tolerance) || tolerance is < 0 or > 50)
         { Say("Проскальзывание — от 0 до 50 %.", Tone.Error); return; }
         if (target.Id == Sell.Coin.Id) { Say("Монеты совпадают.", Tone.Error); return; }
-        Say("Поиск маршрута…", Tone.Progress);
+        // A quote asked in the background must not wipe what the screen says about a swap just made.
+        var quiet = Tone is Tone.Success or Tone.Error;
+        if (!quiet) Say("Поиск маршрута…", Tone.Progress);
         var wallet = await main.WalletAsync();
         var warning = main.Shell.Coins.Observe(new CoinRef(target.Id, target.Symbol)) is { } c ? $"Внимание: {c.Symbol} раньше был id {c.KnownId}, теперь id {c.NewId}." : "";
         var bps = (int)(tolerance * 100);
         var trade = await wallet.Backend.BestTradeAsync(Sell.Coin.Id, target.Id, value, ExactInput);
+        // The whole balance: a SellAll transaction. The network takes its commission in the coin sold, whatever the gas
+        // coin, and swaps it through that coin's pool or reserve right before the sale; the node's sell-all estimate
+        // counts both, so the quote and the guarantee come from it.
+        var all = sellAll && ExactInput;
+        if (all) value = Sell.Value;
+        var gas = 0u;
+        string? selling = null;
+        if (all)
+        {
+            ITxData probe = trade is { Path.Count: >= 2 } ? new SellAllSwapPoolData(trade.Path, 0) : new SellAllCoinData(Sell.Coin.Id, target.Id, 0);
+            if (await CommissionAsync(wallet, probe, Sell.Coin.Id) is not { } commission)
+            { Say($"«Всё» платит комиссию самой монетой, а {Sell.Coin.Symbol} её не заплатить: продайте сумму без «Всё».", Tone.Error); return; }
+            if (commission >= value) { Say("Баланса не хватает даже на комиссию.", Tone.Warning); return; }
+            gas = Sell.Coin.Id;
+            selling = $"всё: {Units.FormatCoins(value - commission)} {Sell.Coin.Symbol} и {Units.FormatCoins(commission)} {Sell.Coin.Symbol} на комиссию";
+        }
         ITxData data; string route; BigInteger expected, limit;
         if (trade is { Path.Count: >= 2 })
         {
             route = string.Join(" → ", trade.Path.Select(main.Symbol)) + " (пулы)";
-            expected = trade.Result;
+            expected = all ? await wallet.Backend.EstimateSellAllAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Pool, trade.Path.Skip(1).SkipLast(1).ToList()) : trade.Result;
             limit = ExactInput ? expected * (10000 - bps) / 10000 : expected * (10000 + bps) / 10000;
-            data = ExactInput ? new SellSwapPoolData(trade.Path, value, limit) : new BuySwapPoolData(trade.Path, value, limit);
+            data = all ? new SellAllSwapPoolData(trade.Path, limit)
+                : ExactInput ? new SellSwapPoolData(trade.Path, value, limit) : new BuySwapPoolData(trade.Path, value, limit);
         }
         else
         {
             var estimate = ExactInput ? await wallet.Backend.EstimateSellAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Bancor)
                                       : await wallet.Backend.EstimateBuyAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Bancor);
             route = $"{Sell.Coin.Symbol} → {target.Symbol} (резерв)";
-            expected = estimate.Amount;
+            expected = all ? await wallet.Backend.EstimateSellAllAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Bancor) : estimate.Amount;
             limit = ExactInput ? expected * (10000 - bps) / 10000 : expected * (10000 + bps) / 10000;
-            data = ExactInput ? new SellCoinData(Sell.Coin.Id, value, target.Id, limit) : new BuyCoinData(target.Id, value, Sell.Coin.Id, limit);
+            data = all ? new SellAllCoinData(Sell.Coin.Id, target.Id, limit)
+                : ExactInput ? new SellCoinData(Sell.Coin.Id, value, target.Id, limit) : new BuyCoinData(target.Id, value, Sell.Coin.Id, limit);
         }
+        if (all) route += " · продаётся всё";
         var expectedText = $"{Display.Amount(expected, 6)} {(ExactInput ? target.Symbol : Sell.Coin.Symbol)}";
         var limitText = ExactInput ? $"не меньше {Units.FormatCoins(limit)} {target.Symbol}" : $"не больше {Units.FormatCoins(limit)} {Sell.Coin.Symbol}";
-        planned = (data, route, expectedText, limitText);
+        planned = (data, route, expectedText, limitText, gas, selling);
         foreach (var name in new[] { nameof(HasQuote), nameof(QuoteRoute), nameof(QuoteExpectedLabel), nameof(QuoteExpected), nameof(QuoteLimit) }) Changed(name);
         SwapNow.Refresh();
-        Say(warning, Tone.Warning);
+        if (warning.Length > 0) Say(warning, Tone.Warning);
+        else if (!quiet) Say("");
+    }
+
+    // The commission of a transaction in this coin; null when the coin cannot pay it.
+    private async Task<BigInteger?> CommissionAsync(WalletService wallet, ITxData data, uint coin)
+    {
+        try { return (await wallet.PreviewAsync(main.Selected!.Account, data, coin)).Commission; }
+        catch (MinterWallet.Core.ChainApiException) { return null; }
     }
 
     private async Task SwapAsync()
     {
         if (planned is not { } p) return;
         quoteTimer.Stop();
-        var outcome = await main.ConfirmAndSendAsync("Обмен", p.Data, 0, [],
-            [("Маршрут", p.Route), ("Оценка", $"≈ {p.Expected}"), ("Гарантия", p.Limit)], [], this);
-        if (outcome?.Succeeded == true) { amount = ""; Changed(nameof(Amount)); ClearQuote(); }
+        var rows = new List<(string, string)> { ("Маршрут", p.Route) };
+        if (p.Selling != null) rows.Add(("Продаёте", p.Selling));
+        rows.AddRange([("Оценка", $"≈ {p.Expected}"), ("Гарантия", p.Limit)]);
+        var outcome = await main.ConfirmAndSendAsync("Обмен", p.Data, p.GasCoin, [], rows, [], this);
+        if (outcome?.Succeeded == true) { amount = ""; sellAll = false; Changed(nameof(Amount)); ClearQuote(); }
         else if (outcome != null) ClearQuote();
     }
 }
 
-public sealed record CandidateItem(CandidateInfo Info, string Base)
+public sealed record CandidateItem(CandidateInfo Info, string Base, string? Name = null)
 {
     public string Key => Info.PublicKey.ToString();
-    public string Short => Core.History.Short(Info.PublicKey);
+    public string Short => Name ?? Core.History.Short(Info.PublicKey);
+    public override string ToString() => Short;
     public string Commission => $"{Info.Commission}%";
     public string CommissionText => $"комиссия {Info.Commission} %";
     public string Stake => $"{Display.Amount(Info.TotalStake, 0)} {Base}";
@@ -747,7 +857,9 @@ public sealed class StakingViewModel : ScreenModel
     private readonly List<CandidateItem> all = [];
     private CandidateItem? candidate;
     private BalanceItem? coin;
-    private string amount = "", filter = "", count = "";
+    private string amount = "", filter = "", count = "", myStake = "", locked = "";
+    private CandidateItem? moveTarget;
+    private IReadOnlyDictionary<string, string>? names;
 
     public StakingViewModel(MainViewModel main)
     {
@@ -755,11 +867,32 @@ public sealed class StakingViewModel : ScreenModel
         Load = new AsyncCommand(LoadAsync, Fail);
         DelegateNow = new AsyncCommand(() => StakeAsync(true), Fail);
         Unbond = new AsyncCommand(() => StakeAsync(false), Fail);
+        Move = new AsyncCommand(MoveAsync, Fail);
+        LockStakes = new AsyncCommand(LockStakesAsync, Fail);
     }
+
+    private int modeIndex;
+    public int ModeIndex
+    {
+        get => modeIndex;
+        set
+        {
+            if (value < 0 || !Set(ref modeIndex, value)) return;
+            Changed(nameof(IsDelegation)); Changed(nameof(IsValidatorMode));
+            if (value == 1) main.Validator.Load.Execute(null);
+        }
+    }
+    public bool IsDelegation => modeIndex == 0;
+    public bool IsValidatorMode => modeIndex == 1;
+    public string MyStake { get => myStake; private set => Set(ref myStake, value); }
+    public CandidateItem? MoveTarget { get => moveTarget; set => Set(ref moveTarget, value); }
+    public string Locked { get => locked; private set => Set(ref locked, value); }
+    public AsyncCommand Move { get; }
+    public AsyncCommand LockStakes { get; }
 
     public ObservableCollection<CandidateItem> Candidates { get; } = [];
     public ObservableCollection<BalanceItem> Coins { get; } = [];
-    public CandidateItem? Candidate { get => candidate; set { Set(ref candidate, value); Changed(nameof(CandidateTitle)); Changed(nameof(CandidateCaption)); } }
+    public CandidateItem? Candidate { get => candidate; set { if (!Set(ref candidate, value)) return; Changed(nameof(CandidateTitle)); Changed(nameof(CandidateCaption)); _ = ReadMyStakeAsync(); } }
     public BalanceItem? Coin { get => coin; set { Set(ref coin, value); Changed(nameof(Available)); } }
     public string Amount { get => amount; set => Set(ref amount, value); }
     public string Filter { get => filter; set { Set(ref filter, value); ApplyFilter(); } }
@@ -778,6 +911,9 @@ public sealed class StakingViewModel : ScreenModel
         foreach (var b in main.Balances) Coins.Add(b);
         Coin = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault(c => c.Coin.Id == 0) ?? Coins.FirstOrDefault();
         if (all.Count == 0) Load.Execute(null);
+        var until = (long)(main.State?.LockedStakeUntil ?? 0);
+        Locked = main.Shell.Status is { } s && until > s.Height
+            ? $"Стейки этого счёта заморожены до блока {Display.Integer(until)} (≈ {s.BlockTime.AddSeconds((until - s.Height) * 5).ToLocalTime():dd.MM.yyyy})." : "";
     }
 
     public void Reset() { all.Clear(); Candidates.Clear(); Candidate = null; Count = ""; }
@@ -787,7 +923,7 @@ public sealed class StakingViewModel : ScreenModel
         var keep = Candidate;
         var text = Filter.Trim();
         Candidates.Clear();
-        foreach (var c in all.Where(c => text.Length == 0 || c.Key.Contains(text, StringComparison.OrdinalIgnoreCase))) Candidates.Add(c);
+        foreach (var c in all.Where(c => text.Length == 0 || c.Key.Contains(text, StringComparison.OrdinalIgnoreCase) || c.Name?.Contains(text, StringComparison.OrdinalIgnoreCase) == true)) Candidates.Add(c);
         if (keep != null && Candidates.Contains(keep)) Candidate = keep;
     }
 
@@ -795,8 +931,12 @@ public sealed class StakingViewModel : ScreenModel
     {
         var wallet = await main.WalletAsync();
         var list = await wallet.Backend.CandidatesAsync();
+        // Mainnet validators' own names, from the explorer; the keys alone elsewhere or when it does not answer.
+        if (names == null && main.Shell.Status?.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) == true)
+            try { names = await main.Shell.Explorer.ValidatorNamesAsync(); } catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
         all.Clear();
-        all.AddRange(list.OrderByDescending(c => c.Validator).ThenByDescending(c => c.TotalStake).Select(c => new CandidateItem(c, main.Symbol(0))));
+        all.AddRange(list.OrderByDescending(c => c.Validator).ThenByDescending(c => c.TotalStake)
+            .Select(c => new CandidateItem(c, main.Symbol(0), names?.GetValueOrDefault(c.PublicKey.ToString()))));
         ApplyFilter();
         Count = $"Кандидатов: {Display.Integer(all.Count)}, из них валидаторов: {Display.Integer(all.Count(c => c.Info.Validator))}";
     }
@@ -809,8 +949,48 @@ public sealed class StakingViewModel : ScreenModel
         ITxData data = delegating ? new DelegateData(Candidate.Info.PublicKey, Coin.Coin.Id, value) : new UnbondData(Candidate.Info.PublicKey, Coin.Coin.Id, value);
         var warnings = delegating ? new List<string>() : ["Выведенный стейк замораживается примерно на 30 дней (518 400 блоков) и только потом вернётся на счёт."];
         if (delegating && Candidate.Info.Commission >= 50) warnings.Add($"Комиссия валидатора {Candidate.Info.Commission}%: он забирает эту долю наград.");
-        await main.ConfirmAndSendAsync(delegating ? "Делегирование" : "Вывод из стейка", data, 0, [],
+        var outcome = await main.ConfirmAndSendAsync(delegating ? "Делегирование" : "Вывод из стейка", data, 0, [],
             [("Валидатор", $"{Candidate.Key}\nкомиссия {Candidate.Commission}, {Candidate.State}"), ("Сумма", $"{Units.FormatCoins(value)} {Coin.Coin.Symbol} (id {Coin.Coin.Id})")], warnings, this);
+        if (outcome?.Succeeded == true) _ = ReadMyStakeAsync();
+    }
+
+    // This account's stake with the chosen validator, read from the candidate's list of stakes.
+    private async Task ReadMyStakeAsync()
+    {
+        MyStake = "";
+        if (Candidate is not { } c || main.Selected == null) return;
+        try
+        {
+            var wallet = await main.WalletAsync();
+            var stakes = await wallet.Backend.StakesAsync(c.Info.PublicKey);
+            if (Candidate != c) return;
+            var mine = stakes.Where(s => s.Owner == main.Selected.Account.Address).ToList();
+            MyStake = mine.Count == 0 ? "Вашего стейка у этого валидатора нет." : "Ваш стейк здесь: " + string.Join(", ", mine.Select(s => $"{Display.Amount(s.Value)} {s.Coin.Symbol}"));
+        }
+        catch (Exception e) when (e is HttpRequestException or ChainApiException or TaskCanceledException) { }
+    }
+
+    // A stake from the chosen validator to another without the 30-day unbond: it arrives after the move period.
+    private async Task MoveAsync()
+    {
+        if (Candidate == null) { Say("Выберите валидатора в списке — откуда переносить.", Tone.Error); return; }
+        if (MoveTarget == null || MoveTarget.Key == Candidate.Key) { Say("Выберите, к какому валидатору перенести.", Tone.Error); return; }
+        if (Coin == null) { Say("Выберите монету.", Tone.Error); return; }
+        if (!MainViewModel.TryAmount(Amount, this, out var value)) return;
+        var outcome = await main.ConfirmAndSendAsync("Перенос стейка", new MoveStakeData(Candidate.Info.PublicKey, MoveTarget.Info.PublicKey, Coin.Coin.Id, value), 0, [],
+            [("Откуда", $"{Candidate.Short}\n{Candidate.Key}"), ("Куда", $"{MoveTarget.Short}\n{MoveTarget.Key}\nкомиссия {MoveTarget.Commission}, {MoveTarget.State}"),
+             ("Сумма", $"{Units.FormatCoins(value)} {Coin.Coin.Symbol} (id {Coin.Coin.Id})")],
+            ["Стейк дойдёт до нового валидатора примерно через неделю (на тестовых сетях — через 15 минут); пока он в пути, наград за него нет. Это быстрее вывода, который длится 30 дней."], this);
+        if (outcome?.Succeeded == true) _ = ReadMyStakeAsync();
+    }
+
+    // All stakes of the account locked for higher rewards: three years on mainnet, two days on test networks.
+    private async Task LockStakesAsync()
+    {
+        await main.ConfirmAndSendAsync("Заморозка стейков", new LockStakeData(), 0, [],
+            [("Что", "все стейки этого счёта, у всех валидаторов"), ("Срок", "3 года (на тестовых сетях — 2 дня)")],
+            ["Все стейки счёта будут заморожены на 3 года: ни вывести, ни перенести их до срока нельзя. Взамен они получают повышенные награды. Отменить заморозку нельзя.",
+             "Заморозка ставится на весь счёт: новые делегирования тоже не вывести до этого срока, а повторная заморозка продлевает его на 3 года от момента повтора."], this);
     }
 }
 
@@ -848,6 +1028,7 @@ public sealed class HistoryViewModel : ScreenModel
         this.main = main;
         Load = new AsyncCommand(async () => { cursor = null; Items.Clear(); olderShown = false; await MoreAsync(); }, e => { Loading = false; Fail(e); });
         More = new AsyncCommand(MoreAsync, e => { Loading = false; Fail(e); });
+        Export = new AsyncCommand(ExportAsync, Fail, () => main.Shell.SaveText != null);
         CopyHash = new RelayCommand(async hash => { if (hash is string h && main.Shell.CopyText != null) { await main.Shell.CopyText(h); Say("Хеш транзакции скопирован.", Tone.Success); } });
     }
 
@@ -860,6 +1041,7 @@ public sealed class HistoryViewModel : ScreenModel
     public bool HasNote => olderShown;
     public AsyncCommand Load { get; }
     public AsyncCommand More { get; }
+    public AsyncCommand Export { get; }
     public RelayCommand CopyHash { get; }
 
     public void Reset()
@@ -891,6 +1073,42 @@ public sealed class HistoryViewModel : ScreenModel
         HasMore = cursor.HasMore;
         Changed(nameof(Note)); Changed(nameof(HasNote)); Changed(nameof(IsEmpty));
         if (Tone == Tone.Error) Say("");
+    }
+
+    // The whole history (up to ExportLimit transactions) to a CSV file: every page, then the time of each block not
+    // dated by the explorer, asked of the source a block at a time and slowly enough for a gate's rate limit.
+    private const int ExportLimit = 20000;
+    private async Task ExportAsync()
+    {
+        if (main.Selected == null || main.Shell.SaveText == null) return;
+        var wallet = await main.WalletAsync();
+        var me = main.Selected.Account.Address;
+        var all = main.HistoryCursor(wallet, me, 100);
+        var rows = new List<(TxRecord Record, HistoryEntry Entry)>();
+        Say("Собираю историю…", Tone.Progress);
+        while (true)
+        {
+            foreach (var (record, _) in await all.NextAsync())
+                try { rows.Add((record, Core.History.Decode(record, me, main.Symbol))); } catch (FormatException) { }
+            if (!all.HasMore || rows.Count >= ExportLimit) break;
+            Say($"Собираю историю: {rows.Count} транзакций…", Tone.Progress);
+        }
+        var times = new Dictionary<long, DateTimeOffset?>();
+        var heights = rows.Where(r => !r.Record.Tags.ContainsKey("timestamp")).Select(r => r.Record.Height).Distinct().ToList();
+        for (var i = 0; i < heights.Count; i++)
+        {
+            if (i % 10 == 0) Say($"Время блоков: {i} из {heights.Count}…", Tone.Progress);
+            try { times[heights[i]] = await wallet.Backend.BlockTimeAsync(heights[i]); }
+            catch (Exception e) when (e is HttpRequestException or MinterWallet.Core.ChainApiException) { times[heights[i]] = null; }
+            await Task.Delay(110);
+        }
+        DateTimeOffset? TimeOf(TxRecord r) => r.Tags.TryGetValue("timestamp", out var t) && DateTimeOffset.TryParse(t, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at)
+            ? at : times.GetValueOrDefault(r.Height);
+        var csv = HistoryTable.Csv(rows.Select(r => new HistoryRow(r.Record, r.Entry, TimeOf(r.Record))), me, main.Symbol, Localization.Text);
+        var name = $"minter-{me.ToString()[..8]}-{DateTime.Now:yyyy-MM-dd}.csv";
+        Say("");
+        if (await main.Shell.SaveText(name, csv))
+            Say(rows.Count >= ExportLimit ? $"Сохранено {rows.Count} последних транзакций (больше за раз не выгружается)." : $"Сохранено транзакций: {rows.Count}.", Tone.Success);
     }
 }
 

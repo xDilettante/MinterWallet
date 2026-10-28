@@ -30,6 +30,8 @@ public sealed class Shell : Observable
     public Func<string, Task>? CopyText { get; set; }
     public Func<Task<string?>>? PasteText { get; set; }
     public Func<Uri, Task>? OpenUrl { get; set; }
+    // Saves a text file the user names (suggested name, contents); false when they cancel.
+    public Func<string, string, Task<bool>>? SaveText { get; set; }
 
     public Shell(string? dataDirectory = null)
     {

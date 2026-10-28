@@ -111,6 +111,15 @@ public sealed class AddressBook
         if (directory != null) WalletPaths.WriteAtomic(Path.Combine(directory, FileName), JsonSerializer.SerializeToUtf8Bytes(Entries, SettingsJson.Default.ListAddressBookEntry), secret: false);
     }
 
+    // Another address that only looks like this one: the same first and last three hex digits. Addresses made to look
+    // like a contact are sent with dust so that they get copied from the history; they differ only in the middle.
+    public static bool LooksLike(Address address, Address known)
+    {
+        if (address == known) return false;
+        var a = address.ToString(); var b = known.ToString();
+        return string.Equals(a[2..5], b[2..5], StringComparison.OrdinalIgnoreCase) && string.Equals(a[^3..], b[^3..], StringComparison.OrdinalIgnoreCase);
+    }
+
     // "Mx12 3456 7890 …": the full address in groups of four, for reading it aloud or against another device.
     public static string Grouped(Address address)
     {

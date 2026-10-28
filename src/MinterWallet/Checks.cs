@@ -103,6 +103,13 @@ public sealed class CheckRedeemViewModel : ScreenModel
         check = null;
         var t = Text.Trim();
         if (t.Length == 0) { Info = ""; InfoTone = Tone.None; return; }
+        // A check link (bip.to/tx/… with ?p=password): the check and its password.
+        if (MinterLink.Parse(t) is { Type: TxType.RedeemCheck } link)
+        {
+            text = t = "Mc" + Convert.ToHexStringLower(link.Check());
+            Changed(nameof(Text));
+            if (link.Password != null) Password = link.Password;
+        }
         try { check = Check.Parse(t); }
         catch (Exception e) when (e is FormatException or ArgumentException or InvalidOperationException) { Info = "Это не чек Minter: он начинается с Mc и состоит из шестнадцатеричных символов."; InfoTone = Tone.Warning; return; }
         string issuer;

@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.MultisigPage"
+             x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640" DataContext="{Binding Multisig}" x:DataType="local:MultisigViewModel">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Общий счёт" Classes="h1" />
+        <TextBlock Classes="muted prose" Text="Адрес на несколько участников (мультиподпись): тратить с него можно, только когда подпишут участники с нужным суммарным весом. Для команды, семьи или надёжного хранения." />
+      </StackPanel>
+      <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Создать общий счёт или перевод с него">
+        <ListBoxItem Content="Создать общий счёт" />
+        <ListBoxItem Content="Перевод с общего счёта" />
+      </ListBox>
+
+      <!-- Create -->
+      <StackPanel Spacing="14" IsVisible="{Binding IsCreate}">
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <StackPanel>
+              <TextBlock Text="Участники" Classes="label" />
+              <TextBox Text="{Binding Members}" Classes="mono" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" PlaceholderText="Mx… 1&#10;Mx… 1&#10;Mx… 2" AutomationProperties.Name="Участники" />
+              <TextBlock Text="Каждый участник — с новой строки: адрес и вес (без веса — 1). Свой адрес не забудьте." Classes="caption" Margin="0,6,0,0" />
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Порог — сколько веса нужно для траты" Classes="label" />
+              <TextBox Text="{Binding Threshold}" Classes="mono" Width="120" HorizontalAlignment="Left" AutomationProperties.Name="Порог" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Button Content="Создать общий счёт" Command="{Binding Create}" Classes="accent" HorizontalAlignment="Right" MinWidth="170" />
+        <Border Classes="card" IsVisible="{Binding HasCreated}">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Адрес общего счёта" Classes="label" Margin="0" />
+            <SelectableTextBlock local:AddressMarks.Text="{Binding Created}" Classes="mono" TextWrapping="Wrap" />
+            <Button Content="Добавить в счета для просмотра" Command="{Binding WatchCreated}" HorizontalAlignment="Left" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- A transfer from it, and the text that travels between members -->
+      <StackPanel Spacing="14" IsVisible="{Binding IsTransaction}">
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <TextBlock Text="Новый перевод" Classes="h2" />
+            <StackPanel>
+              <TextBlock Text="Общий счёт" Classes="label" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding LoadAccount}" Margin="8,0,0,0" />
+                <TextBox Text="{Binding Account}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Адрес общего счёта" />
+              </DockPanel>
+              <TextBlock Text="{Binding AccountInfo}" Classes="caption prose" Margin="0,6,0,0" />
+            </StackPanel>
+            <StackPanel><TextBlock Text="Получатель" Classes="label" /><TextBox Text="{Binding Recipient}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Получатель" /></StackPanel>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <StackPanel><TextBlock Text="Сумма" Classes="label" /><TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Сумма" /></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Монета" Classes="label" /><ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" MinWidth="120" AutomationProperties.Name="Монета" /></StackPanel>
+            </Grid>
+            <StackPanel><TextBlock Text="Сообщение (необязательно)" Classes="label" /><TextBox Text="{Binding Payload}" AutomationProperties.Name="Сообщение" /></StackPanel>
+            <Button Content="Подписать и получить текст" Command="{Binding Propose}" Classes="accent" HorizontalAlignment="Right" />
+          </StackPanel>
+        </Border>
+        <Border Classes="card">
+          <StackPanel Spacing="12">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}">
+                <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="paste" Width="16" Height="16" /><TextBlock Text="Вставить" /></StackPanel>
+              </Button>
+              <TextBlock Text="Транзакция для подписи" Classes="h2" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Classes="caption prose" Text="Участники передают этот текст друг другу (мессенджер, почта); каждый подписывает своим счётом. Подписи не раскрывают ключей." />
+            <TextBox Text="{Binding Text}" Classes="mono" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="120" PlaceholderText="msig:…" AutomationProperties.Name="Транзакция для подписи" />
+            <TextBlock Text="{Binding TextInfo}" Classes="prose" TextWrapping="Wrap" />
+            <ItemsControl ItemsSource="{Binding Signers}" IsVisible="{Binding HasTx}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:SignerItem">
+                  <DockPanel Margin="0,2">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Caption}" Classes="caption" VerticalAlignment="Center" />
+                    <local:Icon Kind="success" Width="16" Height="16" IsVisible="{Binding Signed}" Foreground="{DynamicResource Success}" Margin="0,0,8,0" />
+                    <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Address}" />
+                  </DockPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding Progress}" FontWeight="SemiBold" IsVisible="{Binding HasTx}" />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" IsVisible="{Binding HasTx}">
+              <Button Command="{Binding Copy}">
+                <StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="16" Height="16" /><TextBlock Text="{Binding CopyLabel}" /></StackPanel>
+              </Button>
+              <Button Content="Подписать" Command="{Binding Sign}" />
+              <Button Content="Отправить" Command="{Binding SendNow}" Classes="accent" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

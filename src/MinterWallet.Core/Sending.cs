@@ -156,6 +156,38 @@ public sealed class WalletService(IChainBackend backend, KeystoreSession session
             return tx;
         }, progress, ct);
 
+    // A transaction of a multisig address: built by a member with the address's next nonce, then signed by members in
+    // turn (SignMultisig) as it travels between them (MultisigText), sent once their weights reach the threshold.
+    public async Task<(Transaction Tx, TxPreview Preview)> ProposeMultisigAsync(Address multisig, ITxData data, uint gasCoin = 0, byte[]? payload = null, CancellationToken ct = default)
+    {
+        payload ??= [];
+        if (payload.Length > Transaction.MaxPayload) throw new ArgumentException($"Payload не больше {Transaction.MaxPayload} байт.");
+        var gasPrice = Gas.Choose(await Backend.MinGasPriceAsync(ct));
+        var prices = await Backend.PricesAsync(ct);
+        var nonce = (await Backend.AccountAsync(multisig, ct)).Nonce + 1;
+        var tx = Transaction.Create(nonce, ChainId, gasPrice, gasCoin, data, payload, signatureType: SignatureType.Multi);
+        tx.SetMultisigAddress(multisig);
+        var probe = tx.Copy();
+        using (var throwaway = PrivateKey.Generate()) probe.Sign(throwaway);
+        var commission = await Backend.EstimateCommissionAsync(probe, ct);
+        var coin = await Backend.CoinAsync(gasCoin, ct);
+        var price = Commission.WithGasPrice(Commission.Price(data, payload.Length, prices), gasPrice);
+        return (tx, new TxPreview(data, gasCoin, gasPrice, payload, commission, new CoinRef(gasCoin, coin?.Symbol ?? $"#{gasCoin}"), price, prices.Coin));
+    }
+
+    public void SignMultisig(WalletAccount member, Transaction tx)
+    {
+        if (tx.SignatureType != SignatureType.Multi) throw new InvalidOperationException("Это не транзакция общего счёта.");
+        if (tx.MultisigSigners().Contains(member.Address)) throw new InvalidOperationException("Этот счёт уже подписал.");
+        using var key = session.OpenKey(member);
+        tx.Sign(key);
+    }
+
+    // Sent as signed: its nonce is part of the signatures, so a nonce the address has used meanwhile ends it.
+    public Task<TxOutcome> SendMultisigAsync(Transaction tx, IProgress<TxOutcome>? progress = null, CancellationToken ct = default) =>
+        Queue.SubmitAsync(tx.Sender(), nonce => nonce == tx.Nonce ? tx
+            : throw new InvalidOperationException("Общий счёт уже отправил другую транзакцию с этим номером: соберите эту заново."), progress, ct);
+
     // Chain ID of a network name: mainnet is 1, any other network (testnet, devnet) uses 2.
     public static byte ChainIdOf(string network) => network.StartsWith("minter-mainnet", StringComparison.Ordinal) ? Minter.Protocol.ChainId.Mainnet : Minter.Protocol.ChainId.Testnet;
 }
@@ -163,3 +195,24 @@ public sealed class WalletService(IChainBackend backend, KeystoreSession session
 [System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
 [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, uint>))]
 internal partial class CoreJson : System.Text.Json.Serialization.JsonSerializerContext;
+
+// A partly signed multisig transaction as text: "msig:" and the hex of its bytes; read back with or without the prefix.
+public static class MultisigText
+{
+    public const string Prefix = "msig:";
+    public static string Of(Transaction tx) => Prefix + Convert.ToHexStringLower(tx.Encode());
+
+    public static Transaction? Parse(string text)
+    {
+        var t = string.Concat(text.Where(c => !char.IsWhiteSpace(c)));
+        if (t.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) t = t[Prefix.Length..];
+        if (t.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) t = t[2..];
+        if (t.Length == 0 || t.Length % 2 != 0 || !t.All(Uri.IsHexDigit)) return null;
+        try
+        {
+            var tx = Transaction.Decode(Convert.FromHexString(t));
+            return tx.SignatureType == SignatureType.Multi ? tx : null;
+        }
+        catch (Exception e) when (e is FormatException or InvalidOperationException) { return null; }
+    }
+}

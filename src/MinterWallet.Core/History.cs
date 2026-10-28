@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using System.Text;
 using Minter.Protocol;
@@ -123,4 +124,73 @@ public sealed class HistoryCursor(Func<int, Task<IReadOnlyList<TxRecord>>> sourc
         }
         return result;
     }
+}
+
+// History as a table for accounting: CSV (RFC 4180), a row per transaction, newest first. Transfers and redeemed checks
+// carry the counterparty and the exact amount in coins, signed (+ in, − out); the account's own transactions their
+// commission when the source reports it (a node's tags; the explorer's older part has none). Texts written by others
+// (messages, error logs) are kept from starting a spreadsheet formula.
+public sealed record HistoryRow(TxRecord Record, HistoryEntry Entry, DateTimeOffset? Time);
+
+public static class HistoryTable
+{
+    public static string Csv(IEnumerable<HistoryRow> rows, Address me, Func<uint, string> symbol, Func<string, string> text)
+    {
+        var csv = new StringBuilder();
+        Line(csv, [text("Дата (UTC)"), text("Блок"), text("Хеш"), text("Статус"), text("Тип"), text("Направление"), text("Контрагент"),
+            text("Сумма"), text("Монета"), text("Комиссия"), text("Монета комиссии"), text("Описание"), text("Сообщение")]);
+        foreach (var (record, entry, time) in rows)
+        {
+            ITxData? data = null;
+            try { data = Transaction.Decode(record.Raw).DecodeData(); } catch (FormatException) { }
+            var (counterparty, amount, coin) = Transfer(data, entry, me, symbol, text);
+            string fee = "", feeCoin = "";
+            if (entry.From == me && record.Tags.TryGetValue("tx.commission_amount", out var f) && BigInteger.TryParse(f, NumberStyles.None, CultureInfo.InvariantCulture, out var pip))
+            {
+                fee = Units.FormatCoins(pip);
+                feeCoin = record.Tags.TryGetValue("tx.commission_coin", out var c) && uint.TryParse(c, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? symbol(id) : "";
+            }
+            var status = entry.Success ? text("выполнена") : $"{text("не выполнена")}: {Safe(entry.Log)}";
+            var direction = text(entry.Direction switch { Direction.Incoming => "входящая", Direction.Self => "себе", _ => "исходящая" });
+            Line(csv, [time?.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) ?? "", record.Height.ToString(CultureInfo.InvariantCulture),
+                record.Hash, status, entry.Type.ToString(), direction, counterparty, amount, coin, fee, feeCoin, Safe(text(entry.Summary)), Safe(entry.Payload)]);
+        }
+        return csv.ToString();
+    }
+
+    private static (string Counterparty, string Amount, string Coin) Transfer(ITxData? data, HistoryEntry entry, Address me, Func<uint, string> symbol, Func<string, string> text)
+    {
+        static BigInteger Sum(IEnumerable<MultisendItem> items) => items.Aggregate(BigInteger.Zero, (s, i) => s + i.Value);
+        switch (data)
+        {
+            case SendData s:
+                var sign = entry.Direction switch { Direction.Incoming => "", Direction.Outgoing => "-", _ => "" };
+                return (entry.Direction == Direction.Incoming ? entry.From.ToString() : s.To.ToString(),
+                    entry.Direction == Direction.Self ? "0" : sign + Units.FormatCoins(s.Value), symbol(s.Coin));
+            case MultisendData m when entry.Direction == Direction.Incoming:
+                var mine = m.List.Where(i => i.To == me).ToList();
+                return mine.Select(i => i.Coin).Distinct().Count() == 1 ? (entry.From.ToString(), Units.FormatCoins(Sum(mine)), symbol(mine[0].Coin)) : (entry.From.ToString(), "", "");
+            case MultisendData m:
+                var others = m.List.Where(i => i.To != me).ToList();
+                var to = text($"получателей: {others.Count}");
+                return others.Count > 0 && others.Select(i => i.Coin).Distinct().Count() == 1 ? (to, "-" + Units.FormatCoins(Sum(others)), symbol(others[0].Coin)) : (to, "", "");
+            case RedeemCheckData r when entry.From == me:
+                try
+                {
+                    var check = Check.Parse("Mc" + Convert.ToHexStringLower(r.RawCheck));
+                    return (check.Issuer().ToString(), Units.FormatCoins(check.Value), symbol(check.Coin));
+                }
+                catch (Exception e) when (e is FormatException or ArgumentException or InvalidOperationException) { return ("", "", ""); }
+            default:
+                return ("", "", "");
+        }
+    }
+
+    private static void Line(StringBuilder csv, IEnumerable<string> fields) => csv.Append(string.Join(',', fields.Select(Quote))).Append("\r\n");
+
+    private static string Quote(string field) =>
+        field.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? '"' + field.Replace("\"", "\"\"") + '"' : field;
+
+    // A text from someone else that a spreadsheet would run as a formula (=, +, -, @) gets a leading apostrophe.
+    private static string Safe(string field) => field.Length > 0 && field[0] is '=' or '+' or '-' or '@' or '\t' or '\r' ? "'" + field : field;
 }

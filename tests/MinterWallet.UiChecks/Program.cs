@@ -56,7 +56,9 @@ public static class UiScenario
                 "phrase reveal and copy, next address, new phrase, watch-only, rename, remove; import, balances, send, wrong password, history, swap by ticker with automatic quote, " +
                 "every screen in English with no Cyrillic left, the language switched in place, " +
                 "liquidity added and halved, limit order placed and cancelled, delegation, multisend, check issued and redeemed, sources, receive with QR, address book, password change, lock/unlock against the devnet; dark and light themes; " +
-                "amounts by significant digits, addresses with highlighted edges, the «Вид» switches");
+                "amounts by significant digits, addresses with highlighted edges, the «Вид» switches; a lookalike recipient flagged, sell all, Minter Links, history to CSV; " +
+                "a token created with its price shown, minted, burned, re-created, pooled and given away; a 2-of-2 shared account created, funded and spent from; " +
+                "a candidate declared, switched on and off, its control address changed, a stake moved to it");
             return 0;
         }
         catch (Exception error)
@@ -132,6 +134,12 @@ public static class UiScenario
         main.Section = Section.History;
         await Until(() => main.History.Items.Count > 0 && !main.History.Loading ? main : null, "history");
         Scan("history"); Shot("en-history");
+        main.Section = Section.Tokens; Scan("tokens"); Shot("en-tokens");
+        main.Tokens.ModeIndex = 1; Scan("tokens, create");
+        main.Tokens.ModeIndex = 2; Scan("tokens, pool");
+        main.Tokens.ModeIndex = 0;
+        main.Section = Section.Staking; main.Staking.ModeIndex = 1; Scan("own validator"); main.Staking.ModeIndex = 0;
+        main.Section = Section.Multisig; Scan("shared account"); main.Multisig.ModeIndex = 1; Scan("shared account, transfer"); main.Multisig.ModeIndex = 0;
         main.Section = Section.Accounts; Scan("accounts");
         main.Section = Section.Settings; Scan("settings"); Shot("en-settings");
         var dialog = new ConfirmWindow(new ConfirmRequest("Перевод",
@@ -325,7 +333,12 @@ public static class UiScenario
         Settings(data, url, "dark");
         var confirmations = new List<ConfirmRequest>();
         var answer = Password;
-        var shell = new Shell(data) { Confirm = request => { confirmations.Add(request); return Task.FromResult<string?>(answer); } };
+        (string Name, string Text)? savedFile = null;
+        var shell = new Shell(data)
+        {
+            Confirm = request => { confirmations.Add(request); return Task.FromResult<string?>(answer); },
+            SaveText = (name, text) => { savedFile = (name, text); return Task.FromResult(true); },
+        };
         window = new MainWindow(shell) { Width = 1100, Height = 720 };
         window.Show();
 
@@ -344,6 +357,18 @@ public static class UiScenario
         main.ToggleReceive.Execute(null);
         Check(main.ShowReceive, "receive panel");
         Shot("receive");
+        // Ask for 2.5 MNT with a message: a Minter Link in the QR code, and the same link opened in the send form.
+        main.Request.Amount = "2,5"; main.Request.Message = "счёт 7";
+        var request = MinterLink.Parse(main.Request.Link);
+        Check(main.Request.QrText == main.Request.Link && request?.DecodeData() is SendData { Coin: 0 } asked && asked.To == main.Selected!.Account.Address
+            && asked.Value == Units.ParseCoins("2.5") && Encoding.UTF8.GetString(request.Payload) == "счёт 7", "payment request link in the QR code");
+        Shot("receive-request");
+        main.Send.Recipient = main.Request.Link;
+        Dispatcher.UIThread.RunJobs();
+        Check(main.Send.Recipient == main.Address && main.Send.Amount == "2.5" && main.Send.Payload == "счёт 7" && main.Send.Coin?.Coin.Id == 0, "the link fills the send form");
+        main.Send.Recipient = ""; main.Send.Amount = ""; main.Send.Payload = "";
+        main.Request.Amount = ""; main.Request.Message = "";
+        Check(main.Request.QrText == main.Address, "the bare address again without an amount");
         main.ToggleReceive.Execute(null);
 
         // Send 1.5 to test account C with a payload: confirmation shows the address in one piece and the amount.
@@ -360,6 +385,11 @@ public static class UiScenario
         Check(confirm.Rows.Any(r => r.Label == "Сумма" && r.Value.StartsWith("1.5 MNT (id 0)", StringComparison.Ordinal)), "confirmation shows amount with coin id");
         Check(confirm.Warnings.Any(w => w.StartsWith("Новый получатель", StringComparison.Ordinal)), "new recipient warned");
         Shot("send-done");
+        // An address with C's beginning and end but another middle: the substitution warning, in red.
+        main.Send.Recipient = "Mxf1e" + new string('f', 34) + "8d5";
+        Check(main.Send.RecipientTone == Tone.Error && main.Send.RecipientCheck.StartsWith("Адрес только похож на «Тестовый C» Mxf1e0…f8d5", StringComparison.Ordinal), "lookalike of a contact flagged");
+        Shot("send-lookalike");
+        main.Send.Recipient = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
         var dialog = new ConfirmWindow(confirm);
         dialog.Show(); Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         dialog.CaptureRenderedFrame()?.Save(Path.Combine(output, $"{++step:00}-confirm.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
@@ -377,6 +407,14 @@ public static class UiScenario
         main.Section = Section.History;
         await Until(() => main.History.Items.Any(i => i.Summary.StartsWith("Перевод 1.5 MNT → Mxf1e0", StringComparison.Ordinal)) ? main : null, "send in history", 30, () => main.History.Status);
         Shot("history");
+        // The whole history to CSV: a header, a row per transaction, the send to C dated, signed and with its commission.
+        main.History.Export.Execute(null);
+        await Until(() => main.History.Status.StartsWith("Сохранено", StringComparison.Ordinal) ? main : null, "history saved to CSV", 120, () => main.History.Status);
+        var table = savedFile!.Value.Text.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Check(savedFile.Value.Name.StartsWith("minter-Mx37980a", StringComparison.Ordinal) && savedFile.Value.Name.EndsWith(".csv", StringComparison.Ordinal), "CSV file name");
+        Check(table[0].StartsWith("Дата (UTC),Блок,Хеш,", StringComparison.Ordinal) && table.Length - 1 >= main.History.Items.Count, $"CSV rows: {table.Length - 1} for {main.History.Items.Count} shown");
+        Check(table.Any(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d+,Mt[0-9a-f]+,выполнена,Send,исходящая,Mxf1e0f934a415d37018a318c779441143ba20f8d5,-1\.5,MNT,0\.\d+,MNT,")),
+            "the send to C in the CSV with its time, amount and commission");
 
         // Swap 1 MNT for the devnet token (id 1) along the node's route, 1% slippage.
         // The coin to buy is found by its ticker (the gate's list, or a node's coin_info), and the quote comes by itself.
@@ -426,6 +464,25 @@ public static class UiScenario
         await Until(() => main.Orders.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Orders.Mine.All(o => o.Order.Id != placed) ? main : null, "order cancelled", 90, () => main.Orders.Status);
         main.TradeModeIndex = 0;
 
+        // Sell all of the token back for MNT: a SellAll transaction, the commission paid in the token itself.
+        main.Swap.Sell = main.Swap.Coins.First(c => c.Coin.Id == 1);
+        main.Swap.Buy.Query = main.Symbol(0);
+        main.Swap.Buy.Selected = await Until(() => main.Swap.Buy.Results.FirstOrDefault(c => c.Id == 0), "base coin for selling all", 30, () => main.Swap.Buy.EmptyText);
+        main.Swap.All.Execute(null);
+        Check(main.Swap.Amount == Units.FormatCoins(main.Swap.Sell!.Value), "the whole token balance as the amount");
+        await Until(() => main.Swap.HasQuote ? main : null, "sell-all quote", 30, () => main.Swap.Status);
+        Check(main.Swap.QuoteRoute.EndsWith("· продаётся всё", StringComparison.Ordinal), "the quote says everything is sold");
+        // Balances read again rebuild the coin list under the selection: "Всё" stays.
+        main.Swap.BalancesChanged();
+        await Until(() => main.Swap.HasQuote && main.Swap.QuoteRoute.EndsWith("· продаётся всё", StringComparison.Ordinal) ? main : null, "selling all kept after the balances", 30, () => main.Swap.Status);
+        Shot("swap-all");
+        // A balance read again re-quotes (the cancelled order's refund may land now): press when the button is on.
+        await Until(() => main.Swap.SwapNow.CanExecute(null) ? main : null, "sell-all ready", 30, () => main.Swap.Status);
+        main.Swap.SwapNow.Execute(null);
+        await Until(() => main.Swap.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "sell-all included", 90, () => main.Swap.Status);
+        Check(confirmations[^1].Rows.Any(r => r.Label == "Продаёте" && r.Value.StartsWith("всё:", StringComparison.Ordinal)), "the confirmation says everything is sold");
+        await Until(() => main.Balances.All(b => b.Coin.Id != 1) ? main : null, "no token left after selling all", 30, () => main.Status);
+
         // Delegate 2 MNT to the devnet validator.
         main.Section = Section.Staking;
         await Until(() => main.Staking.Candidates.Count > 0 ? main : null, "candidates", 30, () => main.Staking.Status);
@@ -469,6 +526,124 @@ public static class UiScenario
         main.ShowReceive = false;
         main.Selected = main.Accounts.First(x => x.Name == "Тестовый B");
         await Until(() => main.Balances.Count > 1 ? main : null, "back to B");
+
+        // Tokens: a new one (a random 7-letter ticker, the cheapest kind) with its price shown before creating; minted,
+        // burned, re-created with a closed supply, put into a pool with MNT, then given to C.
+        main.Section = Section.Tokens;
+        main.Tokens.ModeIndex = 1;
+        var ticker = "UI" + string.Concat(Enumerable.Range(0, 5).Select(_ => (char)('A' + Random.Shared.Next(26))));
+        main.Tokens.Symbol = ticker.ToLowerInvariant(); main.Tokens.Name = "Проверка окна"; main.Tokens.Initial = "1000"; main.Tokens.MaxSupply = "10000";
+        Check(main.Tokens.Symbol == ticker, "the ticker in capitals");
+        await Until(() => main.Tokens.Cost.StartsWith("Обойдётся в", StringComparison.Ordinal) ? main : null, "the token's price", 30, () => main.Tokens.Cost);
+        Shot("tokens-create");
+        main.Tokens.Create.Execute(null);
+        await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "token created", 90, () => main.Tokens.Status);
+        Check(confirmations[^1].Rows.Any(r => r.Label == "Тикер" && r.Value == ticker), "the confirmation names the ticker");
+        await Until(() => main.Tokens.Selected?.Symbol == ticker ? main : null, "the new token among mine", 30, () => main.Tokens.Status);
+        Check(main.Tokens.Selected!.Info.Volume == Units.ParseCoins("1000") && main.Tokens.Selected.Info.MaxSupply == Units.ParseCoins("10000")
+            && main.Tokens.Selected.Info.Owner == main.Selected!.Account.Address, "the token as created");
+        main.Tokens.ModeIndex = 0;
+        main.Tokens.MintAmount = "500";
+        main.Tokens.Mint.Execute(null);
+        await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Tokens.Selected?.Info.Volume == Units.ParseCoins("1500") ? main : null, "minted", 90, () => main.Tokens.Status);
+        Shot("tokens-mine");
+        main.Tokens.BurnAmount = "200";
+        main.Tokens.Burn.Execute(null);
+        await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Tokens.Selected?.Info.Volume == Units.ParseCoins("1300") ? main : null, "burned", 90, () => main.Tokens.Status);
+        main.Tokens.StartRecreate.Execute(null);
+        Check(main.Tokens.IsCreate && main.Tokens.Recreating && main.Tokens.Symbol == ticker, "re-creating the same ticker");
+        main.Tokens.Initial = "50"; main.Tokens.Mintable = false;
+        main.Tokens.Create.Execute(null);
+        await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "token re-created", 90, () => main.Tokens.Status);
+        await Until(() => main.Tokens.Selected is { Info.Mintable: false } t && t.Symbol == ticker && t.Info.Volume == Units.ParseCoins("50") ? main : null, "the re-created token", 30, () => main.Tokens.Status);
+        var token2 = main.Tokens.Selected!.Info.Id;
+        // A pool of 10 of it and 1 MNT: the starting price 0.1 MNT.
+        main.Tokens.ModeIndex = 2;
+        await Until(() => main.Tokens.Coins.Any(c => c.Coin.Id == token2) ? main : null, "the new token among the balances", 30, () => main.Status);
+        main.Tokens.CoinA = main.Tokens.Coins.First(c => c.Coin.Id == token2);
+        main.Tokens.CoinB = main.Tokens.Coins.First(c => c.Coin.Id == 0);
+        main.Tokens.AmountA = "10"; main.Tokens.AmountB = "1";
+        Check(main.Tokens.PoolText.StartsWith($"Начальная цена: 1 {ticker} = 0.1 MNT", StringComparison.Ordinal), $"the pool's starting price: {main.Tokens.PoolText}");
+        Shot("tokens-pool");
+        main.Tokens.CreatePool.Execute(null);
+        await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "pool created", 90, () => main.Tokens.Status);
+        Check(await shell.Backend!.SwapPoolAsync(token2, 0) is { } pool && pool.Amount0 + pool.Amount1 > 0, "the pool exists");
+        // The token to C: gone from mine, C its owner.
+        main.Tokens.ModeIndex = 0;
+        main.Tokens.Selected = main.Tokens.Mine.First(t => t.Info.Id == token2);
+        main.Tokens.NewOwner = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
+        main.Tokens.GiveAway.Execute(null);
+        await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "ownership given", 90, () => main.Tokens.Status);
+        Check(main.Tokens.Mine.All(t => t.Info.Id != token2) && (await shell.Backend!.CoinAsync(token2))?.Owner == Address.Parse("Mxf1e0f934a415d37018a318c779441143ba20f8d5"), "C owns the token");
+
+        // A shared account of B and the check's recipient, 2 of 2: created by B, funded with 5 MNT, 1 MNT sent from it
+        // to C — proposed and signed by B, the text signed by the other member, then sent.
+        var b = main.Selected!.Account.Address;
+        var other = main.Accounts.First(x => x.Name == "Получатель чека").Account.Address;
+        main.Section = Section.Multisig;
+        main.Multisig.ModeIndex = 0;
+        main.Multisig.Members = $"{b}\n{other} 1"; main.Multisig.Threshold = "2";
+        main.Multisig.Create.Execute(null);
+        await Until(() => main.Multisig.HasCreated ? main : null, "shared account created", 90, () => main.Multisig.Status);
+        var shared = Address.Parse(main.Multisig.Created);
+        Check((await shell.Backend!.AccountAsync(shared)).Multisig is { Threshold: 2, Members.Count: 2 }, "the shared account's members on the chain");
+        Shot("multisig-created");
+        main.Section = Section.Send;
+        main.Send.Recipient = shared.ToString(); main.Send.Coin = main.Send.Coins.First(c => c.Coin.Id == 0); main.Send.Amount = "5"; main.Send.Payload = "";
+        main.Send.SendNow.Execute(null);
+        await Until(() => main.Send.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "shared account funded", 90, () => main.Send.Status);
+        main.Section = Section.Multisig;
+        main.Multisig.ModeIndex = 1;
+        main.Multisig.LoadAccount.Execute(null);
+        await Until(() => main.Multisig.AccountInfo.StartsWith("Порог 2 из 2", StringComparison.Ordinal) && main.Multisig.Coins.Count > 0 ? main : null, "the shared account read", 30, () => main.Multisig.Status);
+        main.Multisig.Recipient = "Mxf1e0f934a415d37018a318c779441143ba20f8d5"; main.Multisig.Amount = "1";
+        main.Multisig.Propose.Execute(null);
+        await Until(() => main.Multisig.HasTx && main.Multisig.Progress == "Подписано: вес 1 из 2 нужных." ? main : null, "proposed and signed by B", 30, () => main.Multisig.Status + " " + main.Multisig.TextInfo);
+        Check(!main.Multisig.CanSend && !main.Multisig.CanSign && confirmations[^1].Action == "Подписать", "one signature is not enough; B cannot sign twice");
+        var text = main.Multisig.Text;
+        Shot("multisig-signed-once");
+        main.Selected = main.Accounts.First(x => x.Name == "Получатель чека");
+        main.Multisig.Text = ""; main.Multisig.Text = text;   // as the other member pastes it
+        await Until(() => main.Multisig.CanSign ? main : null, "the other member can sign", 30, () => main.Multisig.TextInfo);
+        main.Multisig.Sign.Execute(null);
+        await Until(() => main.Multisig.CanSend ? main : null, "signed by both", 30, () => main.Multisig.Status + " " + main.Multisig.Progress);
+        var sharedBefore = (await shell.Backend!.AccountAsync(shared)).BalanceOf(0);
+        main.Multisig.SendNow.Execute(null);
+        await Until(() => main.Multisig.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "sent from the shared account", 90, () => main.Multisig.Status);
+        Check((await shell.Backend!.AccountAsync(shared)).BalanceOf(0) <= sharedBefore - Units.PipPerCoin, "1 MNT left the shared account");
+        Shot("multisig-sent");
+        main.Selected = main.Accounts.First(x => x.Name == "Тестовый B");
+        await Until(() => main.Balances.Count > 1 ? main : null, "back to B after the shared account");
+
+        // Own validator: a new candidate (a random key) declared with 1 MNT, switched on and off, its control address
+        // given to C; then 1 MNT of B's stake moved to it from the devnet validator, B's stake seen there.
+        main.Section = Section.Staking;
+        main.Staking.ModeIndex = 1;
+        await Until(() => main.Validator.DeclareReward.Length > 0 ? main : null, "own candidates read", 30, () => main.Validator.Status);
+        var nodeKey = "Mp" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        main.Validator.DeclareKey = nodeKey; main.Validator.DeclareCommission = "7"; main.Validator.DeclareStake = "1";
+        main.Validator.Declare.Execute(null);
+        await Until(() => main.Validator.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Validator.Mine.Any(c => c.Key == nodeKey) ? main : null, "candidate declared", 90, () => main.Validator.Status);
+        main.Validator.Selected = main.Validator.Mine.First(c => c.Key == nodeKey);
+        main.Validator.On.Execute(null);
+        await Until(() => main.Validator.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Validator.Selected?.Info.Status == 2 ? main : null, "candidate on", 90, () => main.Validator.Status);
+        Shot("validator");
+        main.Validator.Off.Execute(null);
+        await Until(() => main.Validator.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Validator.Selected?.Info.Status == 1 ? main : null, "candidate off", 90, () => main.Validator.Status);
+        main.Validator.Control = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
+        main.Validator.SaveAddresses.Execute(null);
+        await Until(() => main.Validator.Status.StartsWith("Готово", StringComparison.Ordinal) && main.Validator.Selected?.Info.Control == Address.Parse("Mxf1e0f934a415d37018a318c779441143ba20f8d5") ? main : null, "control address changed", 90, () => main.Validator.Status);
+        main.Staking.ModeIndex = 0;
+        main.Staking.Load.Execute(null);
+        await Until(() => main.Staking.Candidates.Any(c => c.Key == nodeKey) ? main : null, "the new candidate listed", 30, () => main.Staking.Status);
+        main.Staking.Candidate = main.Staking.Candidates.First(c => c.Info.Validator);
+        await Until(() => main.Staking.MyStake.StartsWith("Ваш стейк здесь:", StringComparison.Ordinal) ? main : null, "B's stake with the devnet validator", 30, () => main.Staking.MyStake);
+        main.Staking.MoveTarget = main.Staking.Candidates.First(c => c.Key == nodeKey);
+        main.Staking.Coin = main.Staking.Coins.First(c => c.Coin.Id == 0); main.Staking.Amount = "1";
+        main.Staking.Move.Execute(null);
+        await Until(() => main.Staking.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "stake moved", 90, () => main.Staking.Status);
+        Check(confirmations[^1].Rows.Any(r => r.Label == "Куда" && r.Value.Contains(nodeKey, StringComparison.Ordinal)), "the move's confirmation names the new candidate");
+        Shot("stake-moved");
 
         main.Section = Section.Settings;
         Check(main.Settings.Sources.Count == 2 && main.Settings.Sources[0].Source.IsDefaultGate && main.Settings.SourceIndex == 1 && main.Settings.CanRemove,

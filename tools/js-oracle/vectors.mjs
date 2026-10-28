@@ -1,10 +1,10 @@
 // Second reference for Minter.Protocol: the official Minter JS libraries (minterjs-wallet 6.2.0 / bip39 3.1.0 for
-// mnemonics and the m/44'/60'/0'/0/i path, minter-js-sdk 0.46.2 for checks and redeem proofs).
+// mnemonics and the m/44'/60'/0'/0/i path, minter-js-sdk 0.46.2 for checks, redeem proofs and Minter Links).
 // Writes tests/Minter.Protocol.Checks/Fixtures/js-expected.json. Test keys and mnemonics only.
 import { readFileSync, writeFileSync } from 'node:fs';
 import bip39 from 'bip39';
 import { walletFromMnemonic } from 'minterjs-wallet';
-import { issueCheck, RedeemCheckTxData } from 'minter-js-sdk';
+import { issueCheck, RedeemCheckTxData, prepareLink, decodeLink, TX_TYPE } from 'minter-js-sdk';
 
 const fixtures = new URL('../../tests/Minter.Protocol.Checks/Fixtures/', import.meta.url);
 const cases = JSON.parse(readFileSync(new URL('cases.json', fixtures), 'utf8'));
@@ -46,6 +46,26 @@ const checks = cases.checks.filter(c => Buffer.from(Buffer.from(c.nonce, 'hex').
     return { name: c.name, check, proof: proof.replace(/^0x/, '') };
   });
 
+// Minter Links (https://bip.to/tx/…): requests to pay, with and without a message and the sender's gas settings, and
+// a check with its password.
+const to = 'Mx7633980c000139dd3bd24a3f54e06474fa941e16';
+const links = [
+  { name: 'send', to, coin: 0, value: '1.5' },
+  { name: 'send-payload', to, coin: 1993, value: '0.000001234', payload: 'заказ 42 ✓' },
+  { name: 'send-gas', to, coin: 0, value: '12345.678', nonce: 7, gasPrice: 1, gasCoin: 0 },
+  { name: 'send-gas-coin', to, coin: 0, value: '1', gasCoin: 1993 },
+].map(l => {
+  const url = prepareLink({ type: TX_TYPE.SEND, data: { to: l.to, coin: l.coin, value: l.value }, payload: l.payload,
+    nonce: l.nonce, gasPrice: l.gasPrice, gasCoin: l.gasCoin });
+  const back = decodeLink(url);
+  return { ...l, url, decoded: { to: back.data.to, coin: Number(back.data.coin), value: String(back.data.value), payload: back.payload,
+    nonce: back.nonce ?? null, gasPrice: back.gasPrice ?? null, gasCoin: back.gasCoin ?? null } };
+});
+const checkLinks = checks.slice(0, 1).map(c => {
+  const password = cases.checks.find(k => k.name === c.name).password;
+  return { name: c.name, check: c.check, password, url: prepareLink({ type: TX_TYPE.REDEEM_CHECK, data: { check: c.check }, password }) };
+});
+
 writeFileSync(new URL('js-expected.json', fixtures), JSON.stringify({
-  source: 'minterjs-wallet 6.2.0, bip39 3.1.0, minter-js-sdk 0.46.2', mnemonics, invalid, checks }, null, 2) + '\n');
-console.log(`js oracle: ${mnemonics.length} mnemonics, ${invalid.length} invalid, ${checks.length} checks`);
+  source: 'minterjs-wallet 6.2.0, bip39 3.1.0, minter-js-sdk 0.46.2', mnemonics, invalid, checks, links, checkLinks }, null, 2) + '\n');
+console.log(`js oracle: ${mnemonics.length} mnemonics, ${invalid.length} invalid, ${checks.length} checks, ${links.length + checkLinks.length} links`);

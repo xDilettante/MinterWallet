@@ -50,7 +50,14 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         var balances = j.GetProperty("balance").EnumerateArray().Select(b => new Balance(Coin(b.GetProperty("coin")), Big(b, "value"), Big(b, "bip_value"))).ToList();
         var delegated = j.TryGetProperty("delegated", out var d) && d.ValueKind == JsonValueKind.Array
             ? d.EnumerateArray().Select(x => new Delegation(Coin(x.GetProperty("coin")), Big(x, "value"), Big(x, "bip_value"))).ToList() : [];
-        return new AccountState(address, U64(j, "transaction_count"), balances, delegated, Big(j, "bip_value"));
+        MultisigInfo? multisig = null;
+        if (j.TryGetProperty("multisig", out var m) && m.ValueKind == JsonValueKind.Object)
+        {
+            var weights = m.GetProperty("weights").EnumerateArray().Select(w => (uint)ParseU64(w)).ToList();
+            var addresses = m.GetProperty("addresses").EnumerateArray().Select(a => Address.Parse(a.GetString()!)).ToList();
+            multisig = new MultisigInfo((uint)U64(m, "threshold"), addresses.Zip(weights, (a, w) => new MultisigMember(a, w)).ToList());
+        }
+        return new AccountState(address, U64(j, "transaction_count"), balances, delegated, Big(j, "bip_value"), multisig, U64(j, "locked_stake_until_block"));
     }
 
     public async Task<CoinDetails?> CoinAsync(uint id, CancellationToken ct = default) => await CoinOrNull($"coin_info_by_id/{id}", ct);
@@ -81,6 +88,12 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
     {
         var j = await Get($"estimate_coin_sell?coin_id_to_sell={sell}&coin_id_to_buy={buy}&value_to_sell={value}&swap_from={From(from)}{Route(route)}", ct);
         return new SwapEstimate(Big(j, "will_get"), Big(j, "commission"), Str(j, "swap_from"));
+    }
+
+    public async Task<BigInteger> EstimateSellAllAsync(uint sell, uint buy, BigInteger balance, SwapFrom from, IReadOnlyList<uint>? route = null, CancellationToken ct = default)
+    {
+        var j = await Get($"estimate_coin_sell_all?coin_id_to_sell={sell}&coin_id_to_buy={buy}&value_to_sell={balance}&swap_from={From(from)}{Route(route)}", ct);
+        return Big(j, "will_get");
     }
 
     public async Task<SwapEstimate> EstimateBuyAsync(uint sell, uint buy, BigInteger value, SwapFrom from, IReadOnlyList<uint>? route = null, CancellationToken ct = default)
@@ -125,6 +138,13 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         return sent.Concat(received).GroupBy(r => r.Hash).Select(g => g.First()).OrderByDescending(r => r.Height).ToList();
     }
 
+    // The time of a block; "size" keeps the answer short (the list of fields has no "time": it comes anyway).
+    public async Task<DateTimeOffset> BlockTimeAsync(long height, CancellationToken ct = default)
+    {
+        var j = await Get($"block/{height.ToString(CultureInfo.InvariantCulture)}?fields=size", ct);
+        return DateTimeOffset.Parse(Str(j, "time"), CultureInfo.InvariantCulture);
+    }
+
     private async Task<List<TxRecord>> Query(string query, int page, int perPage, CancellationToken ct)
     {
         JsonElement j;
@@ -138,7 +158,18 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         var j = await Get("candidates?status=all&not_show_stakes=true", ct);
         return j.GetProperty("candidates").EnumerateArray().Select(c => new CandidateInfo(
             Pubkey.Parse(Str(c, "public_key")), (uint)U64(c, "commission"), Big(c, "total_stake"), (int)U64(c, "status"),
-            c.TryGetProperty("validator", out var v) && v.GetBoolean(), Address.Parse(Str(c, "owner_address")))).ToList();
+            c.TryGetProperty("validator", out var v) && v.GetBoolean(), Address.Parse(Str(c, "owner_address")),
+            Address.TryParse(c.TryGetProperty("reward_address", out var r) ? r.GetString() ?? "" : "", out var reward) ? reward : null,
+            Address.TryParse(c.TryGetProperty("control_address", out var k) ? k.GetString() ?? "" : "", out var control) ? control : null)).ToList();
+    }
+
+    // Who has staked what with a candidate.
+    public async Task<IReadOnlyList<StakeInfo>> StakesAsync(Pubkey candidate, CancellationToken ct = default)
+    {
+        var j = await Get($"candidate/{candidate}?not_show_stakes=false", ct);
+        return j.TryGetProperty("stakes", out var s) && s.ValueKind == JsonValueKind.Array
+            ? s.EnumerateArray().Select(x => new StakeInfo(Address.Parse(Str(x, "owner")), Coin(x.GetProperty("coin")), Big(x, "value"), Big(x, "bip_value"))).ToList()
+            : [];
     }
 
     // The reserves of the pool of two coins, in the order asked; null when there is no such pool.

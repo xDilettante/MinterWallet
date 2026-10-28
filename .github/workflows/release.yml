@@ -1,6 +1,6 @@
-# A tag v<version> builds the release from that commit: MinterWallet-<version>-win-x64.exe (signed with Azure Trusted
-# Signing when its secrets are set), the Linux file, its AppImage and .deb, and SHA256SUMS.txt, then publishes them
-# as a GitHub release with the notes of .github/release-notes.md.
+# A tag v<version> builds the release from that commit: MinterWallet-<version>-win-x64.exe, the Linux file, its
+# AppImage and .deb, and SHA256SUMS.txt, then publishes them as a GitHub release with the notes of
+# .github/release-notes.md. Nothing is signed: the project is open and anyone can build the same files from the tag.
 name: release
 on:
   push:
@@ -10,8 +10,6 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -24,21 +22,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'publish failed' }
           ./out/MinterWallet.exe --self-test
           if ($LASTEXITCODE -ne 0) { throw 'self-test failed' }
-      - name: Sign (Azure Trusted Signing)
-        if: env.AZURE_CLIENT_ID != ''
-        uses: azure/trusted-signing-action@v0.5.1
-        with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
-          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
-          files-folder: out
-          files-folder-filter: exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
       - name: Name
         shell: pwsh
         run: |

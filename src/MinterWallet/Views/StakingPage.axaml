@@ -5,19 +5,27 @@
              x:Class="MinterWallet.Views.StakingPage"
              x:DataType="local:MainViewModel">
   <Grid Margin="32,28,32,24" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14" DataContext="{Binding Staking}" x:DataType="local:StakingViewModel">
-    <StackPanel Spacing="4">
-      <TextBlock Text="Стейкинг" Classes="h1" />
-      <TextBlock Classes="muted prose" Text="Делегируйте монеты валидатору и получайте долю наград. Выведенный стейк возвращается примерно через 30 дней." />
+    <StackPanel Spacing="10">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Стейкинг" Classes="h1" />
+        <TextBlock Classes="muted prose" Text="Делегируйте монеты валидатору и получайте долю наград. Выведенный стейк возвращается примерно через 30 дней." />
+      </StackPanel>
+      <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Делегирование или свой валидатор" HorizontalAlignment="Left">
+        <ListBoxItem Content="Делегирование" />
+        <ListBoxItem Content="Свой валидатор" />
+      </ListBox>
     </StackPanel>
-    <DockPanel Grid.Row="1">
+
+    <!-- Delegation -->
+    <DockPanel Grid.Row="1" IsVisible="{Binding IsDelegation}">
       <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить список" AutomationProperties.Name="Обновить список"
               Margin="8,0,0,0"><local:Icon Kind="refresh" /></Button>
       <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Classes="caption" VerticalAlignment="Center" Margin="12,0,0,0" />
-      <TextBox Text="{Binding Filter}" PlaceholderText="Поиск по ключу Mp…" Classes="mono" AutomationProperties.Name="Поиск валидатора">
+      <TextBox Text="{Binding Filter}" PlaceholderText="Поиск по имени или ключу Mp…" Classes="mono" AutomationProperties.Name="Поиск валидатора">
         <TextBox.InnerLeftContent><local:Icon Kind="search" Width="16" Height="16" Margin="10,0,0,0" Foreground="{DynamicResource Muted}" /></TextBox.InnerLeftContent>
       </TextBox>
     </DockPanel>
-    <ListBox Grid.Row="2" Classes="rows" ItemsSource="{Binding Candidates}" SelectedItem="{Binding Candidate}" AutomationProperties.Name="Валидаторы">
+    <ListBox Grid.Row="2" Classes="rows" ItemsSource="{Binding Candidates}" SelectedItem="{Binding Candidate}" AutomationProperties.Name="Валидаторы" IsVisible="{Binding IsDelegation}">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="local:CandidateItem">
           <Grid ColumnDefinitions="Auto,*,Auto">
@@ -34,11 +42,12 @@
         </DataTemplate>
       </ListBox.ItemTemplate>
     </ListBox>
-    <Border Grid.Row="3" Classes="card" Padding="16">
+    <Border Grid.Row="3" Classes="card" Padding="16" IsVisible="{Binding IsDelegation}">
       <StackPanel Spacing="12">
         <StackPanel>
           <TextBlock Text="{Binding CandidateTitle}" Classes="mono" FontWeight="SemiBold" />
           <TextBlock Text="{Binding CandidateCaption}" Classes="caption" />
+          <TextBlock Text="{Binding MyStake}" Classes="caption" FontWeight="SemiBold" Margin="0,4,0,0" />
         </StackPanel>
         <Grid ColumnDefinitions="200,*,Auto" ColumnSpacing="10">
           <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета">
@@ -53,8 +62,106 @@
           </StackPanel>
         </Grid>
         <TextBlock Text="{Binding Available}" Classes="caption" />
+        <Expander Header="Перенести стейк к другому валидатору, заморозить стейки" HorizontalAlignment="Stretch">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="caption prose" Text="Перенос — без 30-дневного вывода: стейк дойдёт до нового валидатора примерно через неделю. Сумма и монета — те, что выше." />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <ComboBox ItemsSource="{Binding Candidates}" SelectedItem="{Binding MoveTarget}" HorizontalAlignment="Stretch" PlaceholderText="К какому валидатору" AutomationProperties.Name="К какому валидатору" />
+              <Button Grid.Column="1" Content="Перенести" Command="{Binding Move}" />
+            </Grid>
+            <Border Classes="divider" />
+            <TextBlock Classes="caption prose" Text="Заморозка: все стейки счёта на 3 года за повышенные награды. Вывести их до срока будет нельзя." />
+            <Button Content="Заморозить стейки на 3 года…" Command="{Binding LockStakes}" HorizontalAlignment="Left" />
+          </StackPanel>
+        </Expander>
+        <TextBlock Text="{Binding Locked}" Classes="caption prose" Foreground="{DynamicResource Warning}" />
         <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
       </StackPanel>
     </Border>
+
+    <!-- Own validator -->
+    <ScrollViewer Grid.Row="1" Grid.RowSpan="3" IsVisible="{Binding IsValidatorMode}">
+      <Panel>
+        <StackPanel Spacing="14" MaxWidth="640" HorizontalAlignment="Left" DataContext="{Binding $parent[UserControl].((local:MainViewModel)DataContext).Validator}" x:DataType="local:ValidatorViewModel">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить"><local:Icon Kind="refresh" /></Button>
+            <TextBlock Text="Кандидаты этого счёта" Classes="h2" VerticalAlignment="Center" />
+          </DockPanel>
+          <ListBox Classes="rows" ItemsSource="{Binding Mine}" SelectedItem="{Binding Selected}" IsVisible="{Binding HasMine}" AutomationProperties.Name="Кандидаты этого счёта">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="local:CandidateItem">
+                <DockPanel>
+                  <Border DockPanel.Dock="Right" Classes="badge neutral" Classes.success="{Binding IsValidator}"><TextBlock Text="{Binding State}" /></Border>
+                  <TextBlock Text="{Binding Key}" Classes="mono caption" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </DockPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <Border Classes="card" IsVisible="{Binding HasSelected}">
+            <StackPanel Spacing="12">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                  <Button Content="Включить" Command="{Binding On}" Classes="accent" />
+                  <Button Content="Выключить" Command="{Binding Off}" />
+                </StackPanel>
+                <TextBlock Text="{Binding SelectedCaption}" Classes="caption" VerticalAlignment="Center" />
+              </DockPanel>
+              <StackPanel>
+                <TextBlock Text="Комиссия, %" Classes="label" />
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Content="Сохранить" Command="{Binding SaveCommission}" Margin="8,0,0,0" />
+                  <TextBox Text="{Binding Commission}" Classes="mono" AutomationProperties.Name="Комиссия" />
+                </DockPanel>
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Text="Адреса: награды, владелец, управление" Classes="label" />
+                <TextBox Text="{Binding Reward}" Classes="mono" PlaceholderText="Mx… для наград" AutomationProperties.Name="Адрес для наград" />
+                <TextBox Text="{Binding Owner}" Classes="mono" PlaceholderText="Mx… владельца" AutomationProperties.Name="Адрес владельца" />
+                <TextBox Text="{Binding Control}" Classes="mono" PlaceholderText="Mx… для включения и выключения" AutomationProperties.Name="Адрес управления" />
+                <Button Content="Сохранить адреса" Command="{Binding SaveAddresses}" HorizontalAlignment="Right" />
+              </StackPanel>
+              <Expander Header="Новый ключ ноды, голосования валидаторов" HorizontalAlignment="Stretch">
+                <StackPanel Spacing="10">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Сменить ключ" Command="{Binding ChangeKey}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding NewKey}" Classes="mono" PlaceholderText="Mp… нового ключа" AutomationProperties.Name="Новый ключ" />
+                  </DockPanel>
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Голосовать за остановку" Command="{Binding Halt}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding HaltHeight}" Classes="mono" PlaceholderText="Блок остановки" AutomationProperties.Name="Блок остановки" />
+                  </DockPanel>
+                  <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+                    <TextBox Text="{Binding Version}" Classes="mono" PlaceholderText="Версия" AutomationProperties.Name="Версия" />
+                    <TextBox Grid.Column="1" Text="{Binding UpdateHeight}" Classes="mono" PlaceholderText="С блока" AutomationProperties.Name="С блока" />
+                    <Button Grid.Column="2" Content="Голосовать за обновление" Command="{Binding Vote}" />
+                  </Grid>
+                </StackPanel>
+              </Expander>
+            </StackPanel>
+          </Border>
+          <Border Classes="card">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Выдвинуть кандидата" Classes="h2" />
+              <StackPanel><TextBlock Text="Ключ ноды" Classes="label" /><TextBox Text="{Binding DeclareKey}" Classes="mono" PlaceholderText="Mp…" AutomationProperties.Name="Ключ ноды" /></StackPanel>
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                <StackPanel><TextBlock Text="Комиссия, %" Classes="label" /><TextBox Text="{Binding DeclareCommission}" Classes="mono" AutomationProperties.Name="Комиссия кандидата" /></StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Монета стейка" Classes="label" />
+                  <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding DeclareCoin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета стейка">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="local:BalanceItem"><TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" /></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="Стейк" Classes="label" /><TextBox Text="{Binding DeclareStake}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Стейк кандидата" /></StackPanel>
+              </Grid>
+              <StackPanel><TextBlock Text="Адрес для наград" Classes="label" /><TextBox Text="{Binding DeclareReward}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Адрес для наград кандидата" /></StackPanel>
+              <Button Content="Выдвинуть" Command="{Binding Declare}" Classes="accent" HorizontalAlignment="Right" />
+            </StackPanel>
+          </Border>
+          <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+        </StackPanel>
+      </Panel>
+    </ScrollViewer>
   </Grid>
 </UserControl>

@@ -1,0 +1,142 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.TokensPage"
+             x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640" DataContext="{Binding Tokens}" x:DataType="local:TokensViewModel">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Токены" Classes="h1" />
+        <TextBlock Classes="muted prose" Text="Свой токен в сети Minter: создайте его, выпускайте и сжигайте, откройте для него пул, чтобы его можно было обменивать." />
+      </StackPanel>
+      <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Токены: мои, создать или пул">
+        <ListBoxItem Content="Мои токены" />
+        <ListBoxItem Content="Создать токен" />
+        <ListBoxItem Content="Создать пул" />
+      </ListBox>
+
+      <!-- My tokens -->
+      <StackPanel Spacing="14" IsVisible="{Binding IsMine}">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить" Margin="8,0,0,0"><local:Icon Kind="refresh" /></Button>
+          <Button DockPanel.Dock="Right" Content="Найти" Command="{Binding Find}" Margin="8,0,0,0" />
+          <TextBox Text="{Binding FindText}" Classes="mono" PlaceholderText="Свой токен по тикеру" AutomationProperties.Name="Тикер своего токена" />
+        </DockPanel>
+        <ListBox Classes="rows" ItemsSource="{Binding Mine}" SelectedItem="{Binding Selected}" IsVisible="{Binding HasMine}" AutomationProperties.Name="Мои токены">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="local:TokenItem">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="avatar" Width="32" Height="32"><TextBlock Text="{Binding Initial}" /></Border>
+                <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Name}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="{Binding SupplyText}" HorizontalAlignment="Right" />
+                  <TextBlock Text="{Binding Flags}" Classes="caption" HorizontalAlignment="Right" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <Border Classes="card" IsVisible="{Binding HasSelected}">
+          <StackPanel Spacing="14">
+            <TextBlock Text="{Binding SelectedTitle}" Classes="h2" />
+            <StackPanel IsVisible="{Binding CanMint}" Spacing="6">
+              <TextBlock Text="Выпустить ещё" Classes="label" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Выпустить" Command="{Binding Mint}" Classes="accent" Margin="8,0,0,0" />
+                <TextBox Text="{Binding MintAmount}" Classes="mono" PlaceholderText="Сколько" AutomationProperties.Name="Сколько выпустить" />
+              </DockPanel>
+              <TextBlock Text="{Binding MintHint}" Classes="caption" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding CanBurn}" Spacing="6">
+              <TextBlock Text="Сжечь" Classes="label" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Сжечь" Command="{Binding Burn}" Margin="8,0,0,0" />
+                <TextBox Text="{Binding BurnAmount}" Classes="mono" PlaceholderText="Сколько" AutomationProperties.Name="Сколько сжечь" />
+              </DockPanel>
+            </StackPanel>
+            <StackPanel Spacing="6">
+              <TextBlock Text="Передать владение" Classes="label" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Передать" Command="{Binding GiveAway}" Margin="8,0,0,0" />
+                <TextBox Text="{Binding NewOwner}" Classes="mono" PlaceholderText="Mx… нового владельца" AutomationProperties.Name="Адрес нового владельца" />
+              </DockPanel>
+            </StackPanel>
+            <Button Content="Пересоздать токен…" Command="{Binding StartRecreate}" HorizontalAlignment="Left"
+                    ToolTip.Tip="Тот же тикер с новыми параметрами; нынешний токен останется у держателей под тикером с номером версии" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- Create (or re-create) a token -->
+      <StackPanel Spacing="14" IsVisible="{Binding IsCreate}">
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="link" Content="Отмена" Command="{Binding CancelRecreate}" IsVisible="{Binding Recreating}" />
+              <TextBlock Text="{Binding CreateTitle}" Classes="h2" />
+            </DockPanel>
+            <Grid ColumnDefinitions="*,2*" ColumnSpacing="12">
+              <StackPanel><TextBlock Text="Тикер" Classes="label" /><TextBox Text="{Binding Symbol}" Classes="mono" PlaceholderText="MYTOKEN" MaxLength="10" IsReadOnly="{Binding Recreating}" /></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Название" Classes="label" /><TextBox Text="{Binding Name}" PlaceholderText="Например, Мой токен" /></StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <StackPanel><TextBlock Text="Начальный выпуск" Classes="label" /><TextBox Text="{Binding Initial}" Classes="mono" PlaceholderText="1000000" /></StackPanel>
+              <StackPanel Grid.Column="1" IsVisible="{Binding Mintable}"><TextBlock Text="Предел выпуска (необязательно)" Classes="label" /><TextBox Text="{Binding MaxSupply}" Classes="mono" PlaceholderText="без предела" /></StackPanel>
+            </Grid>
+            <CheckBox IsChecked="{Binding Mintable}"><TextBlock Classes="prose" Text="Можно выпускать ещё (только владелец)" /></CheckBox>
+            <CheckBox IsChecked="{Binding Burnable}"><TextBlock Classes="prose" Text="Можно сжигать (любой держатель — свои)" /></CheckBox>
+            <TextBlock Text="{Binding Cost}" Classes="caption prose" />
+          </StackPanel>
+        </Border>
+        <Button Content="{Binding CreateLabel}" Command="{Binding Create}" Classes="accent" HorizontalAlignment="Right" MinWidth="150" />
+      </StackPanel>
+
+      <!-- A new pool -->
+      <StackPanel Spacing="14" IsVisible="{Binding IsPool}">
+        <TextBlock Classes="muted prose" Text="Пул из двух монет делает их обмениваемыми друг на друга. Вы кладёте обе монеты — их соотношение задаёт начальную цену — и получаете долю пула, которую можно вывести." />
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+              <StackPanel Spacing="6">
+                <TextBlock Text="Первая монета" Classes="label" />
+                <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding CoinA}" HorizontalAlignment="Stretch" AutomationProperties.Name="Первая монета">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:BalanceItem">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBox Text="{Binding AmountA}" Classes="mono" PlaceholderText="Сколько положить" AutomationProperties.Name="Сколько первой монеты" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="6">
+                <TextBlock Text="Вторая монета" Classes="label" />
+                <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding CoinB}" HorizontalAlignment="Stretch" AutomationProperties.Name="Вторая монета">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:BalanceItem">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBox Text="{Binding AmountB}" Classes="mono" PlaceholderText="Сколько положить" AutomationProperties.Name="Сколько второй монеты" />
+              </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding PoolText}" Classes="caption prose" />
+          </StackPanel>
+        </Border>
+        <Button Content="Создать пул" Command="{Binding CreatePool}" Classes="accent" HorizontalAlignment="Right" MinWidth="150" />
+      </StackPanel>
+
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -271,5 +271,84 @@
       "check": "Mcf89480010184ffffffff8084ffffffffb84180bb1559b0ba84c54efd75bb1c3344de34c169b04db8bac8e48f5613589f83902d190e3eb886494af2558b6358745be53c24606f67e60fd6a6690f809b385032011ba05c2c0646cdc959e94b38fd961fcd361f206f9870993c421a8943b20957caab46a00ca438263f105b87880ff8f1afce0924b4270ccacd40160e3b3fe07af90cea5d",
       "proof": "32caf59b4aa9502692bb700421edf991dcede432b6f5711db50e786a865b3c1957e8c02f69ccebcbe40c58e42b2ee39e1670c3d03d59cc2b19ebcb97ebd536f901"
     }
+  ],
+  "links": [
+    {
+      "name": "send",
+      "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+      "coin": 0,
+      "value": "1.5",
+      "url": "https://bip.to/tx/5gGg34CUdjOYDAABOd070ko_VOBkdPqUHhaIFNESDXsWAACAgIDA",
+      "decoded": {
+        "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+        "coin": 0,
+        "value": "1.5",
+        "payload": "",
+        "nonce": null,
+        "gasPrice": null,
+        "gasCoin": null
+      }
+    },
+    {
+      "name": "send-payload",
+      "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+      "coin": 1993,
+      "value": "0.000001234",
+      "payload": "заказ 42 ✓",
+      "url": "https://bip.to/tx/9wGg34IHyZR2M5gMAAE53TvSSj9U4GR0-pQeFoYBH1AhtACR0LfQsNC60LDQtyA0MiDinJOAgMA",
+      "decoded": {
+        "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+        "coin": 1993,
+        "value": "0.000001234",
+        "payload": "заказ 42 ✓",
+        "nonce": null,
+        "gasPrice": null,
+        "gasCoin": null
+      }
+    },
+    {
+      "name": "send-gas",
+      "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+      "coin": 0,
+      "value": "12345.678",
+      "nonce": 7,
+      "gasPrice": 1,
+      "gasCoin": 0,
+      "url": "https://bip.to/tx/6AGi4YCUdjOYDAABOd070ko_VOBkdPqUHhaKAp1CsxrLavsAAIAHAYA",
+      "decoded": {
+        "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+        "coin": 0,
+        "value": "12345.678",
+        "payload": "",
+        "nonce": "7",
+        "gasPrice": "1",
+        "gasCoin": "0"
+      }
+    },
+    {
+      "name": "send-gas-coin",
+      "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+      "coin": 0,
+      "value": "1",
+      "gasCoin": 1993,
+      "url": "https://bip.to/tx/6AGg34CUdjOYDAABOd070ko_VOBkdPqUHhaIDeC2s6dkAACAgICCB8k",
+      "decoded": {
+        "to": "Mx7633980c000139dd3bd24a3f54e06474fa941e16",
+        "coin": 0,
+        "value": "1",
+        "payload": "",
+        "nonce": null,
+        "gasPrice": null,
+        "gasCoin": "1993"
+      }
+    }
+  ],
+  "checkLinks": [
+    {
+      "name": "check-basic",
+      "check": "Mcf8983101843b9ac9ff80880de0b6b3a764000080b841cf390d1c7486f17e8f567c1a338e82aaaa2555d5db5d326c60eca1e2cd5c41cb729119677914c2fdfa5dc5a56c6645a1dd3d21e39e8cc21fc87300f2f7604346011ba064cffb766855005cc4a6e0a2cbc8e44854df6dc45d0dd904d2ad3a067e86d503a04079652e0a6d0cd98e6ecfbea951dbebcee852a66349a4c040c896a87fe9decc",
+      "password": "pass",
+      "url": "https://bip.to/tx/-KYJuJ_4nbia-JgxAYQ7msn_gIgN4Lazp2QAAIC4Qc85DRx0hvF-j1Z8GjOOgqqqJVXV210ybGDsoeLNXEHLcpEZZ3kUwv36XcWlbGZFod09IeOejMIfyHMA8vdgQ0YBG6Bkz_t2aFUAXMSm4KLLyORIVN9txF0N2QTSrToGfobVA6BAeWUuCm0M2Y5uz76pUdvrzuhSpmNJpMBAyJaof-nezICAgIDA?p=cGFzcw"
+    }
   ]
 }

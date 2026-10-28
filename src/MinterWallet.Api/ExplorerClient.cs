@@ -21,6 +21,18 @@ public sealed class ExplorerClient : IDisposable
         http.DefaultRequestHeaders.UserAgent.ParseAdd("MinterWallet");
     }
 
+    // Names validators gave themselves (mainnet), by public key.
+    public async Task<IReadOnlyDictionary<string, string>> ValidatorNamesAsync(CancellationToken ct = default)
+    {
+        using var reply = await http.GetAsync("validators", ct);
+        reply.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct));
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var v in doc.RootElement.GetProperty("data").EnumerateArray())
+            if (v.GetProperty("public_key").GetString() is { } key && v.TryGetProperty("name", out var n) && n.GetString() is { Length: > 0 } name) names[key] = name.Trim();
+        return names;
+    }
+
     // One page (50 transactions, newest first) and whether more pages follow.
     public async Task<(IReadOnlyList<TxRecord> Records, bool More)> HistoryAsync(Address address, int page, CancellationToken ct = default)
     {
@@ -32,7 +44,9 @@ public sealed class ExplorerClient : IDisposable
         foreach (var t in root.GetProperty("data").EnumerateArray())
         {
             if (t.GetProperty("raw_tx").GetString() is not { Length: > 0 } raw) continue;
-            records.Add(new TxRecord(t.GetProperty("hash").GetString() ?? "", t.GetProperty("height").GetInt64(), 0, "", Convert.FromHexString(raw), new Dictionary<string, string>()));
+            var tags = new Dictionary<string, string>();
+            if (t.TryGetProperty("timestamp", out var time) && time.GetString() is { Length: > 0 } at) tags["timestamp"] = at;
+            records.Add(new TxRecord(t.GetProperty("hash").GetString() ?? "", t.GetProperty("height").GetInt64(), 0, "", Convert.FromHexString(raw), tags));
         }
         var meta = root.GetProperty("meta");
         return (records, meta.GetProperty("current_page").GetInt32() < meta.GetProperty("last_page").GetInt32());

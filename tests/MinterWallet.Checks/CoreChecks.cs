@@ -77,6 +77,13 @@ internal static class GuardChecks
         reloaded.Accept(conflict!);
         Assert.True(new CoinRegistry(path).Observe(new CoinRef(4242, "USDTE")) == null, "accepted change persists");
 
+        var contact = Address.Parse("Mx37980a12b1be0855384b8d4f24b2d7957f680149");
+        Assert.True(AddressBook.LooksLike(Address.Parse("Mx379ffffffffffffffffffffffffffffffff00149"), contact), "same edges, other middle: a lookalike");
+        Assert.True(AddressBook.LooksLike(Address.Parse("Mx379FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0149"), contact), "case does not matter");
+        Assert.True(!AddressBook.LooksLike(contact, contact), "the address itself is not a lookalike");
+        Assert.True(!AddressBook.LooksLike(Address.Parse("Mx378ffffffffffffffffffffffffffffffff00149"), contact), "another beginning");
+        Assert.True(!AddressBook.LooksLike(Address.Parse("Mx379ffffffffffffffffffffffffffffffff00148"), contact), "another end");
+
         Assert.Equal(ChainId.Mainnet, WalletService.ChainIdOf("minter-mainnet-5"), "mainnet chain id");
         Assert.Equal(ChainId.Testnet, WalletService.ChainIdOf("minter-devnet"), "other networks use 2");
         return Task.CompletedTask;
@@ -104,6 +111,20 @@ internal static class HistoryChecks
         Assert.Equal("Создание токена TOKEN", Describe("create-token", sender), "create token");
         var entry = History.Decode(new TxRecord("Mt", 1, 0, "", Convert.FromHexString(Fixtures.Go.GetProperty("transactions")[2].GetProperty("hex").GetString()!), new Dictionary<string, string>()), sender, registry.Symbol);
         Assert.Equal("привет, Minter ✓", entry.Payload, "payload text");
+
+        // The CSV table: a signed exact amount, the commission from the node's tags, quoting, no formula from a message.
+        var raw = Convert.FromHexString(Fixtures.Go.GetProperty("transactions").EnumerateArray().Single(t => t.GetProperty("name").GetString() == "send-min").GetProperty("hex").GetString()!);
+        var tags = new Dictionary<string, string> { ["tx.commission_amount"] = "10000000000000000", ["tx.commission_coin"] = "0" };
+        var record = new TxRecord("Mtab", 42, 0, "", raw, tags);
+        var sent = History.Decode(record, sender, registry.Symbol) with { Payload = "=HYPERLINK(\"x\"), да" };
+        var at = new DateTimeOffset(2026, 10, 28, 9, 5, 7, TimeSpan.FromHours(3));
+        var csv = HistoryTable.Csv([new HistoryRow(record, sent, at)], sender, registry.Symbol, s => s).Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        var csvIn = HistoryTable.Csv([new HistoryRow(record, History.Decode(record, recipient, registry.Symbol), null)], recipient, registry.Symbol, s => s)
+            .Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(2, csv.Length, "header and a row");
+        Assert.True(csv[0].StartsWith("Дата (UTC),Блок,Хеш,Статус,Тип,Направление,Контрагент,Сумма,Монета,Комиссия", StringComparison.Ordinal), "header");
+        Assert.Equal($"2026-10-28 06:05:07,42,Mtab,выполнена,Send,исходящая,{recipient},-0.000000000000000001,BIP,0.01,BIP,Перевод 0.000000000000000001 BIP → Mxb8ae…f11b,\"'=HYPERLINK(\"\"x\"\"), да\"", csv[1], "outgoing row");
+        Assert.True(csvIn[1].StartsWith($",42,Mtab,выполнена,Send,входящая,{sender},0.000000000000000001,BIP,,,", StringComparison.Ordinal), "incoming row: no time known, no commission of ours");
         return Task.CompletedTask;
     }
 }
@@ -155,9 +176,12 @@ internal sealed class FakeChain : IChainBackend
     public Task<uint> MinGasPriceAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<SwapEstimate> EstimateSellAsync(uint sell, uint buy, BigInteger value, SwapFrom from, IReadOnlyList<uint>? route = null, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<SwapEstimate> EstimateBuyAsync(uint sell, uint buy, BigInteger value, SwapFrom from, IReadOnlyList<uint>? route = null, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<BigInteger> EstimateSellAllAsync(uint sell, uint buy, BigInteger balance, SwapFrom from, IReadOnlyList<uint>? route = null, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<BestTrade?> BestTradeAsync(uint sell, uint buy, BigInteger amount, bool exactInput, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<BigInteger> EstimateCommissionAsync(Transaction tx, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TxRecord>> HistoryAsync(Address address, int page, int perPage, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<DateTimeOffset> BlockTimeAsync(long height, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<StakeInfo>> StakesAsync(Pubkey candidate, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<CandidateInfo>> CandidatesAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<FrozenFunds>> FrozenAsync(Address address, CancellationToken ct = default) => throw new NotSupportedException();
 }

@@ -54,6 +54,8 @@
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="send" /><TextBlock Text="Отправить" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="swap" /><TextBlock Text="Обмен" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="stake" /><TextBlock Text="Стейкинг" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="coin" /><TextBlock Text="Токены" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="key" /><TextBlock Text="Общий счёт" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="history" /><TextBlock Text="История" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="users" /><TextBlock Text="Счета" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="settings" /><TextBlock Text="Настройки" /></StackPanel></ListBoxItem>
@@ -67,6 +69,8 @@
       <views:SendPage IsVisible="{Binding IsSend}" />
       <views:SwapPage IsVisible="{Binding IsSwap}" />
       <views:StakingPage IsVisible="{Binding IsStaking}" />
+      <views:TokensPage IsVisible="{Binding IsTokens}" />
+      <views:MultisigPage IsVisible="{Binding IsMultisig}" />
       <views:HistoryPage IsVisible="{Binding IsHistory}" />
       <views:AccountsPage IsVisible="{Binding IsAccounts}" />
       <views:SettingsPage IsVisible="{Binding IsSettings}" />

@@ -13,6 +13,7 @@ var groups = new (string Name, Action Run)[]
     ("multisig vs go", OracleChecks.Multisig),
     ("checks vs go", OracleChecks.Checks),
     ("checks vs js", OracleChecks.JsChecks),
+    ("links vs js", OracleChecks.JsLinks),
     ("mnemonic vs js", MnemonicChecks.Run),
     ("rejections", RejectionChecks.Run),
 };
