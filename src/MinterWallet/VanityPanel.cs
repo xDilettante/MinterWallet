@@ -221,6 +221,12 @@ public sealed class VanityViewModel : ScreenModel
     private static void Wipe(VanityResult r) { if (r.PrivateKey is { } key) System.Security.Cryptography.CryptographicOperations.ZeroMemory(key); }
 
     // A new search starts clean: the last result and the finds go, their keys wiped.
+    public void Cancel()
+    {
+        stop?.Cancel();
+        Clear();
+    }
+
     private void Clear()
     {
         if (result is { } r) Wipe(r);

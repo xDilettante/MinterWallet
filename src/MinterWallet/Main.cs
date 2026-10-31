@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Numerics;
@@ -25,6 +26,8 @@ public sealed record AccountItem(WalletAccount Account, string Kind, string Glyp
     public bool IsChild => Phrase && !First;
     public string Caption => Phrase && Siblings > 1 ? $"{Number} · {Short}" : $"{Short} · {Kind}";
     public string AddressText => Display.Address(Account.Address);
+    public string WalletTitle => Group.Length > 0 ? Group : Name;
+    public string WalletCaption => Kind;
     public override string ToString() => $"{Title} · {Short}";
 }
 
@@ -65,14 +68,15 @@ public sealed record ContactItem(AddressBookEntry Entry)
     public string Initial => Entry.Name.Length > 0 ? Entry.Name[..1].ToUpperInvariant() : "?";
 }
 
-public sealed class MainViewModel : ScreenModel
+public sealed partial class MainViewModel : ScreenModel
 {
     private readonly Shell shell;
     private readonly DispatcherTimer autoLock;
     private AccountItem? selected;
     private Section section;
     private string sourceName, networkText = "подключение…", blockText = "", updated = "", totalText = "—", totalCaption = "", totalUsd = "", copyLabel = "Копировать", updateText = "";
-    private bool connected, showReceive;
+    private bool connected, showReceive, initializing = true;
+    private int autoLockHolds;
     private Uri? updatePage;
     private AccountState? state;
     private IReadOnlyList<CoinListing>? catalog;
@@ -90,7 +94,7 @@ public sealed class MainViewModel : ScreenModel
         OpenSwap = new Command(() => Section = Section.Swap);
         OpenStaking = new Command(() => Section = Section.Staking);
         AddAddress = new Command(() => { AccountsPage!.StartAdding(); Section = Section.Accounts; });
-        ToggleReceive = new Command(() => ShowReceive = !ShowReceive);
+        ToggleReceive = new Command(() => { if (ShowReceive) ShowReceive = false; else if (Derivation!.PrepareReceive()) ShowReceive = true; });
         OpenUpdate = new AsyncCommand(async () => { if (updatePage != null && shell.OpenUrl != null) await shell.OpenUrl(updatePage); }, Fail);
         RemoveContact = new RelayCommand(item => { if (item is ContactItem c && Minter.Protocol.Address.TryParse(c.Address, out var a)) { shell.AddressBook.Remove(a); LoadContacts(); } });
         Send = new SendViewModel(this);
@@ -110,24 +114,61 @@ public sealed class MainViewModel : ScreenModel
         Liquidity = new LiquidityViewModel(this);
         Orders = new OrdersViewModel(this);
         RedeemCheck = new CheckRedeemViewModel(this);
+        Derivation = new DerivationViewModel(this);
         LoadAccounts(shell.Settings.LastAccountId);
         autoLock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
-        autoLock.Tick += (_, _) => { if (DateTime.UtcNow - LastActivity > TimeSpan.FromMinutes(Math.Max(1, shell.Settings.AutoLockMinutes))) { autoLock.Stop(); shell.Lock(); } };
+        autoLock.Tick += (_, _) =>
+        {
+            if (autoLockHolds > 0) { LastActivity = DateTime.UtcNow; return; }
+            if (DateTime.UtcNow - LastActivity > TimeSpan.FromMinutes(Math.Max(1, shell.Settings.AutoLockMinutes))) { autoLock.Stop(); shell.Lock(); }
+        };
         autoLock.Start();
         pulse = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         pulse.Tick += (_, _) => PulseTick();
         pulse.Start();
         LoadContacts();
-        Refresh.Execute(null);
+        initializing = false;
+        RequestRefresh();
         if (shell.Settings.CheckUpdates) _ = CheckUpdatesAsync();
     }
 
+    public IDisposable HoldAutoLock()
+    {
+        Interlocked.Increment(ref autoLockHolds);
+        LastActivity = DateTime.UtcNow;
+        return new AutoLockHold(this);
+    }
+
+    private sealed class AutoLockHold(MainViewModel owner) : IDisposable
+    {
+        private int disposed;
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+            owner.LastActivity = DateTime.UtcNow;
+            Interlocked.Decrement(ref owner.autoLockHolds);
+        }
+    }
+
+    public void Stop()
+    {
+        autoLock.Stop();
+        pulse.Stop();
+        Swap.Stop();
+        Derivation.Cancel();
+        AccountsPage.Stop();
+        Hub.Cancel();
+        HubIn.Cancel();
+    }
+
     // Every 5 seconds while the window is on the screen: the source's height and, once a block has come, the account
-    // again; the usage counts with it. The ring by the source counts the seconds down; the icon turns while it reads.
+    // again; the usage counts every minute. The ring by the source counts the seconds down; the icon turns while it reads.
     public const double PulseSeconds = 5;
     private readonly DispatcherTimer pulse;
     private DateTime pulseFrom = DateTime.UtcNow;
+    private DateTime usageAt;
     private long pulseHeight = -1;
+    private ChainStatus? pulseStatus;
     private bool reading;
     private double countdownAngle;
     private string usageLine = "", usageTip = "";
@@ -140,7 +181,7 @@ public sealed class MainViewModel : ScreenModel
 
     private void PulseTick()
     {
-        if (Reading || !shell.AutoRefresh) return;
+        if (Reading || Refresh.IsRunning || !shell.AutoRefresh) return;
         var elapsed = (DateTime.UtcNow - pulseFrom).TotalSeconds;
         CountdownAngle = Math.Min(360, elapsed / PulseSeconds * 360);
         if (elapsed >= PulseSeconds && shell.WindowShown && shell.Page == this) _ = PulseAsync();
@@ -148,42 +189,53 @@ public sealed class MainViewModel : ScreenModel
 
     public async Task PulseAsync()
     {
+        var context = accountVersion;
         Reading = true;
         try
         {
-            var wallet = await WalletAsync();
-            var s = await wallet.Backend.StatusAsync();
+            var (wallet, fresh) = await WalletCoreAsync();
+            var s = fresh ?? await wallet.Backend.StatusAsync();
+            if (context != accountVersion || !ReferenceEquals(shell.Backend, wallet.Backend) || shell.Session?.IsLocked != false) return;
+            var previousHeight = pulseHeight;
             ShowSource(s);
-            if (s.Height != pulseHeight) { pulseHeight = s.Height; await Refresh.RunAsync(); }
-            await UsageAsync();
+            if (s.Height != previousHeight) { pulseStatus = s; await Refresh.RunAsync(); }
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException) { Connected = false; NetworkText = "нет связи"; BlockText = ""; }
-        finally { Reading = false; pulseFrom = DateTime.UtcNow; CountdownAngle = 0; }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or ObjectDisposedException) { if (context == accountVersion) { Connected = false; NetworkText = "нет связи"; BlockText = ""; } }
+        finally
+        {
+            if (DateTime.UtcNow - usageAt >= TimeSpan.FromSeconds(60)) await UsageAsync();
+            Reading = false;
+            pulseFrom = DateTime.UtcNow;
+            CountdownAngle = 0;
+        }
     }
 
     // How many use the wallet, under the source: now, the day, all installs; versions and systems in the tip.
     private async Task UsageAsync()
     {
+        usageAt = DateTime.UtcNow;
         if (shell.UsageEndpoint is not { } endpoint) { UsageLine = ""; return; }
         try
         {
-            using var usage = new UsageClient(endpoint);
+            using var usage = shell.CreateUsageClient(endpoint);
             var s = await usage.StatsAsync();
             UsageLine = $"Кошельков сейчас {Display.Integer(s.Online)} · за сутки {Display.Integer(s.Day)} · всего {Display.Integer(s.Total)}";
             UsageTip = $"Анонимная статистика гейта: сейчас {Display.Integer(s.Online)}, за сутки {Display.Integer(s.Day)}, за 30 дней {Display.Integer(s.Month)}, всего установок {Display.Integer(s.Total)}."
                 + (s.Versions.Count > 0 ? "\nВерсии: " + string.Join(", ", s.Versions.Select(v => $"{v.Name} — {Display.Integer(v.Count)}")) : "")
                 + (s.Systems.Count > 0 ? "\nСистемы: " + string.Join(", ", s.Systems.Select(v => $"{v.Name} — {Display.Integer(v.Count)}")) : "");
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { UsageLine = "Статистика временно недоступна"; UsageTip = Describe(e); }
     }
 
     public ObservableCollection<ContactItem> Contacts { get; } = [];
     public bool HasContacts => Contacts.Count > 0;
-    public bool ShowReceive { get => showReceive; set => Set(ref showReceive, value); }
+    public bool ShowReceive { get => showReceive; set => Set(ref showReceive, value && CanReceive); }
     public string TotalUsd { get => totalUsd; set { Set(ref totalUsd, value); Changed(nameof(HasUsd)); } }
     public bool HasUsd => TotalUsd.Length > 0;
     public string UpdateText { get => updateText; set { Set(ref updateText, value); Changed(nameof(HasUpdate)); } }
     public bool HasUpdate => UpdateText.Length > 0;
+    public string AppVersion => $"v{Program.Version}";
+    public string VersionTip => $"Minter Wallet {Program.Version}";
     public Command ToggleReceive { get; }
     public AsyncCommand OpenUpdate { get; }
     public RelayCommand RemoveContact { get; }
@@ -201,7 +253,7 @@ public sealed class MainViewModel : ScreenModel
         try
         {
             using var updates = new UpdateClient();
-            if (await updates.LatestAsync() is { } latest && UpdateClient.IsNewer(latest.Version, Version.Parse(Program.Version)))
+            if (await updates.LatestAsync() is { } latest && UpdateClient.IsNewer(latest.Version, System.Version.Parse(Program.Version)))
             {
                 updatePage = latest.Page;
                 UpdateText = $"Вышла версия {latest.Version.ToString(3)}. Сейчас у вас {Program.Version}.";
@@ -214,32 +266,65 @@ public sealed class MainViewModel : ScreenModel
     // Coins the source gives no value for (Minter nodes value a token only in some cases: USDTBSC comes as 0 although it
     // has a pool with BIP): what selling all of it would bring along the best route of pools, in the base coin and, on
     // mainnet, in USDTE. Kept a minute per coin and amount, so that the refresh every few seconds does not ask again.
-    private async Task<Dictionary<uint, (BigInteger Bip, BigInteger? Usd)>> EstimatesAsync(IReadOnlyList<Balance> balances, ChainStatus s)
+    private (Dictionary<uint, (BigInteger Bip, BigInteger? Usd)> Priced, List<Balance> Missing) CachedEstimates(IReadOnlyList<Balance> balances)
     {
-        var result = new Dictionary<uint, (BigInteger, BigInteger?)>();
-        if (shell.Backend is not { } backend) return result;
-        var mainnet = s.Network.StartsWith("minter-mainnet", StringComparison.Ordinal);
+        var priced = new Dictionary<uint, (BigInteger, BigInteger?)>();
+        var missing = new List<Balance>();
+        var now = DateTime.UtcNow;
         foreach (var b in balances.Where(b => b.Coin.Id != 0 && b.BipValue.IsZero && b.Value.Sign > 0))
         {
-            if (estimates.TryGetValue((b.Coin.Id, b.Value), out var kept) && DateTime.UtcNow - kept.At < TimeSpan.FromMinutes(1)) { if (kept.Bip.Sign > 0) result[b.Coin.Id] = (kept.Bip, kept.Usd); continue; }
-            try
+            if (estimates.TryGetValue((b.Coin.Id, b.Value), out var kept) && now - kept.At < TimeSpan.FromMinutes(1))
             {
-                var bip = (await backend.BestTradeAsync(b.Coin.Id, 0, b.Value, exactInput: true))?.Result ?? 0;
-                BigInteger? usd = !mainnet ? null : b.Coin.Id == 1993 ? b.Value : (await backend.BestTradeAsync(b.Coin.Id, 1993, b.Value, exactInput: true))?.Result;
-                estimates[(b.Coin.Id, b.Value)] = (DateTime.UtcNow, bip, usd);
-                if (bip.Sign > 0) result[b.Coin.Id] = (bip, usd);
+                if (kept.Bip.Sign > 0) priced[b.Coin.Id] = (kept.Bip, kept.Usd);
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException) { }
+            else missing.Add(b);
         }
-        return result;
+        return (priced, missing);
     }
+
+    private async Task BackfillEstimatesAsync(AccountState targetState, BigInteger? usdPerCoin, ChainStatus s, IChainBackend backend, IReadOnlyList<Balance> missing, int context)
+    {
+        bool Current() => context == accountVersion && ReferenceEquals(shell.Backend, backend) && shell.Session?.IsLocked == false && ReferenceEquals(state, targetState);
+        var mainnet = s.Network.StartsWith("minter-mainnet", StringComparison.Ordinal);
+        var updated = false;
+        using (SourceRequestHandler.EnterBackground())
+        {
+            foreach (var b in missing)
+            {
+                if (!Current()) return;
+                try
+                {
+                    var bip = (await backend.BestTradeAsync(b.Coin.Id, 0, b.Value, exactInput: true))?.Result ?? 0;
+                    BigInteger? usd = !mainnet ? null : b.Coin.Id == 1993 ? b.Value : (await backend.BestTradeAsync(b.Coin.Id, 1993, b.Value, exactInput: true))?.Result;
+                    estimates[(b.Coin.Id, b.Value)] = (DateTime.UtcNow, bip, usd);
+                    if (bip.Sign > 0) updated = true;
+                }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or ObjectDisposedException) { }
+            }
+        }
+        if (!updated || !Current()) return;
+        var (priced, _) = CachedEstimates(targetState.Balances);
+        ApplyBalances(targetState, usdPerCoin, priced, observeCoins: false);
+        Swap.BalancesChanged();
+    }
+
     private readonly Dictionary<(uint, BigInteger), (DateTime At, BigInteger Bip, BigInteger? Usd)> estimates = [];
+    private (DateTime At, string Network, BigInteger? Value) usdCache;
 
     private async Task<BigInteger?> UsdPerCoinAsync(ChainStatus s)
     {
         if (!s.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) || shell.Backend == null) return null;
-        try { return await shell.Backend.SwapPoolAsync(0, 1993) is ({ Sign: > 0 } bip, var usd) ? usd * Units.PipPerCoin / bip : null; }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException) { return null; }
+        if (usdCache.Network == s.Network && DateTime.UtcNow - usdCache.At < TimeSpan.FromSeconds(30)) return usdCache.Value;
+        try
+        {
+            var value = await shell.Backend.SwapPoolAsync(0, 1993) is ({ Sign: > 0 } bip, var usd) ? usd * Units.PipPerCoin / bip : (BigInteger?)null;
+            usdCache = (DateTime.UtcNow, s.Network, value);
+            return value;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or ObjectDisposedException)
+        {
+            return usdCache.Network == s.Network ? usdCache.Value : null;
+        }
     }
 
     public Shell Shell => shell;
@@ -254,8 +339,11 @@ public sealed class MainViewModel : ScreenModel
         get => section;
         set
         {
+            var previous = section;
             if (!Set(ref section, value)) return;
+            if (previous == Section.Accounts) AccountsPage.HidePhrase.Execute(null);
             foreach (var name in new[] { nameof(SectionIndex), nameof(IsOverview), nameof(IsSend), nameof(IsSwap), nameof(IsBridge), nameof(IsStaking), nameof(IsTokens), nameof(IsMultisig), nameof(IsHistory), nameof(IsAccounts), nameof(IsSettings) }) Changed(name);
+            if (value == Section.Accounts) AccountsPage.EnsureReady();
             if (value == Section.History && History.Items.Count == 0) History.Load.Execute(null);
             if (value == Section.Tokens && !Tokens.HasMine) Tokens.Load.Execute(null);
             if (value == Section.Multisig && Multisig.IsCreate) Multisig.StartCreating();
@@ -280,20 +368,32 @@ public sealed class MainViewModel : ScreenModel
         get => selected;
         set
         {
-            if (!Set(ref selected, value) || value == null) return;
+            if (!Set(ref selected, value)) return;
+            ClearAccountState();
+            if (value == null) { ReceiveSafetyChanged(); return; }
+            Derivation.SelectedChanged();
             foreach (var name in new[] { nameof(Address), nameof(AddressText), nameof(CanSign), nameof(IsWatchOnly), nameof(AccountName) }) Changed(name);
             Request?.Update();
             shell.Settings.LastAccountId = value.Account.Id; shell.Settings.Save(shell.DataDirectory);
             History.Reset(); Tokens?.Reset(); Multisig?.AccountChanged(); Validator?.Reset();
             if (IsBridge) HubIn.AccountChanged();
             AccountsPage.Reload();
-            Refresh.Execute(null);
+            RequestRefresh();
         }
     }
     public string Address => Selected?.Account.Address.ToString() ?? "";
-    public string AddressText => Selected == null ? "" : Display.Address(Selected.Account.Address);
+    public string AddressText => Selected == null || !CanReceive ? "" : Display.Address(Selected.Account.Address);
+    public bool CanReceive => Derivation.CanReceive;
+    public void ReceiveSafetyChanged()
+    {
+        Changed(nameof(CanReceive)); Changed(nameof(AddressText));
+        Changed(nameof(CanSign));
+        if (!CanReceive) ShowReceive = false;
+        Request?.Update();
+        HubIn?.ReceiveSafetyChanged();
+    }
     public string AccountName => Selected?.Title ?? "";
-    public bool CanSign => Selected is { Account.WatchOnly: false };
+    public bool CanSign => Selected is { Account.WatchOnly: false } && !Derivation.Parameters;
     public bool IsWatchOnly => Selected is { Account.WatchOnly: true };
     public string BaseSymbol => Symbol(0);
     public string SourceName { get => sourceName; set => Set(ref sourceName, value); }
@@ -336,6 +436,7 @@ public sealed class MainViewModel : ScreenModel
     public Command OpenStaking { get; }
     public Command AddAddress { get; }
     public AccountsViewModel AccountsPage { get; }
+    public DerivationViewModel Derivation { get; }
     public CheckIssueViewModel IssueCheck { get; }
     public LiquidityViewModel Liquidity { get; }
     public OrdersViewModel Orders { get; }
@@ -396,14 +497,30 @@ public sealed class MainViewModel : ScreenModel
                     : new AccountItem(a, "фраза", "phrase", store.NameOf(a.SecretId!), Phrase: true, First: i == 0, Siblings: members.Count));
             }
         }
-        Selected = Accounts.FirstOrDefault(a => a.Account.Id == select) ?? Accounts.FirstOrDefault();
+        Derivation.Reload(select);
         AccountsPage.Reload();
+    }
+
+    public WalletAccount TrackAddress(WalletAccount account)
+    {
+        var tracked = shell.Session!.TrackAddress(account);
+        if (!Accounts.Any(a => a.Account.Id == tracked.Id))
+        {
+            var root = Derivation.Wallets.First(a => a.Account.SecretId == tracked.SecretId);
+            Accounts.Add(new AccountItem(tracked, root.Kind, root.Glyph, root.Group, root.Phrase, First: false));
+            AccountsPage.Reload();
+        }
+        return tracked;
     }
 
     // Another source was chosen: everything read from the old one is dropped.
     public void Disconnect()
     {
+        ClearAccountState();
         shell.Disconnect();
+        Derivation.SourceChanged();
+        refreshPending = true;
+        pulseStatus = null; usdCache = default; pulseHeight = -1;
         catalog = null; catalogFrom = null; catalogSymbols = [];
         Connected = false; SourceName = shell.Settings.Source.Name; NetworkText = "подключение…"; BlockText = "";
         Staking.Reset(); History.Reset(); Tokens.Reset(); Swap.Buy.Selected = null; Liquidity.Reset(); Orders.Reset();
@@ -425,9 +542,12 @@ public sealed class MainViewModel : ScreenModel
     // the explorer (when the user keeps that on).
     public HistoryCursor HistoryCursor(WalletService wallet, Address me, int perPage)
     {
-        Task<IReadOnlyList<TxRecord>> Source(int page) => wallet.Backend.HistoryAsync(me, page, perPage);
         var useExplorer = shell.Settings.HistoryFromExplorer && shell.GateIndexFrom > 1 && shell.Status?.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) == true;
-        return useExplorer ? new HistoryCursor(Source, perPage, page => shell.Explorer.HistoryAsync(me, page), shell.GateIndexFrom) : new HistoryCursor(Source, perPage);
+        Func<int, Task<(IReadOnlyList<TxRecord>, bool)>>? explorer = useExplorer ? page => shell.Explorer.HistoryAsync(me, page) : null;
+        var below = useExplorer ? shell.GateIndexFrom : long.MaxValue;
+        return wallet.Backend is NodeApiClient api
+            ? new HistoryCursor(page => api.SentHistoryAsync(me, page, perPage), page => api.ReceivedHistoryAsync(me, page, perPage), perPage, explorer, below)
+            : new HistoryCursor(page => wallet.Backend.HistoryAsync(me, page, perPage), perPage, explorer, below);
     }
 
     public async Task<CoinOption?> LookupCoinAsync(string text)
@@ -440,9 +560,19 @@ public sealed class MainViewModel : ScreenModel
     private async Task LoadCatalogAsync()
     {
         if (shell.Backend == null || ReferenceEquals(catalogFrom, shell.Backend)) return;
-        catalogFrom = shell.Backend;
-        try { catalog = await shell.Backend.CoinListAsync(); }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or System.Text.Json.JsonException) { catalog = null; }
+        var backend = shell.Backend;
+        catalogFrom = backend;
+        IReadOnlyList<CoinListing>? found;
+        var failed = false;
+        try
+        {
+            using (SourceRequestHandler.EnterBackground())
+                found = await backend.CoinListAsync();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or System.Text.Json.JsonException or ObjectDisposedException) { found = null; failed = true; }
+        if (!ReferenceEquals(shell.Backend, backend)) return;
+        if (failed) catalogFrom = null;
+        catalog = found;
         catalogSymbols = catalog?.ToDictionary(c => c.Id, c => c.Symbol) ?? [];
         Swap.Buy.Refresh();
     }
@@ -450,13 +580,15 @@ public sealed class MainViewModel : ScreenModel
     // Tickers the wallet has seen first, then the gate's coin list: history never shows a bare id when the source knows the coin.
     public string Symbol(uint coin) => shell.Coins.Symbol(coin) is ['#', ..] unknown ? catalogSymbols.GetValueOrDefault(coin, unknown) : shell.Coins.Symbol(coin);
 
-    public async Task<WalletService> WalletAsync()
+    private async Task<(WalletService Wallet, ChainStatus? FreshStatus)> WalletCoreAsync()
     {
-        if (shell.Wallet != null) return shell.Wallet;
+        if (shell.Wallet != null) return (shell.Wallet, null);
         var s = await shell.ConnectAsync();
         ShowSource(s);
-        return shell.Wallet!;
+        return (shell.Wallet!, s);
     }
+
+    public async Task<WalletService> WalletAsync() => (await WalletCoreAsync()).Wallet;
 
     // The selected source does not answer: another one of the same network, for this session only. The selected one
     // stays selected and is tried again at the next start or "Переподключиться".
@@ -483,6 +615,7 @@ public sealed class MainViewModel : ScreenModel
 
     private void ShowSource(ChainStatus s)
     {
+        pulseHeight = s.Height;
         SourceName = shell.ActiveSource.Name;
         NetworkText = s.Network;
         BlockText = $"блок {Display.Integer(s.Height)}";
@@ -493,7 +626,7 @@ public sealed class MainViewModel : ScreenModel
 
     private async Task CopyAddressAsync()
     {
-        if (Selected == null || shell.CopyText == null) return;
+        if (Selected == null || shell.CopyText == null || !Derivation.PrepareReceive()) return;
         await shell.CopyText(Selected.Account.Address.ToString());
         CopyLabel = "Скопировано";
         DispatcherTimer.RunOnce(() => CopyLabel = "Копировать", TimeSpan.FromSeconds(2));
@@ -501,45 +634,118 @@ public sealed class MainViewModel : ScreenModel
 
     private async Task RefreshAsync()
     {
-        var wallet = await WalletAsync();
-        var s = await wallet.Backend.StatusAsync();
-        ShowSource(s);
-        _ = LoadCatalogAsync();
-        if (Selected == null) return;
-        state = await wallet.Backend.AccountAsync(Selected.Account.Address);
-        Changed(nameof(State));
-        var conflicts = new List<string>();
-        var usdPerCoin = await UsdPerCoinAsync(s);
-        var priced = await EstimatesAsync(state.Balances, s);
-        string Usd(BigInteger bip) => usdPerCoin is { } p ? Display.Usd(bip * p / Units.PipPerCoin) : "";
-        Balances.Clear();
-        totalBip = state.TotalBipValue;
-        foreach (var b in state.Balances)
+        try
         {
-            if (shell.Coins.Observe(b.Coin) is { } c) conflicts.Add($"{c.Symbol}: раньше id {c.KnownId}, теперь id {c.NewId}");
+            do
+            {
+                refreshPending = false;
+                var context = accountVersion;
+                try { await RefreshSelectedAsync(context); }
+                catch (Exception) when (context != accountVersion || shell.Session?.IsLocked != false) { }
+            } while (refreshPending && shell.Session?.IsLocked == false);
+        }
+        finally
+        {
+            pulseFrom = DateTime.UtcNow;
+            CountdownAngle = 0;
+        }
+    }
+    private int accountVersion;
+    private bool refreshPending;
+    public int ContextVersion => accountVersion;
+    private void RequestRefresh()
+    {
+        if (initializing) return;
+        refreshPending = true;
+        Refresh.Execute(null);
+    }
+    private void ClearAccountState()
+    {
+        accountVersion++;
+        state = null; totalBip = 0;
+        Balances.Clear(); Delegations.Clear(); Frozen.Clear();
+        TotalText = "—"; TotalUsd = ""; TotalCaption = "Загрузка выбранного адреса…"; ShowReceive = false;
+        foreach (var name in new[] { nameof(State), nameof(TotalExact), nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
+        Recent.Clear(); RecentText = "Загрузка операций…";
+        if (Send != null) { Send.BalancesChanged(); Multisend.BalancesChanged(); Swap.AccountChanged(); Request.BalancesChanged(); }
+    }
+
+    private static void SyncList<T>(ObservableCollection<T> target, IReadOnlyList<T> items)
+    {
+        if (items.Count == 0) { if (target.Count > 0) target.Clear(); return; }
+        if (target.Count != items.Count)
+        {
+            target.Clear();
+            foreach (var item in items) target.Add(item);
+            return;
+        }
+        for (var i = 0; i < items.Count; i++)
+            if (!EqualityComparer<T>.Default.Equals(target[i], items[i])) target[i] = items[i];
+    }
+
+    private List<string> ApplyBalances(AccountState next, BigInteger? usdPerCoin, Dictionary<uint, (BigInteger Bip, BigInteger? Usd)> priced, bool observeCoins)
+    {
+        var conflicts = new List<string>();
+        string Usd(BigInteger bip) => usdPerCoin is { } p ? Display.Usd(bip * p / Units.PipPerCoin) : "";
+        var nextBalances = new List<BalanceItem>(next.Balances.Count);
+        totalBip = next.TotalBipValue;
+        foreach (var b in next.Balances)
+        {
+            if (observeCoins && shell.Coins.Observe(b.Coin) is { } c) conflicts.Add($"{c.Symbol}: раньше id {c.KnownId}, теперь id {c.NewId}");
             if (priced.TryGetValue(b.Coin.Id, out var p))
             {
                 totalBip += p.Bip;
-                Balances.Add(new BalanceItem(b.Coin, b.Value, p.Bip, BaseSymbol, p.Usd is { } usd ? Display.Usd(usd) : Usd(p.Bip)));
+                nextBalances.Add(new BalanceItem(b.Coin, b.Value, p.Bip, BaseSymbol, p.Usd is { } usd ? Display.Usd(usd) : Usd(p.Bip)));
             }
-            else Balances.Add(new BalanceItem(b.Coin, b.Value, b.BipValue, BaseSymbol, Usd(b.BipValue)));
+            else nextBalances.Add(new BalanceItem(b.Coin, b.Value, b.BipValue, BaseSymbol, Usd(b.BipValue)));
         }
+        SyncList(Balances, nextBalances);
         TotalUsd = usdPerCoin == null ? "" : "≈ " + Usd(totalBip);
-        Delegations.Clear();
-        foreach (var d in state.Delegated) Delegations.Add(new DelegationItem(d, BaseSymbol));
         TotalText = Display.Amount(totalBip);
         Changed(nameof(TotalExact));
+        return conflicts;
+    }
+
+    private async Task RefreshSelectedAsync(int context)
+    {
+        var account = Selected?.Account;
+        var (wallet, connectedStatus) = await WalletCoreAsync();
+        var known = Interlocked.Exchange(ref pulseStatus, null) ?? connectedStatus;
+        var s = known ?? await wallet.Backend.StatusAsync();
+        bool Current() => context == accountVersion && ReferenceEquals(shell.Backend, wallet.Backend) && shell.Session?.IsLocked == false;
+        if (!Current()) return;
+        ShowSource(s);
+        if (account == null) { _ = LoadCatalogAsync(); return; }
+
+        var accountTask = wallet.Backend.AccountAsync(account.Address);
+        var frozenTask = wallet.Backend.FrozenAsync(account.Address);
+        var usdTask = UsdPerCoinAsync(s);
+        await Task.WhenAll(accountTask, frozenTask, usdTask);
+        if (!Current()) return;
+
+        var next = accountTask.Result;
+        var frozenFunds = frozenTask.Result;
+        var usdPerCoin = usdTask.Result;
+        var (priced, missingEstimates) = CachedEstimates(next.Balances);
+
+        state = next;
+        Changed(nameof(State));
+        var conflicts = ApplyBalances(state, usdPerCoin, priced, observeCoins: true);
+        SyncList(Delegations, state.Delegated.Select(d => new DelegationItem(d, BaseSymbol)).ToList());
         TotalCaption = $"≈ всего в {BaseSymbol} по оценке источника и пулов · отправлено транзакций: {Display.Integer((long)state.Nonce)}";
         Changed(nameof(BaseSymbol));
-        var frozenFunds = await wallet.Backend.FrozenAsync(Selected.Account.Address);
-        Frozen.Clear();
-        foreach (var f in frozenFunds)
-            Frozen.Add(new FrozenItem($"{Units.FormatCoins(f.Value)} {f.Coin.Symbol}", $"{Display.Amount(f.Value)} {f.Coin.Symbol}",
-                $"до блока {Display.Integer(f.UnlockHeight)}, ≈ {EstimateDate(s, f.UnlockHeight)}{(f.Candidate is { } k ? $" · из стейка у {Core.History.Short(k)}" : "")}"));
+        SyncList(Frozen, frozenFunds.Select(f => new FrozenItem($"{Units.FormatCoins(f.Value)} {f.Coin.Symbol}", $"{Display.Amount(f.Value)} {f.Coin.Symbol}",
+            $"до блока {Display.Integer(f.UnlockHeight)}, ≈ {EstimateDate(s, f.UnlockHeight)}{(f.Candidate is { } k ? $" · из стейка у {Core.History.Short(k)}" : "")}")).ToList());
         foreach (var name in new[] { nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
         if (conflicts.Count > 0) Say("Тикер указывает на другой id монеты, чем раньше: " + string.Join("; ", conflicts) + ". Проверьте монету перед отправкой.", Tone.Warning);
         else if (Tone == Tone.Error) Say("");
         Send.BalancesChanged(); Multisend.BalancesChanged(); Hub.BalancesChanged(); Request.BalancesChanged(); Swap.BalancesChanged(); Staking.BalancesChanged(); Validator.BalancesChanged(); Tokens.BalancesChanged(); IssueCheck.BalancesChanged(); Liquidity.BalancesChanged(); Orders.BalancesChanged();
+
+        _ = LoadRecentAsync(account, wallet, context);
+        _ = LoadCatalogAsync();
+        if (DateTime.UtcNow - usageAt >= TimeSpan.FromSeconds(60)) _ = UsageAsync();
+        Derivation.Observe(account, state, frozenFunds);
+        if (missingEstimates.Count > 0) _ = BackfillEstimatesAsync(state, usdPerCoin, s, wallet.Backend, missingEstimates, context);
     }
 
     private static string EstimateDate(ChainStatus s, long height) => s.BlockTime.AddSeconds((height - s.Height) * 5).ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
@@ -549,15 +755,18 @@ public sealed class MainViewModel : ScreenModel
     public async Task<TxOutcome?> ConfirmAndSendAsync(string title, ITxData data, uint gasCoin, byte[] payload, IEnumerable<(string, string)> rows,
         IEnumerable<string> warnings, ScreenModel screen)
     {
+        if (Derivation.Parameters) { screen.Say("Примените параметры или закройте редактор пути.", Tone.Warning); return null; }
         var account = Selected?.Account ?? throw new InvalidOperationException("Выберите счёт.");
+        var context = accountVersion;
         if (account.WatchOnly) throw new InvalidOperationException("Этот счёт только для просмотра: подписать нечем.");
         var wallet = await WalletAsync();
         screen.Say("Расчёт комиссии…", Tone.Progress);
         var preview = await wallet.PreviewAsync(account, data, gasCoin, payload);
-        var allRows = new List<(string, string)> { ("Операция", Core.History.Describe(data, account.Address, account.Address, Symbol)), ("Со счёта", $"{account.Name}\n{Display.Address(account.Address)}") };
+        if (context != accountVersion || !ReferenceEquals(shell.Backend, wallet.Backend)) { screen.Say("Адрес или источник изменился. Повторите расчёт.", Tone.Warning); return null; }
+        var allRows = new List<(string, string)> { ("Операция", Core.History.Describe(data, account.Address, account.Address, Symbol)), ("Со счёта", $"{account.Name}\n{Display.Address(account.Address)}" + (Selected?.Phrase == true ? $"\n{account.Path}" : "")) };
         allRows.AddRange(rows);
         allRows.Add(("Комиссия", $"{Units.FormatCoins(preview.Commission)} {preview.CommissionCoin.Symbol} (id {preview.CommissionCoin.Id}), gas price {preview.GasPrice}"));
-        if (payload.Length > 0) allRows.Add(("Сообщение", Encoding.UTF8.GetString(payload)));
+        if (payload.Length > 0) allRows.Add(("Сообщение", Core.History.PayloadText(payload)));
         allRows.Add(("Сеть", $"{shell.Status?.Network} (chain ID {wallet.ChainId}) · {wallet.Backend.Name}"));
         var allWarnings = warnings.ToList();
         if (preview.GasPrice > 1) allWarnings.Add($"Сеть загружена: gas price {preview.GasPrice}, комиссия умножена на него.");
@@ -565,6 +774,7 @@ public sealed class MainViewModel : ScreenModel
         if (password == null) { screen.Say("Отменено — ничего не отправлено.", Tone.Info); return null; }
         screen.Say("Проверка пароля…", Tone.Progress);
         if (!await shell.CheckPasswordAsync(password)) { screen.Say("Неверный пароль — ничего не отправлено.", Tone.Error); return null; }
+        if (context != accountVersion || !ReferenceEquals(shell.Backend, wallet.Backend) || shell.Session?.IsLocked != false) { screen.Say("Адрес или источник изменился. Подпись отменена; повторите расчёт.", Tone.Warning); return null; }
         screen.Say("Подпись и отправка…", Tone.Progress);
         var outcome = await wallet.SendAsync(account, preview, new Progress<TxOutcome>(o => screen.Say($"Отправлено {o.Hash}, ждём блок…", Tone.Progress)));
         switch (outcome.State)
@@ -695,13 +905,18 @@ public sealed class SendViewModel : ScreenModel
     private async Task AllAsync()
     {
         if (Coin == null) { Say("Выберите монету.", Tone.Warning); return; }
+        var context = main.ContextVersion;
+        var coin = Coin;
+        var account = main.Selected!.Account;
         var gas = GasCoin?.Coin.Id ?? 0;
         var value = Coin.Value;
         if (gas == Coin.Coin.Id)
         {
             var to = Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a) ? a : main.Selected!.Account.Address;
             var wallet = await main.WalletAsync();
-            var preview = await wallet.PreviewAsync(main.Selected!.Account, new SendData(Coin.Coin.Id, to, value), gas, MainViewModel.Utf8(Payload));
+            if (context != main.ContextVersion) return;
+            var preview = await wallet.PreviewAsync(account, new SendData(coin.Coin.Id, to, value), gas, MainViewModel.Utf8(Payload));
+            if (context != main.ContextVersion || Coin?.Coin.Id != coin.Coin.Id || (GasCoin?.Coin.Id ?? 0) != gas) return;
             value -= preview.Commission;
             if (value.Sign <= 0) { Say("Баланса не хватает даже на комиссию.", Tone.Warning); return; }
         }
@@ -764,6 +979,12 @@ public sealed class SwapViewModel : ScreenModel
         requote = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         requote.Tick += (_, _) => RequoteTick();
         requote.Start();
+    }
+
+    public void Stop()
+    {
+        quoteTimer.Stop();
+        requote.Stop();
     }
 
     public double QuoteAngle { get => quoteAngle; private set => Set(ref quoteAngle, value); }
@@ -836,22 +1057,38 @@ public sealed class SwapViewModel : ScreenModel
     {
         var keep = Sell?.Coin.Id;
         var all = sellAll;
-        Coins.Clear();   // the list drops its selection here (Sell = null), which would end "Всё"
+        if (Coins.SequenceEqual(main.Balances)) return;
+        var oldValue = Sell?.Value;
+        updatingBalances = true;
+        Coins.Clear();
         foreach (var b in main.Balances) Coins.Add(b);
         Sell = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
         if (all && Sell is { } same && same.Coin.Id == keep)
         {
             sellAll = true;
             amount = Units.FormatCoins(same.Value); Changed(nameof(Amount));
-            InputChanged();
         }
+        updatingBalances = false;
+        if (Sell?.Coin.Id != keep || all && Sell?.Value != oldValue) InputChanged();
     }
 
+    private bool updatingBalances;
+    private int quoteVersion;
     private void InputChanged()
     {
+        if (updatingBalances) return;
+        quoteVersion++;
         ClearQuote();
         quoteTimer?.Stop();
         if (Ready) quoteTimer?.Start();
+    }
+
+    public void AccountChanged()
+    {
+        quoteVersion++;
+        quoteTimer.Stop(); ClearQuote(); QuoteDelta = ""; amount = ""; sellAll = false;
+        Changed(nameof(Amount));
+        Coins.Clear(); Sell = null;
     }
 
     private void ClearQuote()
@@ -867,6 +1104,9 @@ public sealed class SwapViewModel : ScreenModel
     // is left alone.
     private async Task EstimateAsync(bool again = false)
     {
+        var context = main.ContextVersion;
+        var input = quoteVersion;
+        bool Current() => context == main.ContextVersion && input == quoteVersion;
         quoteTimer.Stop();
         if (!again) { ClearQuote(); QuoteDelta = ""; lastExpected = 0; }
         if (Sell == null) { Say("Выберите, что отдаёте.", Tone.Error); return; }
@@ -879,9 +1119,11 @@ public sealed class SwapViewModel : ScreenModel
         var quiet = again || Tone is Tone.Success or Tone.Error;
         if (!quiet) Say("Поиск маршрута…", Tone.Progress);
         var wallet = await main.WalletAsync();
+        if (!Current()) return;
         var warning = main.Shell.Coins.Observe(new CoinRef(target.Id, target.Symbol)) is { } c ? $"Внимание: {c.Symbol} раньше был id {c.KnownId}, теперь id {c.NewId}." : "";
         var bps = (int)(tolerance * 100);
         var trade = await wallet.Backend.BestTradeAsync(Sell.Coin.Id, target.Id, value, ExactInput);
+        if (!Current()) return;
         // The whole balance: a SellAll transaction. The network takes its commission in the coin sold, whatever the gas
         // coin, and swaps it through that coin's pool or reserve right before the sale; the node's sell-all estimate
         // counts both, so the quote and the guarantee come from it.
@@ -892,7 +1134,9 @@ public sealed class SwapViewModel : ScreenModel
         if (all)
         {
             ITxData probe = trade is { Path.Count: >= 2 } ? new SellAllSwapPoolData(trade.Path, 0) : new SellAllCoinData(Sell.Coin.Id, target.Id, 0);
-            if (await CommissionAsync(wallet, probe, Sell.Coin.Id) is not { } commission)
+            var cost = await CommissionAsync(wallet, probe, Sell.Coin.Id);
+            if (!Current()) return;
+            if (cost is not { } commission)
             { Say($"«Всё» платит комиссию самой монетой, а {Sell.Coin.Symbol} её не заплатить: продайте сумму без «Всё».", Tone.Error); return; }
             if (commission >= value) { Say("Баланса не хватает даже на комиссию.", Tone.Warning); return; }
             gas = Sell.Coin.Id;
@@ -903,6 +1147,7 @@ public sealed class SwapViewModel : ScreenModel
         {
             route = string.Join(" → ", trade.Path.Select(main.Symbol)) + " (пулы)";
             expected = all ? await wallet.Backend.EstimateSellAllAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Pool, trade.Path.Skip(1).SkipLast(1).ToList()) : trade.Result;
+            if (!Current()) return;
             limit = ExactInput ? expected * (10000 - bps) / 10000 : expected * (10000 + bps) / 10000;
             data = all ? new SellAllSwapPoolData(trade.Path, limit)
                 : ExactInput ? new SellSwapPoolData(trade.Path, value, limit) : new BuySwapPoolData(trade.Path, value, limit);
@@ -911,8 +1156,10 @@ public sealed class SwapViewModel : ScreenModel
         {
             var estimate = ExactInput ? await wallet.Backend.EstimateSellAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Bancor)
                                       : await wallet.Backend.EstimateBuyAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Bancor);
+            if (!Current()) return;
             route = $"{Sell.Coin.Symbol} → {target.Symbol} (резерв)";
             expected = all ? await wallet.Backend.EstimateSellAllAsync(Sell.Coin.Id, target.Id, value, SwapFrom.Bancor) : estimate.Amount;
+            if (!Current()) return;
             limit = ExactInput ? expected * (10000 - bps) / 10000 : expected * (10000 + bps) / 10000;
             data = all ? new SellAllCoinData(Sell.Coin.Id, target.Id, limit)
                 : ExactInput ? new SellCoinData(Sell.Coin.Id, value, target.Id, limit) : new BuyCoinData(target.Id, value, Sell.Coin.Id, limit);
@@ -1123,20 +1370,41 @@ public sealed class StakingViewModel : ScreenModel
 public sealed record MoveItem(string Text, bool Up, bool Down);
 public sealed record DetailRow(string Label, string Value);
 
+public sealed class DateGroupHeader(DateTime date)
+{
+    public DateTime Date { get; } = date;
+    public string Title => HistoryViewModel.FormatDateHeader(Date);
+}
+
 // A line of the history: what the transaction was, with whom or along which route, what it moved on this account
 // (+ green, − red), its commission; a click opens every detail.
 public sealed class HistoryItem : Observable
 {
     private bool expanded;
+    private DateTimeOffset? timestamp;
+    private bool isEstimatedTime;
 
-    public HistoryItem(HistoryEntry entry, TxDetails details, bool fromExplorer, Func<uint, string> symbol, Func<Minter.Protocol.Address, string?> nameOf)
+    public HistoryItem(HistoryEntry entry, TxDetails details, bool fromExplorer, Func<uint, string> symbol, Func<Minter.Protocol.Address, string?> nameOf, Minter.Protocol.Address? me = null, DateTimeOffset? time = null, bool isEstimated = false)
     {
         Entry = entry; Details = details; FromExplorer = fromExplorer;
+        timestamp = time; isEstimatedTime = isEstimated;
+        PartiesLine = BuildPartiesLine(entry, details, nameOf, me);
         Subtitle = details.Counterparty is { } c && nameOf(c) is { Length: > 0 } name ? details.Subtitle.Replace(Core.History.Short(c), $"{name} ({Core.History.Short(c)})") : details.Subtitle;
-        Moves = details.Moves.Select(m => new MoveItem($"{(m.Amount.Sign > 0 ? "+" : "−")}{Display.Amount(BigInteger.Abs(m.Amount))} {symbol(m.Coin)}", m.Amount.Sign > 0, m.Amount.Sign < 0)).ToList();
+        Moves = details.Moves.Select(m =>
+        {
+            var sign = m.Amount.Sign > 0 ? "+" : "−";
+            var note = !string.IsNullOrEmpty(m.Note) ? $"{m.Note} " : "";
+            var text = m.Amount == BigInteger.Zero && !string.IsNullOrEmpty(m.Note)
+                ? $"−{m.Note} {symbol(m.Coin)}"
+                : $"{sign}{note}{Display.Amount(BigInteger.Abs(m.Amount))} {symbol(m.Coin)}";
+            return new MoveItem(text, m.Amount.Sign > 0, m.Amount.Sign < 0 || m.Amount == BigInteger.Zero);
+        }).ToList();
         foreach (var (label, value) in details.Rows) Rows.Add(new DetailRow(label, value));
-        if (fromExplorer && details.Moves.Count == 1 && entry.Type is TxType.SellSwapPool or TxType.SellCoin or TxType.SellAllCoin or TxType.SellAllSwapPool or TxType.BuyCoin or TxType.BuySwapPool)
-            Rows.Add(new DetailRow("Получено", "обозреватель не сообщает, сколько принёс обмен"));
+        if (time.HasValue && !isEstimated)
+        {
+            TimeKnown = true;
+            Rows.Insert(Math.Min(2, Rows.Count), new DetailRow("Время", time.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture)));
+        }
     }
 
     public HistoryEntry Entry { get; }
@@ -1146,6 +1414,8 @@ public sealed class HistoryItem : Observable
     public string Title => Details.Title;
     public string Subtitle { get; }
     public bool HasSubtitle => Subtitle.Length > 0;
+    public string PartiesLine { get; }
+    public bool HasPartiesLine => PartiesLine.Length > 0;
     public IReadOnlyList<MoveItem> Moves { get; }
     public string CommissionText => Details.Commission.Length > 0 ? $"комиссия {Details.Commission}" : "";
     public bool HasCommission => CommissionText.Length > 0;
@@ -1154,6 +1424,88 @@ public sealed class HistoryItem : Observable
     public bool TimeKnown { get; set; }
     public string Height => Display.Integer(Entry.Height);
     public string HeightText => $"блок {Display.Integer(Entry.Height)}";
+
+    public DateTimeOffset? Timestamp => timestamp;
+    public bool IsEstimatedTime => isEstimatedTime;
+    public bool HasTime => timestamp.HasValue;
+    public string TimeText => timestamp.HasValue ? timestamp.Value.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "";
+    public string DateText => timestamp.HasValue ? timestamp.Value.ToLocalTime().ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) : "";
+    public string TimeAndHeight => timestamp.HasValue
+        ? $"{(isEstimatedTime ? "≈ " : "")}{timestamp.Value.ToLocalTime():dd.MM.yyyy, HH:mm:ss} · {HeightText}"
+        : HeightText;
+
+    public string OverviewTimeAndHeight => TimeAndHeight;
+
+    public void SetExactTimestamp(DateTimeOffset time)
+    {
+        timestamp = time;
+        isEstimatedTime = false;
+        TimeKnown = true;
+        if (!Rows.Any(r => r.Label == "Время"))
+            Rows.Insert(Math.Min(2, Rows.Count), new DetailRow("Время", time.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture)));
+        Changed(nameof(Timestamp));
+        Changed(nameof(IsEstimatedTime));
+        Changed(nameof(HasTime));
+        Changed(nameof(TimeText));
+        Changed(nameof(DateText));
+        Changed(nameof(TimeAndHeight));
+        Changed(nameof(OverviewTimeAndHeight));
+    }
+
+    private static string BuildPartiesLine(HistoryEntry entry, TxDetails details, Func<Minter.Protocol.Address, string?> nameOf, Minter.Protocol.Address? me)
+    {
+        string Party(Minter.Protocol.Address a)
+        {
+            var n = nameOf(a);
+            var s = Core.History.Short(a);
+            return string.IsNullOrWhiteSpace(n) ? s : $"{n} ({s})";
+        }
+
+        switch (entry.Type)
+        {
+            case TxType.Send:
+                var to = details.Counterparty ?? (me.HasValue && entry.From != me ? me : null);
+                if (to.HasValue)
+                {
+                    if (entry.Direction == Direction.Outgoing)
+                    {
+                        return entry.From == to.Value
+                            ? $"Себе: {Party(to.Value)}"
+                            : $"От: {Party(entry.From)} → Кому: {Party(to.Value)}";
+                    }
+                    return $"От: {Party(entry.From)} → Кому: {Party(to.Value)}";
+                }
+                return details.Subtitle;
+
+            case TxType.Multisend:
+                if (entry.Direction == Direction.Outgoing)
+                    return $"От: {Party(entry.From)} → Кому: {details.Subtitle}";
+                return $"От: {Party(entry.From)} (мультисенд)";
+
+            case TxType.SellCoin or TxType.SellAllCoin or TxType.BuyCoin or TxType.SellSwapPool or TxType.BuySwapPool or TxType.SellAllSwapPool:
+                return details.Subtitle.Length > 0
+                    ? (details.Subtitle.Contains("→", StringComparison.Ordinal) && !details.Subtitle.StartsWith("Маршрут:", StringComparison.Ordinal)
+                        ? $"Маршрут: {details.Subtitle}"
+                        : details.Subtitle)
+                    : "";
+
+            case TxType.Delegate:
+                return $"Кому: {details.Subtitle}";
+
+            case TxType.Unbond:
+                return $"От: {details.Subtitle}";
+
+            case TxType.MoveStake:
+                return $"Маршрут: {details.Subtitle}";
+
+            case TxType.RedeemCheck:
+                return "Чек Minter";
+
+            default:
+                return details.Subtitle;
+        }
+    }
+
     public string Payload => Entry.Payload.Length > 0 ? $"«{Entry.Payload}»" : "";
     public bool HasPayload => Entry.Payload.Length > 0;
     public bool Failed => !Entry.Success;
@@ -1163,7 +1515,7 @@ public sealed class HistoryItem : Observable
     public bool Incoming => Entry.Direction == Direction.Incoming && Entry.Success;
     public string Glyph => !Entry.Success ? "error" : Entry.Type switch
     {
-        TxType.SellCoin or TxType.SellAllCoin or TxType.BuyCoin or TxType.SellSwapPool or TxType.BuySwapPool or TxType.SellAllSwapPool => "swap",
+        TxType.SellCoin or TxType.SellAllCoin or TxType.BuyCoin or TxType.SellSwapPool or TxType.BuySwapPool or TxType.SellAllSwapPool or TxType.AddLimitOrder or TxType.RemoveLimitOrder or TxType.AddLiquidity or TxType.RemoveLiquidity or TxType.CreateSwapPool => "swap",
         TxType.Delegate or TxType.Unbond or TxType.MoveStake or TxType.LockStake => "stake",
         _ => Entry.Direction == Direction.Incoming ? "receive" : "send"
     };
@@ -1173,6 +1525,8 @@ public sealed class HistoryItem : Observable
 // older part from the Minter explorer.
 public sealed class HistoryViewModel : ScreenModel
 {
+    public static readonly ConcurrentDictionary<long, DateTimeOffset> BlockTimeCache = new();
+    private int readGeneration;
     private const int PageSize = 30;
     private readonly MainViewModel main;
     private HistoryCursor? cursor;
@@ -1181,7 +1535,7 @@ public sealed class HistoryViewModel : ScreenModel
     public HistoryViewModel(MainViewModel main)
     {
         this.main = main;
-        Load = new AsyncCommand(async () => { cursor = null; Items.Clear(); olderShown = false; await MoreAsync(); }, e => { Loading = false; Fail(e); });
+        Load = new AsyncCommand(async () => { cursor = null; Items.Clear(); GroupedItems.Clear(); olderShown = false; await MoreAsync(); }, e => { Loading = false; Fail(e); });
         More = new AsyncCommand(MoreAsync, e => { Loading = false; Fail(e); });
         Export = new AsyncCommand(ExportAsync, Fail, () => main.Shell.SaveText != null);
         CopyHash = new RelayCommand(async hash => { if (hash is string h && main.Shell.CopyText != null) { await main.Shell.CopyText(h); Say("Хеш транзакции скопирован.", Tone.Success); } });
@@ -1197,18 +1551,30 @@ public sealed class HistoryViewModel : ScreenModel
     public async Task ToggleAsync(HistoryItem item)
     {
         item.Expanded = !item.Expanded;
-        if (!item.Expanded || item.TimeKnown) return;
+        if (!item.Expanded) return;
+        if (item.Timestamp.HasValue && !item.IsEstimatedTime)
+        {
+            if (!item.TimeKnown)
+            {
+                item.TimeKnown = true;
+                item.Rows.Insert(Math.Min(2, item.Rows.Count), new DetailRow("Время", item.Timestamp.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture)));
+            }
+            return;
+        }
+        if (item.TimeKnown) return;
         item.TimeKnown = true;
         try
         {
             var wallet = await main.WalletAsync();
             var time = await wallet.Backend.BlockTimeAsync(item.Entry.Height);
-            item.Rows.Insert(2, new DetailRow("Время", time.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture)));
+            BlockTimeCache[item.Entry.Height] = time;
+            item.SetExactTimestamp(time);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or MinterWallet.Core.ChainApiException) { item.TimeKnown = false; }
     }
 
     public ObservableCollection<HistoryItem> Items { get; } = [];
+    public ObservableCollection<object> GroupedItems { get; } = [];
     public bool Loading { get => loading; set { Set(ref loading, value); Changed(nameof(IsEmpty)); } }
     public bool HasMore { get => hasMore; private set => Set(ref hasMore, value); }
     public bool IsEmpty => loaded && !Loading && Items.Count == 0;
@@ -1220,10 +1586,58 @@ public sealed class HistoryViewModel : ScreenModel
     public AsyncCommand Export { get; }
     public RelayCommand CopyHash { get; }
 
+    private static readonly string[] RussianMonthsGenitive =
+    [
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря"
+    ];
+
+    public static string FormatDateHeader(DateTime date)
+    {
+        if (date == DateTime.MinValue) return "Ранее";
+        var today = DateTime.Today;
+        var monthName = RussianMonthsGenitive[date.Month - 1];
+        var dateFormatted = $"{date.Day} {monthName} {date.Year}";
+        if (date.Date == today) return $"Сегодня, {dateFormatted}";
+        if (date.Date == today.AddDays(-1)) return $"Вчера, {dateFormatted}";
+        return dateFormatted;
+    }
+
+    public void RebuildGroupedItems()
+    {
+        GroupedItems.Clear();
+        DateTime? currentDate = null;
+        var hasUndatedGroup = false;
+
+        foreach (var item in Items)
+        {
+            if (item.Timestamp.HasValue)
+            {
+                var itemDate = item.Timestamp.Value.ToLocalTime().Date;
+                if (currentDate == null || currentDate.Value != itemDate)
+                {
+                    currentDate = itemDate;
+                    GroupedItems.Add(new DateGroupHeader(itemDate));
+                }
+            }
+            else
+            {
+                if (!hasUndatedGroup)
+                {
+                    hasUndatedGroup = true;
+                    GroupedItems.Add(new DateGroupHeader(DateTime.MinValue));
+                }
+            }
+            GroupedItems.Add(item);
+        }
+    }
+
     public void Reset()
     {
+        readGeneration++; Loading = false;
         cursor = null; loaded = false; olderShown = false;
         Items.Clear();
+        GroupedItems.Clear();
         HasMore = false;
         Changed(nameof(IsEmpty)); Changed(nameof(Note)); Changed(nameof(HasNote));
         if (main.IsHistory) Load.Execute(null);
@@ -1232,24 +1646,94 @@ public sealed class HistoryViewModel : ScreenModel
     private async Task MoreAsync()
     {
         if (main.Selected == null) return;
-        Loading = true;
-        var wallet = await main.WalletAsync();
+        var context = main.ContextVersion;
         var me = main.Selected.Account.Address;
-        cursor ??= main.HistoryCursor(wallet, me, PageSize);
-        foreach (var (record, older) in await cursor.NextAsync())
+        var generation = ++readGeneration;
+        Loading = true;
+        try
         {
-            HistoryEntry entry;
-            TxDetails details;
-            try { entry = Core.History.Decode(record, me, main.Symbol); details = TxExplain.Explain(record, me, main.Symbol); }
-            catch (FormatException) { continue; }   // bytes the wallet cannot read (a third-party answer) are skipped
-            Items.Add(new HistoryItem(entry, details, older, main.Symbol, NameOf));
-            olderShown |= older;
+            var wallet = await main.WalletAsync();
+            if (context != main.ContextVersion || generation != readGeneration) return;
+            cursor ??= main.HistoryCursor(wallet, me, PageSize);
+            var currentCursor = cursor;
+            var records = await currentCursor.NextAsync();
+            if (context != main.ContextVersion || generation != readGeneration || !ReferenceEquals(main.Shell.Backend, wallet.Backend)) return;
+            var pending = new List<HistoryItem>();
+            foreach (var (record, older) in records)
+            {
+                HistoryEntry entry;
+                TxDetails details;
+                try { entry = Core.History.Decode(record, me, main.Symbol); details = TxExplain.Explain(record, me, main.Symbol); }
+                catch (FormatException) { continue; }   // bytes the wallet cannot read (a third-party answer) are skipped
+
+                DateTimeOffset? timestamp = null;
+                var isEstimated = false;
+                if (record.Tags.TryGetValue("timestamp", out var t) && DateTimeOffset.TryParse(t, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at))
+                {
+                    timestamp = at;
+                    BlockTimeCache[record.Height] = at;
+                }
+                else if (BlockTimeCache.TryGetValue(record.Height, out var cached))
+                {
+                    timestamp = cached;
+                }
+                else if (main.Shell.Status is { Height: > 0 } st && st.Height >= record.Height)
+                {
+                    timestamp = st.BlockTime - TimeSpan.FromSeconds((st.Height - record.Height) * 5);
+                    isEstimated = true;
+                }
+
+                var item = new HistoryItem(entry, details, older, main.Symbol, NameOf, me, timestamp, isEstimated);
+                Items.Add(item);
+                if (isEstimated || !timestamp.HasValue) pending.Add(item);
+                olderShown |= older;
+            }
+            RebuildGroupedItems();
+            loaded = true;
+            Loading = false;
+            HasMore = cursor.HasMore;
+            Changed(nameof(Note)); Changed(nameof(HasNote)); Changed(nameof(IsEmpty));
+            if (Tone == Tone.Error) Say("");
+            if (pending.Count > 0)
+                _ = FetchBlockTimesAsync(pending, generation);
         }
-        loaded = true;
-        Loading = false;
-        HasMore = cursor.HasMore;
-        Changed(nameof(Note)); Changed(nameof(HasNote)); Changed(nameof(IsEmpty));
-        if (Tone == Tone.Error) Say("");
+        catch (Exception) when (context != main.ContextVersion || generation != readGeneration) { }
+        finally
+        {
+            if (generation == readGeneration) Loading = false;
+            if (context != main.ContextVersion && main.IsHistory && Items.Count == 0)
+                Dispatcher.UIThread.Post(() => Load.Execute(null));
+        }
+    }
+
+    private async Task FetchBlockTimesAsync(List<HistoryItem> pending, int generation)
+    {
+        var distinctHeights = pending.Select(i => i.Entry.Height).Distinct().ToList();
+        var wallet = await main.WalletAsync();
+        var changed = false;
+        foreach (var height in distinctHeights)
+        {
+            if (generation != readGeneration || !ReferenceEquals(main.Shell.Backend, wallet.Backend)) return;
+            if (BlockTimeCache.TryGetValue(height, out var time))
+            {
+                foreach (var item in pending.Where(i => i.Entry.Height == height)) item.SetExactTimestamp(time);
+                changed = true;
+                continue;
+            }
+            try
+            {
+                time = await wallet.Backend.BlockTimeAsync(height);
+                BlockTimeCache[height] = time;
+                foreach (var item in pending.Where(i => i.Entry.Height == height)) item.SetExactTimestamp(time);
+                changed = true;
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException) { }
+            await Task.Delay(40);
+        }
+        if (changed && generation == readGeneration)
+        {
+            Dispatcher.UIThread.Post(RebuildGroupedItems);
+        }
     }
 
     // The whole history (up to ExportLimit transactions) to a CSV file: every page, then the time of each block not
@@ -1317,6 +1801,7 @@ public sealed class SettingsViewModel : ScreenModel
         AddSource = new AsyncCommand(AddSourceAsync, Fail);
         RemoveSource = new AsyncCommand(RemoveSourceAsync, Fail);
         ChangePassword = new AsyncCommand(ChangePasswordAsync, Fail);
+        CheckTelemetry = new AsyncCommand(async () => { await main.Shell.PingUsageAsync(); await LoadUsageAsync(); }, Fail);
         LoadSources();
     }
 
@@ -1385,10 +1870,12 @@ public sealed class SettingsViewModel : ScreenModel
     public bool Telemetry
     {
         get => main.Shell.Settings.Telemetry;
-        set { if (value == main.Shell.Settings.Telemetry) return; main.Shell.Settings.Telemetry = value; main.Shell.Settings.Save(main.Shell.DataDirectory); Changed(); }
+        set { if (value == main.Shell.Settings.Telemetry) return; main.Shell.Settings.Telemetry = value; main.Shell.Settings.Save(main.Shell.DataDirectory); Changed(); _ = main.Shell.PingUsageAsync(); }
     }
     private string usageText = "";
     public string UsageText { get => usageText; private set => Set(ref usageText, value); }
+    public AsyncCommand CheckTelemetry { get; }
+    public Shell TelemetryState => main.Shell;
 
     // Everyone's pings counted at the gate: how many use the wallet now, today, this month, ever.
     public async Task LoadUsageAsync()
@@ -1396,11 +1883,11 @@ public sealed class SettingsViewModel : ScreenModel
         if (main.Shell.UsageEndpoint is not { } endpoint) { UsageText = ""; return; }
         try
         {
-            using var usage = new UsageClient(endpoint);
+            using var usage = main.Shell.CreateUsageClient(endpoint);
             var s = await usage.StatsAsync();
             UsageText = $"Кошельком пользуются: сейчас {Display.Integer(s.Online)}, за сутки {Display.Integer(s.Day)}, за 30 дней {Display.Integer(s.Month)}; всего установок {Display.Integer(s.Total)}.";
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { UsageText = ""; }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { UsageText = $"Статистика временно недоступна: {Describe(e)}"; }
     }
 
     public bool CheckUpdates

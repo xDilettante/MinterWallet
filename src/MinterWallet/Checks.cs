@@ -46,7 +46,10 @@ public sealed class CheckIssueViewModel : ScreenModel
 
     private async Task IssueAsync()
     {
+        if (main.Derivation.Parameters) { Say("Примените параметры или закройте редактор пути.", Tone.Warning); return; }
         var account = main.Selected?.Account;
+        var context = main.ContextVersion;
+        var phrase = main.Selected?.Phrase == true;
         if (account == null || account.WatchOnly) { Say("Этот счёт только для просмотра: выписать чек нечем.", Tone.Error); return; }
         if (Coin == null) { Say("Выберите монету.", Tone.Error); return; }
         if (!MainViewModel.TryAmount(Amount, this, out var value)) return;
@@ -54,15 +57,17 @@ public sealed class CheckIssueViewModel : ScreenModel
         if (!int.TryParse(Days, out var d) || d is < 1 or > 365) { Say("Срок — от 1 до 365 дней.", Tone.Error); return; }
         var wallet = await main.WalletAsync();
         var height = (await wallet.Backend.StatusAsync()).Height;
+        if (context != main.ContextVersion || !ReferenceEquals(main.Shell.Backend, wallet.Backend)) { Say("Адрес или источник изменился. Повторите расчёт.", Tone.Warning); return; }
         var due = (ulong)(height + d * BlocksPerDay);
         var text = $"{Units.FormatCoins(value)} {Coin.Coin.Symbol} (id {Coin.Coin.Id})";
         var confirm = main.Shell.Confirm == null ? null : await main.Shell.Confirm(new ConfirmRequest("Выписать чек",
-            [("Чек на", text), ("Со счёта", $"{account.Name}\n{Display.Address(account.Address)}"), ("Действует", $"до блока {Display.Integer((long)due)}, ≈ {d} дн.")],
+            [("Чек на", text), ("Со счёта", $"{account.Name}\n{Display.Address(account.Address)}" + (phrase ? $"\n{account.Path}" : "")), ("Действует", $"до блока {Display.Integer((long)due)}, ≈ {d} дн.")],
             ["Сумма и комиссия за погашение спишутся с этого счёта, когда чек погасят. До тех пор держите их на счёте — иначе погасить не выйдет.",
              "Кто знает чек и его пароль — заберёт монеты. Передавайте пароль отдельно от чека."], "Выписать чек"));
         if (confirm == null) { Say("Отменено.", Tone.Info); return; }
         if (!await main.Shell.CheckPasswordAsync(confirm)) { Say("Неверный пароль кошелька — чек не выписан.", Tone.Error); return; }
-        using var key = main.Shell.Session!.OpenKey(account);
+        if (context != main.ContextVersion || main.Shell.Session?.IsLocked != false) { Say("Адрес или источник изменился. Подпись отменена; повторите расчёт.", Tone.Warning); return; }
+        using var key = main.Shell.Session.OpenKey(account);
         var check = Check.Issue(key, Password, RandomNumberGenerator.GetBytes(8), wallet.ChainId, due, Coin.Coin.Id, value, gasCoin: 0);
         Issued = check.ToString();
         IssuedInfo = $"Чек на {Display.Amount(value)} {Coin.Coin.Symbol}, действует до блока {Display.Integer((long)due)} (≈ {d} дн.).";

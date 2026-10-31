@@ -56,15 +56,18 @@ public static class Rlp
     }
     private static int ByteCount(int value) { var n = 0; while (value != 0) { n++; value >>= 8; } return n; }
 
+    private const int MaxDepth = 16;
+
     public static RlpItem Decode(ReadOnlySpan<byte> data)
     {
-        var item = Read(data.ToArray(), 0, data.Length, out var consumed);
+        var item = Read(data.ToArray(), 0, data.Length, out var consumed, 0);
         if (consumed != data.Length) throw new FormatException("Trailing bytes after the RLP value.");
         return item;
     }
 
-    private static RlpItem Read(byte[] buffer, int offset, int end, out int consumed)
+    private static RlpItem Read(byte[] buffer, int offset, int end, out int consumed, int depth)
     {
+        if (depth > MaxDepth) throw new FormatException("RLP nesting exceeds maximum depth.");
         if (offset >= end) throw new FormatException("Unexpected end of RLP data.");
         var prefix = buffer[offset];
         if (prefix < 0x80) { consumed = 1; return new RlpItem(buffer.AsMemory(offset, 1)); }
@@ -94,7 +97,7 @@ public static class Rlp
         var position = start;
         while (position < start + length)
         {
-            items.Add(Read(buffer, position, start + length, out var used));
+            items.Add(Read(buffer, position, start + length, out var used, depth + 1));
             position += used;
         }
         return new RlpItem(items);

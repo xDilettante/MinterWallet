@@ -17,14 +17,46 @@ using MinterWallet.Core;
 // the quote by itself, delegation, multisend, sources in the settings, wrong password, both themes, lock and unlock.
 // --mainnet URL: read-only, against a real MinterGate: a public mainnet address to watch, its balances in dollars, its
 // history with the older part from the Minter explorer, the gate's coin list for a swap. Nothing is signed.
-if (args is not ["--devnet" or "--mainnet", var url]) { Console.WriteLine("Usage: MinterWallet.UiChecks --devnet http://WSL-IP:38843 | --mainnet https://GATE"); return 2; }
+if (args is ["--derivation"])
+{
+    Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
+    var hdSession = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
+    var hdCode = await hdSession.Dispatch(DerivationScenario.Run, CancellationToken.None);
+    Environment.Exit(hdCode);
+    return hdCode;
+}
+if (args is ["--telemetry"])
+{
+    Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
+    var telemetrySession = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
+    var result = await telemetrySession.Dispatch(TelemetryScenario.Run, CancellationToken.None);
+    Environment.Exit(result);
+    return result;
+}
+if (args is ["--hd-devnet", var hdUrl])
+{
+    Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
+    var hdSession = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
+    var hdCode = await hdSession.Dispatch(() => DerivationDevnetScenario.Run(hdUrl), CancellationToken.None);
+    Environment.Exit(hdCode);
+    return hdCode;
+}
+if (args is ["--startup", var startupUrl])
+{
+    Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
+    var startupSession = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
+    var result = await startupSession.Dispatch(() => StartupScenario.Run(startupUrl), CancellationToken.None);
+    Environment.Exit(result);
+    return result;
+}
+if (args is not ["--devnet" or "--mainnet" or "--english", var url]) { Console.WriteLine("Usage: MinterWallet.UiChecks --derivation | --english URL | --devnet URL | --mainnet URL"); return 2; }
 var mainnet = args[0] == "--mainnet";
 // The checks' wallets send no usage pings to the project's gate.
 Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
 var output = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", mainnet ? "ui-mainnet" : "ui-checks"));
 Directory.CreateDirectory(output);
 var session = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
-var code = await session.Dispatch(() => mainnet ? UiScenario.Mainnet(url, output) : UiScenario.Run(url, output), CancellationToken.None);
+var code = await session.Dispatch(() => args[0] == "--english" ? UiScenario.EnglishOnly(url, output + "-english") : mainnet ? UiScenario.Mainnet(url, output) : UiScenario.Run(url, output), CancellationToken.None);
 // The headless session keeps its dispatcher thread (and the wallet's timers) alive: end the process explicitly.
 Environment.Exit(code);
 return code;
@@ -37,6 +69,15 @@ public static class UiChecksApp
 
 public static class UiScenario
 {
+    public static async Task<int> EnglishOnly(string url, string outputDirectory)
+    {
+        output = outputDirectory;
+        Directory.CreateDirectory(output);
+        var data = Directory.CreateTempSubdirectory("minterwallet-ui-english-").FullName;
+        try { await English(url, data); Console.WriteLine("PASS English UI: all sections, confirmation and lock screen"); return 0; }
+        catch (Exception e) { Console.WriteLine("FAIL English UI: " + e.Message); return 1; }
+        finally { window?.Close(); try { Directory.Delete(data, true); } catch (IOException) { } }
+    }
     private const string Password = "ui-check-пароль";
     private static string output = "";
     private static Window? window;

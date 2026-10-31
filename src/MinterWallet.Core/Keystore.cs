@@ -13,16 +13,19 @@ public enum SecretKind { Mnemonic, PrivateKey }
 public sealed record WalletAccount(string Id, string Name, Address Address, string? SecretId, uint Index, DateTimeOffset Created)
 {
     public bool WatchOnly => SecretId == null;
+    public string? DerivationPath { get; init; }
+    public string Path => DerivationPath ?? HdKey.MinterAccountPath(Index);
 }
 
 public sealed class WrongPasswordException() : Exception("Неверный пароль.");
 
-// keystore.json, format 1. One password for the whole store: Argon2id (64 MiB, 3 passes, 1 lane, 16-byte salt) gives
+// keystore.json, format 2 (reads format 1 and backs it up before migration). One password for the whole store:
+// Argon2id (64 MiB, 3 passes, 1 lane, 16-byte salt) gives
 // a 32-byte key; every secret (a BIP39 mnemonic or a raw private key) is sealed with AES-256-GCM under a fresh 12-byte
 // nonce, with the secret id and kind as associated data. A fixed verifier record tells a wrong password apart from a
 // damaged file. Addresses are stored in the clear (they are public) and are re-derived from the secret before every
 // signature, so an edited address field cannot redirect a signature.
-public sealed class Keystore
+public sealed partial class Keystore
 {
     public const string FileName = "keystore.json";
     private const string Format = "minterwallet-keystore";
@@ -37,6 +40,7 @@ public sealed class Keystore
     private sealed record SecretRecord(string Id, SecretKind Kind, Sealed Box);
 
     private readonly string path;
+    private bool legacyLoaded;
     private KdfParameters kdf;
     private Sealed verifier;
     private readonly List<SecretRecord> secrets = [];
@@ -67,20 +71,26 @@ public sealed class Keystore
     public static Keystore Load(string path)
     {
         var root = JsonNode.Parse(File.ReadAllBytes(path)) as JsonObject ?? throw new InvalidDataException("keystore.json is not an object.");
-        if ((string?)root["format"] != Format || (int?)root["version"] != 1) throw new InvalidDataException("Unsupported key store format.");
+        if ((string?)root["format"] != Format || (int?)root["version"] is not (1 or 2)) throw new InvalidDataException("Unsupported key store format.");
         var k = root["kdf"]!;
         if ((string?)k["algorithm"] != "argon2id" || (int?)k["version"] != 19) throw new InvalidDataException("Unsupported key derivation.");
         var kdf = new KdfParameters((int)k["memoryKiB"]!, (int)k["iterations"]!, (int)k["parallelism"]!, Convert.FromBase64String((string)k["salt"]!));
         if (kdf.MemoryKiB < 8 * 1024 || kdf.Iterations < 1 || kdf.Parallelism < 1 || kdf.Salt.Length < 16) throw new InvalidDataException("Key derivation parameters are too weak.");
-        var store = new Keystore(path, kdf, ReadSealed(root["verifier"]!));
+        var store = new Keystore(path, kdf, ReadSealed(root["verifier"]!)) { legacyLoaded = (int?)root["version"] == 1 };
         foreach (var s in root["secrets"]!.AsArray())
         {
             store.secrets.Add(new SecretRecord((string)s!["id"]!, Enum.Parse<SecretKind>((string)s["kind"]!), ReadSealed(s)));
             if ((string?)s["name"] is { Length: > 0 } name) store.secretNames[(string)s["id"]!] = name;
         }
         foreach (var a in root["accounts"]!.AsArray())
+        {
+            var coordinate = (string?)a!["path"];
+            if (coordinate != null) coordinate = HdPath.Parse(coordinate).Text;
             store.accounts.Add(new WalletAccount((string)a!["id"]!, (string)a["name"]!, Address.Parse((string)a["address"]!),
-                (string?)a["secret"], (uint)a["index"]!, DateTimeOffset.Parse((string)a["created"]!, System.Globalization.CultureInfo.InvariantCulture)));
+                (string?)a["secret"], (uint)a["index"]!, DateTimeOffset.Parse((string)a["created"]!, System.Globalization.CultureInfo.InvariantCulture)) { DerivationPath = coordinate });
+            if (coordinate != null && (store.KindOf(store.accounts[^1]) != SecretKind.Mnemonic || HdPath.Parse(coordinate).Index != store.accounts[^1].Index))
+                throw new InvalidDataException("Путь адреса не соответствует записи кошелька.");
+        }
         foreach (var secret in store.secrets.Where(x => !store.secretNames.ContainsKey(x.Id)))
             store.secretNames[secret.Id] = store.accounts.Where(a => a.SecretId == secret.Id).OrderBy(a => a.Index).FirstOrDefault()?.Name ?? "Счёт";
         return store;
@@ -127,7 +137,7 @@ public sealed class Keystore
     {
         var record = secrets.Single(s => s.Id == secretId);
         if (record.Kind != SecretKind.Mnemonic) throw new InvalidOperationException("Новые счета выводятся только из мнемоники.");
-        var next = accounts.Where(a => a.SecretId == secretId).Select(a => a.Index + 1).DefaultIfEmpty(0u).Max();
+        var next = accounts.Where(a => a.SecretId == secretId && a.Path == HdKey.MinterAccountPath(a.Index)).Select(a => a.Index + 1).DefaultIfEmpty(0u).Max();
         var mnemonic = OpenText(key, record);
         using var derived = HdKey.FromMnemonic(mnemonic, next);
         return AddAccount(new WalletAccount(NewId("a"), name, derived.Address, secretId, next, DateTimeOffset.UtcNow));
@@ -158,12 +168,17 @@ public sealed class Keystore
     {
         var record = secrets.Single(s => s.Id == secretId);
         if (record.Kind != SecretKind.Mnemonic) throw new InvalidOperationException("Адреса выводятся только из мнемоники.");
-        if (accounts.Any(a => a.SecretId == secretId && a.Index == index)) throw new InvalidOperationException("Этот адрес фразы уже в кошельке.");
+        if (accounts.Any(a => a.SecretId == secretId && a.Path == HdKey.MinterAccountPath(index))) throw new InvalidOperationException("Этот адрес фразы уже в кошельке.");
         using var derived = HdKey.FromMnemonic(OpenText(key, record), index);
         return AddAccount(new WalletAccount(NewId("a"), name, derived.Address, secretId, index, DateTimeOffset.UtcNow));
     }
 
-    internal void Rename(string accountId, string name) { var i = accounts.FindIndex(a => a.Id == accountId); accounts[i] = accounts[i] with { Name = name }; Save(); }
+    internal void Rename(string accountId, string name)
+    {
+        var i = accounts.FindIndex(a => a.Id == accountId);
+        var before = accounts[i]; accounts[i] = before with { Name = name };
+        try { Save(); } catch { accounts[i] = before; throw; }
+    }
 
     // The account a secret makes (a phrase with its addresses, a key); a watched address is its own account.
     public string NameOf(string secretId) => secretNames.GetValueOrDefault(secretId, "Счёт");
@@ -210,7 +225,7 @@ public sealed class Keystore
         if (account.SecretId == null) throw new InvalidOperationException("Счёт только для просмотра: ключа нет.");
         var record = secrets.Single(s => s.Id == account.SecretId);
         PrivateKey result;
-        if (record.Kind == SecretKind.Mnemonic) result = HdKey.FromMnemonic(OpenText(key, record), account.Index);
+        if (record.Kind == SecretKind.Mnemonic) result = HdKey.FromMnemonic(OpenText(key, record), account.Path);
         else
         {
             var raw = Open(key, record.Box, Aad(record.Id, record.Kind));
@@ -234,17 +249,20 @@ public sealed class Keystore
     {
         var root = new JsonObject
         {
-            ["format"] = Format, ["version"] = 1,
+            ["format"] = Format, ["version"] = 2,
             ["kdf"] = new JsonObject { ["algorithm"] = "argon2id", ["version"] = 19, ["memoryKiB"] = kdf.MemoryKiB, ["iterations"] = kdf.Iterations, ["parallelism"] = kdf.Parallelism, ["salt"] = Convert.ToBase64String(kdf.Salt) },
             ["verifier"] = WriteSealed(verifier),
             ["secrets"] = new JsonArray(secrets.Select(s => (JsonNode)new JsonObject { ["id"] = s.Id, ["kind"] = s.Kind.ToString(), ["name"] = NameOf(s.Id), ["nonce"] = s.Box.Nonce, ["ciphertext"] = s.Box.Ciphertext, ["tag"] = s.Box.Tag }).ToArray()),
             ["accounts"] = new JsonArray(accounts.Select(a => (JsonNode)new JsonObject
             {
                 ["id"] = a.Id, ["name"] = a.Name, ["address"] = a.Address.ToString(), ["secret"] = a.SecretId, ["index"] = a.Index,
+                ["path"] = KindOf(a) == SecretKind.Mnemonic ? a.Path : null,
                 ["created"] = a.Created.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
             }).ToArray()),
         };
+        if (legacyLoaded && File.Exists(path) && !File.Exists(path + ".v1.backup")) File.Copy(path, path + ".v1.backup", overwrite: false);
         WalletPaths.WriteAtomic(path, JsonSerializer.SerializeToUtf8Bytes(root, KeystoreJson.Default.JsonObject), secret: true);
+        legacyLoaded = false;
     }
 
     // ---- primitives ----
@@ -327,6 +345,15 @@ public sealed class KeystoreSession : IDisposable
     public WalletAccount AddNextIndex(string secretId, string name) => Store.AddNextIndex(Key, secretId, name);
     public IReadOnlyList<Address> AddressesOf(string secretId, uint from, int count) => Store.AddressesOf(Key, secretId, from, count);
     public WalletAccount AddIndex(string secretId, uint index, string name) => Store.AddIndex(Key, secretId, index, name);
+    public WalletAccount PreviewAddress(string secretId, string path) => Store.PreviewAddress(Key, secretId, path);
+    public IReadOnlyList<WalletAccount> PreviewAddresses(string secretId, string path, uint from, int count) => Store.PreviewAddresses(Key, secretId, path, from, count);
+    public WalletAccount TrackAddress(WalletAccount account) => Store.TrackAddress(Key, account);
+    public void ImportAddresses(IReadOnlyList<WalletAccount> accounts) => Store.ImportAddresses(Key, accounts);
+    public Task<List<WalletAccount>> VerifyProfileAsync(string secretId, string rootAddress, IReadOnlyList<(string Path, string Address, string Name)> items)
+    {
+        var work = Store.PrepareProfileVerification(Key, secretId, rootAddress, items);
+        return Task.Run(work);
+    }
     public void Rename(string accountId, string name) => Store.Rename(accountId, name);
     public void RenameSecret(string secretId, string name) => Store.RenameSecret(secretId, name);
     public void RemoveSecret(string secretId) => Store.RemoveSecret(secretId);

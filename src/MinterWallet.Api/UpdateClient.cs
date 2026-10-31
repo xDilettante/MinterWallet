@@ -26,7 +26,8 @@ public sealed class UpdateClient : IDisposable
         var root = doc.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? "";
         if (!Version.TryParse(tag.TrimStart('v', 'V'), out var version)) return null;
-        return new Release(version, root.TryGetProperty("name", out var n) ? n.GetString() ?? tag : tag, new Uri(root.GetProperty("html_url").GetString()!));
+        if (!Uri.TryCreate(root.GetProperty("html_url").GetString(), UriKind.Absolute, out var page) || page.Scheme != Uri.UriSchemeHttps) return null;
+        return new Release(version, root.TryGetProperty("name", out var n) ? n.GetString() ?? tag : tag, page);
     }
 
     // Newer than the running version (both as major.minor.build).

@@ -8,7 +8,7 @@
     <StackPanel Width="380" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24,40" Spacing="14">
       <Border Classes="logo large" HorizontalAlignment="Center"><TextBlock /></Border>
       <TextBlock Text="Minter Wallet" Classes="h1" HorizontalAlignment="Center" />
-      <TextBlock Text="{Binding Accounts, StringFormat='Счета: {0}'}" Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+      <TextBlock Text="{Binding Version}" Classes="caption" HorizontalAlignment="Center" Foreground="{DynamicResource Muted}" Margin="0,-6,0,0" />
       <TextBox x:Name="PasswordBox" local:AutoFocus.IsEnabled="True" Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Пароль" Margin="0,8,0,0"
                AutomationProperties.Name="Пароль" />
       <Button Content="Разблокировать" Command="{Binding Unlock}" IsDefault="True" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />

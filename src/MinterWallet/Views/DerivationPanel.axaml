@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.DerivationPanel" x:DataType="local:DerivationViewModel">
+  <Border Classes="card" Padding="16,12" IsVisible="{Binding IsHd}">
+    <StackPanel Spacing="12">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{Binding ToggleLabel}" Command="{Binding Toggle}" Classes="link" />
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <local:Icon Kind="phrase" Width="16" Height="16" Foreground="{DynamicResource Muted}" />
+          <TextBlock Text="Адреса кошелька" FontWeight="SemiBold" />
+          <Button Classes="help" ToolTip.Tip="Одна фраза создаёт много адресов. Карточки переключают индекс внутри выбранного пути. Средства каждого адреса отдельны; фраза открывает доступ ко всем. Названия задаются кнопкой «Переименовать» у выбранного адреса ниже." AutomationProperties.Name="Как устроены адреса кошелька">
+            <local:Icon Kind="help" Width="16" Height="16" />
+          </Button>
+        </StackPanel>
+      </DockPanel>
+      <StackPanel Spacing="12" IsVisible="{Binding Expanded}">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Параметры" Command="{Binding Edit}" />
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button Content="‹" Command="{Binding Previous}" AutomationProperties.Name="Предыдущие адреса" />
+            <TextBlock Text="{Binding Range}" Classes="caption" VerticalAlignment="Center" Margin="4,0" />
+            <Button Content="›" Command="{Binding Next}" AutomationProperties.Name="Следующие адреса" />
+            <ComboBox SelectedIndex="{Binding PageSizeIndex}" AutomationProperties.Name="Карточек на странице" MinWidth="65">
+              <ComboBoxItem Content="5" /><ComboBoxItem Content="10" />
+            </ComboBox>
+          </StackPanel>
+        </DockPanel>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Cards}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="local:DerivationCard">
+                <Button Classes="derivationCard" Classes.current="{Binding Current}" Command="{Binding $parent[ItemsControl].((local:DerivationViewModel)DataContext).Pick}" CommandParameter="{Binding}"
+                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Width="142" Padding="10" ToolTip.Tip="{Binding Path}">
+                  <StackPanel Spacing="5">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <local:Icon Grid.Column="1" Kind="check" Width="14" Height="14" Foreground="{DynamicResource Accent}" IsVisible="{Binding Current}" />
+                    </Grid>
+                    <TextBlock local:AddressMarks.Text="{Binding Address}" Classes="mono" FontSize="13" />
+                    <StackPanel Spacing="2" Margin="0,3,0,0">
+                      <TextBlock Text="{Binding Balance}" FontWeight="Medium" FontSize="13" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Activity}" Classes="caption" />
+                    </StackPanel>
+                    <Border Classes="divider" />
+                    <TextBlock local:PathMarks.Text="{Binding Path}" Classes="mono" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+        <Border Classes="well" IsVisible="{Binding Parameters}">
+          <StackPanel Spacing="12">
+            <DockPanel>
+              <TextBlock Text="Параметры деривации" FontWeight="SemiBold" />
+            </DockPanel>
+            <TextBlock Classes="caption prose" Text="Сеть выбирается в настройках источника и не является уровнем пути. Здесь меняются только ключи и адреса внутри одной фразы. Пока редактор открыт, получение отключено: примените параметры или закройте редактор." />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Сеть:" Classes="caption" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding NetworkName}" Classes="caption" VerticalAlignment="Center" />
+              <Button Content="Сменить источник" Classes="link" Command="{Binding ChooseSource}" />
+            </StackPanel>
+            <ItemsControl ItemsSource="{Binding Fields}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemSpacing="10" LineSpacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:DerivationField">
+                  <StackPanel Width="126" Spacing="5">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <TextBlock Text="{Binding Label}" Classes="caption" VerticalAlignment="Center" />
+                      <Button Classes="help" ToolTip.Tip="{Binding Help}" AutomationProperties.Name="{Binding Label}">
+                        <local:Icon Kind="help" Width="14" Height="14" />
+                      </Button>
+                    </StackPanel>
+                    <TextBox Text="{Binding Value}" Classes="mono" AutomationProperties.Name="{Binding Label}" />
+                    <CheckBox Content="Усиление ′" IsChecked="{Binding Hardened}" FontSize="12" ToolTip.Tip="Hardened: усиленный уровень (апостроф ′). Для его вычисления нужен родительский приватный ключ; одного расширенного публичного ключа недостаточно. Смена флажка меняет адреса." />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <WrapPanel ItemSpacing="8" LineSpacing="8">
+              <Button Content="Применить" Classes="accent" Command="{Binding Apply}" />
+              <Button Content="Базовый путь Minter" Command="{Binding Reset}" />
+              <Button Content="Закрыть" Command="{Binding Edit}" />
+            </WrapPanel>
+            <Expander Header="Полный путь строкой" HorizontalAlignment="Stretch">
+              <StackPanel Spacing="8" Margin="0,8,0,0">
+                <TextBlock Classes="caption prose" Text="Для совместимости с другим кошельком. m — корень; / — уровни; апостроф — усиление. Любое изменение даёт другой адрес. Не меняйте наугад." />
+                <TextBox x:Name="FullPathInput" Text="{Binding FullPath}" Classes="mono" AutomationProperties.Name="Полный путь деривации" />
+                <Button Content="Применить полный путь" Command="{Binding ApplyFullPath}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Expander>
+            <WrapPanel ItemSpacing="10" LineSpacing="6">
+              <Button Classes="link" Content="Найти используемые" Command="{Binding Scan}" IsVisible="{Binding !Loading}" />
+              <Button Classes="link" Content="Остановить поиск" Command="{Binding CancelScan}" IsVisible="{Binding Loading}" />
+              <Button Classes="link" Content="Сохранить профиль" Command="{Binding Export}" />
+              <Button Classes="link" Content="Загрузить профиль" Command="{Binding Import}" />
+            </WrapPanel>
+            <TextBlock Text="{Binding ScanText}" Classes="caption prose" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

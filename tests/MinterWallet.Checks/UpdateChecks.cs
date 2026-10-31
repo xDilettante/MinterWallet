@@ -16,6 +16,10 @@ internal static class UpdateChecks
         Assert.True(UpdateClient.IsNewer(new Version(0, 2, 0), new Version(0, 1, 0)), "0.2.0 is newer than 0.1.0");
         Assert.True(!UpdateClient.IsNewer(new Version(0, 1, 0), new Version(0, 1, 0, 0)), "the same version is not offered");
         Assert.True(!UpdateClient.IsNewer(new Version(0, 1), new Version(0, 1, 0)), "0.1 and 0.1.0 are the same");
+        using var insecure = new UpdateClient(new Recorded("""
+            {"html_url":"http://evil.example/v0.9.0","tag_name":"v0.9.0","name":"Fake","draft":false,"prerelease":false}
+            """));
+        Assert.True(await insecure.LatestAsync() == null, "non-https release link rejected");
     }
 
     private sealed class Recorded(string body) : HttpMessageHandler

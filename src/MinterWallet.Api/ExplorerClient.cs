@@ -16,8 +16,9 @@ public sealed class ExplorerClient : IDisposable
 
     public ExplorerClient(Uri? baseUri = null, HttpMessageHandler? handler = null)
     {
+        var suppliedHandler = handler != null;
         handler ??= new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2), AutomaticDecompression = DecompressionMethods.All };
-        http = new HttpClient(handler) { BaseAddress = baseUri ?? Mainnet, Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = 8 * 1024 * 1024 };
+        http = new HttpClient(new SourceRequestHandler(handler, suppliedHandler ? TimeSpan.Zero : SourceRequestHandler.DefaultInterval, 8 * 1024 * 1024)) { BaseAddress = baseUri ?? Mainnet, Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = 8 * 1024 * 1024 };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("MinterWallet");
     }
 
@@ -80,6 +81,24 @@ public sealed class ExplorerClient : IDisposable
             if (t.GetProperty("raw_tx").GetString() is not { Length: > 0 } raw) continue;
             var tags = new Dictionary<string, string>();
             if (t.TryGetProperty("timestamp", out var time) && time.GetString() is { Length: > 0 } at) tags["timestamp"] = at;
+            if (t.TryGetProperty("tags", out var tg))
+            {
+                if (tg.ValueKind == JsonValueKind.Object)
+                    foreach (var p in tg.EnumerateObject()) tags[p.Name] = p.Value.GetString() ?? p.Value.GetRawText();
+                else if (tg.ValueKind == JsonValueKind.Array)
+                    foreach (var item in tg.EnumerateArray())
+                        if (item.TryGetProperty("key", out var k) && item.TryGetProperty("value", out var v))
+                            tags[k.GetString() ?? ""] = v.GetString() ?? v.GetRawText();
+            }
+            if (t.TryGetProperty("data", out var d) && d.ValueKind == JsonValueKind.Object)
+            {
+                if (d.TryGetProperty("return", out var ret)) tags["tx.return"] = ret.GetString() ?? ret.GetRawText();
+                else if (d.TryGetProperty("value_to_buy", out var vtb) && !tags.ContainsKey("tx.return")) tags["tx.return"] = vtb.GetString() ?? vtb.GetRawText();
+                if (d.TryGetProperty("sell_amount", out var vts) && !tags.ContainsKey("tx.sell_amount")) tags["tx.sell_amount"] = vts.GetString() ?? vts.GetRawText();
+                else if (d.TryGetProperty("value_to_sell", out var vts2) && !tags.ContainsKey("tx.sell_amount")) tags["tx.sell_amount"] = vts2.GetString() ?? vts2.GetRawText();
+                if (d.TryGetProperty("pools", out var pools) && !tags.ContainsKey("tx.pools")) tags["tx.pools"] = pools.GetRawText();
+            }
+            if (t.TryGetProperty("fee", out var fee) && !tags.ContainsKey("tx.commission_amount")) tags["tx.commission_amount"] = fee.GetString() ?? fee.GetRawText();
             records.Add(new TxRecord(t.GetProperty("hash").GetString() ?? "", t.GetProperty("height").GetInt64(), 0, "", Convert.FromHexString(raw), tags));
         }
         var meta = root.GetProperty("meta");

@@ -21,7 +21,7 @@ internal static class ExplainChecks
             ["tx.commission_conversion"] = "pool", ["tx.coin_to_sell"] = "1993", ["tx.coin_to_buy"] = "2684",
         };
         var swap = TxExplain.Explain(new TxRecord("Mt3bd56b2a", 40392852, 0, "", Convert.FromHexString(SwapRaw), tags), trader, Symbol);
-        Assert.Equal("Обмен", swap.Title, "a swap is called a swap");
+        Assert.Equal("Обмен USDTE → GOODZONE", swap.Title, "a swap names both coins");
         Assert.Equal("USDTE → USDX → BIPXBIP → BIP → GOODZONE", swap.Subtitle, "its route");
         Assert.True(swap.Moves is [var sold, var got] && sold == new TxMove(-Units.ParseCoins("0.428"), 1993) && got == new TxMove(BigInteger.Parse("29240364784398093376"), 2684),
             "what it gave and what it brought (tx.return)");
@@ -29,9 +29,9 @@ internal static class ExplainChecks
         Assert.True(swap.Rows.Any(r => r.Label == "Маршрут" && r.Value.Split('\n') is [var first, _, _, var last]
             && first == "0.428 USDTE → 0.453600652624742113 USDX (пул #139)" && last == "5112.050467954593935944 BIP → 29.240364784398093376 GOODZONE (пул #612)"), "every pool of the route with its amounts");
 
-        // Without the tags (an older transaction from the explorer): only what it gave.
+        // Without the tags (an older transaction from the explorer): both coins shown with minimum guaranteed.
         var bare = TxExplain.Explain(new TxRecord("Mt3bd56b2a", 40392852, 0, "", Convert.FromHexString(SwapRaw), new Dictionary<string, string>()), trader, Symbol);
-        Assert.True(bare.Moves is [{ Amount.Sign: < 0 }] && bare.Commission.Length == 0, "no tags: no amount received, no commission");
+        Assert.True(bare.Moves is [var bSold, var bGot] && bSold == new TxMove(-Units.ParseCoins("0.428"), 1993) && bGot.Coin == 2684 && bGot.Amount.Sign > 0 && bGot.Note == "≥" && bare.Commission.Length == 0, "no tags: both coins shown with minimum guaranteed");
 
         // A send: minus for the sender, plus for the recipient; a failed one moves nothing but names its error.
         using var key = new PrivateKey(TestKeys.Bytes(3));

@@ -37,6 +37,15 @@ internal static class TlsChecks
             using var lenient = new NodeApiClient(url, skipCertificateCheck: true);
             var status = await lenient.StatusAsync();
             Assert.Equal(("minter-devnet", 10L), (status.Network, status.Height), "status read with the check off");
+            using (var strictTelemetry = new UsageClient(url))
+            {
+                Exception? refused = null;
+                try { await strictTelemetry.StatsAsync(); } catch (HttpRequestException e) { refused = e; }
+                Assert.True(refused?.InnerException is AuthenticationException, "telemetry still validates certificates by default");
+            }
+            using var telemetry = new UsageClient(url, skipCertificateCheck: true);
+            await telemetry.PingAsync("0123456789abcdef0123456789abcdef", "0.6.1", "windows", "ru", "unknown");
+            Assert.Equal(1L, (await telemetry.StatsAsync()).Total, "telemetry works with the same TLS setting as the balance");
         }
         finally
         {
@@ -72,7 +81,9 @@ internal static class TlsChecks
                     if (read == 0) break;
                     request.Append(Encoding.ASCII.GetString(buffer, 0, read));
                 }
-                var body = Encoding.UTF8.GetBytes(Status);
+                var body = Encoding.UTF8.GetBytes(request.ToString().StartsWith("GET /gate/v1/stats", StringComparison.Ordinal)
+                    ? "{\"online\":1,\"day\":1,\"month\":1,\"total\":1,\"versions\":[],\"systems\":[]}"
+                    : Status);
                 var head = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n");
                 await tls.WriteAsync(head, ct);
                 await tls.WriteAsync(body, ct);

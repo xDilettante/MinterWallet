@@ -89,28 +89,96 @@ public static class History
 
     private static string DecodePayload(byte[] payload)
     {
-        try { return new UTF8Encoding(false, true).GetString(payload); }
+        string text;
+        try { text = new UTF8Encoding(false, true).GetString(payload); }
         catch (DecoderFallbackException) { return "0x" + Convert.ToHexStringLower(payload); }
+        return SanitizeText(text);
+    }
+
+    // Strips bidirectional overrides and invisible control characters so untrusted payloads cannot spoof text on screen.
+    public static string SanitizeText(string text)
+    {
+        StringBuilder? clean = null;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            var unsafeChar = (char.IsControl(ch) && ch is not ('\n' or '\r' or '\t'))
+                || ch is (>= '\u202A' and <= '\u202E') or (>= '\u2066' and <= '\u2069') or '\u061C' or '\u200E' or '\u200F';
+            if (!unsafeChar) { clean?.Append(ch); continue; }
+            clean ??= new StringBuilder(text.Length).Append(text, 0, i);
+        }
+        return clean?.ToString() ?? text;
     }
 }
 
 // History newest first, a page at a time: the source until it runs out, then older transactions from a second
 // provider (the explorer) below the height where the source's own history begins, each transaction once.
-public sealed class HistoryCursor(Func<int, Task<IReadOnlyList<TxRecord>>> source, int perPage,
-    Func<int, Task<(IReadOnlyList<TxRecord> Records, bool More)>>? older = null, long olderBelow = long.MaxValue)
+public sealed class HistoryCursor
 {
+    private readonly Func<int, Task<IReadOnlyList<TxRecord>>>? source;
+    private readonly Func<int, Task<IReadOnlyList<TxRecord>>>? sentSource, receivedSource;
+    private readonly int perPage;
+    private readonly Func<int, Task<(IReadOnlyList<TxRecord> Records, bool More)>>? older;
+    private readonly long olderBelow;
     private readonly HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
-    private int sourcePage, olderPage;
-    private bool sourceDone, olderDone = older == null;
+    private readonly Queue<TxRecord> sentBuffer = new(), receivedBuffer = new();
+    private int sourcePage, sentPage, receivedPage, olderPage;
+    private bool sourceDone, sentDone, receivedDone, olderDone;
 
-    public bool HasMore => !sourceDone || !olderDone;
+    public HistoryCursor(Func<int, Task<IReadOnlyList<TxRecord>>> source, int perPage,
+        Func<int, Task<(IReadOnlyList<TxRecord> Records, bool More)>>? older = null, long olderBelow = long.MaxValue)
+    {
+        this.source = source;
+        this.perPage = perPage;
+        this.older = older;
+        this.olderBelow = olderBelow;
+        olderDone = older == null;
+    }
+
+    public HistoryCursor(Func<int, Task<IReadOnlyList<TxRecord>>> sentSource, Func<int, Task<IReadOnlyList<TxRecord>>> receivedSource, int perPage,
+        Func<int, Task<(IReadOnlyList<TxRecord> Records, bool More)>>? older = null, long olderBelow = long.MaxValue)
+    {
+        this.sentSource = sentSource;
+        this.receivedSource = receivedSource;
+        this.perPage = perPage;
+        this.older = older;
+        this.olderBelow = olderBelow;
+        olderDone = older == null;
+    }
+
+    private bool SplitSourceActive => sentSource != null && (!sentDone || sentBuffer.Count > 0 || !receivedDone || receivedBuffer.Count > 0);
+    public bool HasMore => (sentSource != null ? SplitSourceActive : !sourceDone) || !olderDone;
 
     public async Task<IReadOnlyList<(TxRecord Record, bool Older)>> NextAsync()
     {
         var result = new List<(TxRecord, bool)>();
         while (result.Count < perPage && HasMore)
         {
-            if (!sourceDone)
+            if (sentSource != null && SplitSourceActive)
+            {
+                var needSent = sentBuffer.Count == 0 && !sentDone;
+                var needReceived = receivedBuffer.Count == 0 && !receivedDone;
+                if (needSent && needReceived)
+                {
+                    var sTask = sentSource(++sentPage);
+                    var rTask = receivedSource!(++receivedPage);
+                    await Task.WhenAll(sTask, rTask);
+                    Fill(sentBuffer, sTask.Result, ref sentDone);
+                    Fill(receivedBuffer, rTask.Result, ref receivedDone);
+                }
+                else if (needSent) Fill(sentBuffer, await sentSource(++sentPage), ref sentDone);
+                else if (needReceived) Fill(receivedBuffer, await receivedSource!(++receivedPage), ref receivedDone);
+
+                while (result.Count < perPage && (sentBuffer.Count > 0 || receivedBuffer.Count > 0))
+                {
+                    if (sentBuffer.Count == 0 && !sentDone || receivedBuffer.Count == 0 && !receivedDone) break;
+                    var next = sentBuffer.Count == 0 ? receivedBuffer.Dequeue()
+                        : receivedBuffer.Count == 0 ? sentBuffer.Dequeue()
+                        : sentBuffer.Peek().Height >= receivedBuffer.Peek().Height ? sentBuffer.Dequeue() : receivedBuffer.Dequeue();
+                    if (seen.Add(next.Hash)) result.Add((next, false));
+                }
+            }
+            else if (source != null && !sourceDone)
             {
                 var page = await source(++sourcePage);
                 // The sent and received lists come merged: fewer than a page means both ran out.
@@ -125,6 +193,12 @@ public sealed class HistoryCursor(Func<int, Task<IReadOnlyList<TxRecord>>> sourc
             }
         }
         return result;
+    }
+
+    private void Fill(Queue<TxRecord> buffer, IReadOnlyList<TxRecord> page, ref bool done)
+    {
+        if (page.Count < perPage) done = true;
+        foreach (var item in page) buffer.Enqueue(item);
     }
 }
 

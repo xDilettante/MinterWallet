@@ -29,6 +29,7 @@ public sealed class Command(Action run, Func<bool>? canRun = null) : ICommand
 public sealed class AsyncCommand(Func<Task> run, Action<Exception> onError, Func<bool>? canRun = null) : ICommand
 {
     private bool running;
+    public bool IsRunning => running;
     public event EventHandler? CanExecuteChanged;
     public bool CanExecute(object? parameter) => !running && (canRun?.Invoke() ?? true);
     public async void Execute(object? parameter) => await RunAsync();

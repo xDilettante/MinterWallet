@@ -21,17 +21,32 @@ public partial class MainWindow : Window
         shell.OpenUrl ??= async uri => await Launcher.LaunchUriAsync(uri);
         shell.SaveText ??= async (name, text) =>
         {
+            var isJson = Path.GetExtension(name).Equals(".json", StringComparison.OrdinalIgnoreCase);
             var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 SuggestedFileName = name, DefaultExtension = Path.GetExtension(name).TrimStart('.'),
-                FileTypeChoices = [new FilePickerFileType("CSV") { Patterns = ["*.csv"] }],
+                FileTypeChoices = [new FilePickerFileType(isJson ? "JSON" : "CSV") { Patterns = ["*" + Path.GetExtension(name)] }],
             });
             if (file == null) return false;
             await using var stream = await file.OpenWriteAsync();
-            // With the UTF-8 mark a spreadsheet reads the Cyrillic right.
-            await stream.WriteAsync(System.Text.Encoding.UTF8.GetPreamble());
+            stream.SetLength(0);
+            // With the UTF-8 mark a spreadsheet reads the Cyrillic right; JSON stays clean RFC 8259 UTF-8.
+            if (!isJson) await stream.WriteAsync(System.Text.Encoding.UTF8.GetPreamble());
             await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes(text));
             return true;
+        };
+        shell.OpenText ??= async () =>
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Localization.Text("Профиль путей кошелька"), AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("JSON") { Patterns = ["*.json"] }],
+            });
+            if (files.Count == 0) return null;
+            await using var stream = await files[0].OpenReadAsync();
+            if (stream.Length > 1024 * 1024) throw new InvalidDataException("Профиль слишком большой (больше 1 МБ).");
+            using var reader = new StreamReader(stream);
+            return await reader.ReadToEndAsync();
         };
         DataContext = shell;
         shell.StartUsage();
@@ -40,6 +55,7 @@ public partial class MainWindow : Window
         {
             if (e.Property == IsVisibleProperty || e.Property == WindowStateProperty) shell.WindowShown = IsVisible && WindowState != WindowState.Minimized;
         };
+        Closed += (_, _) => shell.StopTimers();
         // Any input counts as activity for the auto-lock.
         AddHandler(PointerMovedEvent, (_, _) => Touch(shell), handledEventsToo: true);
         AddHandler(KeyDownEvent, (_, _) => Touch(shell), handledEventsToo: true);

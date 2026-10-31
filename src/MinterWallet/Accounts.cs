@@ -24,6 +24,7 @@ public sealed record AddressRow(AccountItem Item, bool IsCurrent)
 
 public sealed record AccountGroup(string? SecretId, string Name, string Kind, string Glyph, IReadOnlyList<AddressRow> Addresses, bool IsPhrase, bool IsActive)
 {
+    public AccountItem Root => Addresses[0].Item;
     public string Caption => IsPhrase ? $"{Kind} · адресов: {Addresses.Count}" : Kind;
     public bool IsInactive => !IsActive;
 }
@@ -49,7 +50,7 @@ public sealed class AccountsViewModel : ScreenModel
         Add = new Command(AddNow);
         Paste = new AsyncCommand(PasteAsync, Fail);
         Vanity = new VanityViewModel(main);
-        Pick = new RelayCommand(p => { if (p is AccountItem item) main.Selected = main.Accounts.FirstOrDefault(a => a.Account.Id == item.Account.Id); });
+        Pick = new RelayCommand(p => { if (p is AccountItem item) { main.Derivation.SelectedWallet = main.Derivation.Wallets.FirstOrDefault(a => a.Account.SecretId == item.Account.SecretId && a.Account.Id == item.Account.Id); main.Section = Section.Overview; } });
         NextAddress = new Command(NextAddressNow);
         ShowDerived = new AsyncCommand(ShowDerivedAsync, Fail);
         AddDerived = new RelayCommand(p => { if (p is DerivedItem item) AddDerivedNow(item); });
@@ -64,7 +65,19 @@ public sealed class AccountsViewModel : ScreenModel
         CancelRemove = new Command(() => { ConfirmingRemove = false; ConfirmingGroupRemove = false; });
         RemoveGroup = new AsyncCommand(RemoveGroupAsync, Fail);
         AddContact = new Command(AddContactNow);
-        NewPhrase();   // «Новая фраза» is the first way to add an account: its words are ready
+    }
+
+    public void EnsureReady()
+    {
+        if (Kind == AddKind.NewPhrase && newPhrase.Length == 0) NewPhrase();
+    }
+
+    public void Stop()
+    {
+        Vanity.Cancel();
+        shownPhrase = null; ShownWords = [];
+        newPhrase = ""; NewWords = [];
+        Secret = "";
     }
 
     public ObservableCollection<AccountGroup> Groups { get; } = [];
@@ -108,7 +121,7 @@ public sealed class AccountsViewModel : ScreenModel
     public string SecretLabel => Kind switch { AddKind.ImportKey => "Приватный ключ", AddKind.Watch => "Адрес", _ => "Фраза восстановления" };
     public string SecretPlaceholder => Kind switch { AddKind.ImportKey => "64 шестнадцатеричных символа", AddKind.Watch => "Mx…", _ => "word word word …" };
     public double SecretHeight => Kind == AddKind.ImportPhrase ? 84 : 0;
-    public string AddLabel => Kind == AddKind.NewPhrase ? "Добавить счёт с этой фразой" : "Добавить";
+    public string AddLabel => Kind == AddKind.NewPhrase ? "Добавить кошелёк с этой фразой" : "Добавить";
 
     // The active account: the current address's.
     public AccountGroup? Active => Groups.FirstOrDefault(g => g.IsActive);
@@ -165,13 +178,12 @@ public sealed class AccountsViewModel : ScreenModel
     // Called when the list of addresses or the current one changes.
     public void Reload()
     {
-        var store = main.Shell.Store!;
         Groups.Clear();
         foreach (var group in main.Accounts.GroupBy(a => a.Account.SecretId ?? a.Account.Id))
         {
             var items = group.ToList();
             var first = items[0];
-            var active = items.Any(i => i.Account.Id == main.Selected?.Account.Id);
+            var active = first.Account.SecretId != null ? first.Account.SecretId == main.Selected?.Account.SecretId : first.Account.Id == main.Selected?.Account.Id;
             Groups.Add(new AccountGroup(first.Account.SecretId, first.Group.Length > 0 ? first.Group : first.Name,
                 first.Phrase ? "фраза восстановления" : first.Account.WatchOnly ? "только просмотр" : "приватный ключ", first.Glyph,
                 items.Select(i => new AddressRow(i, i.Account.Id == main.Selected?.Account.Id)).ToList(), first.Phrase, active));
@@ -186,7 +198,11 @@ public sealed class AccountsViewModel : ScreenModel
     }
 
     // The "+" of the sidebar: the accounts page, a new phrase ready below the accounts.
-    public void StartAdding() => AddIndex = (int)AddKind.NewPhrase;
+    public void StartAdding()
+    {
+        AddIndex = (int)AddKind.NewPhrase;
+        EnsureReady();
+    }
 
     private int newWordCountIndex;
     public int NewWordCountIndex { get => newWordCountIndex; set { if (value >= 0 && Set(ref newWordCountIndex, value)) NewPhrase(); } }
@@ -228,17 +244,20 @@ public sealed class AccountsViewModel : ScreenModel
         var addresses = main.Shell.Session!.AddressesOf(secretId, derivedNext, 10);
         var wallet = await main.WalletAsync();
         Say("Проверяю, какие адреса использовались…", Tone.Progress);
+        var uncheckedAddresses = addresses.Where(a => main.Accounts.All(x => x.Account.Address != a)).ToList();
+        IReadOnlyDictionary<Address, AccountState>? states = null;
+        if (uncheckedAddresses.Count > 0)
+        {
+            try { states = await wallet.Backend.AccountsAsync(uncheckedAddresses); }
+            catch (Exception e) when (e is HttpRequestException or ChainApiException or TaskCanceledException) { }
+        }
         for (var i = 0; i < addresses.Count; i++)
         {
             var a = addresses[i];
             var mine = main.Accounts.FirstOrDefault(x => x.Account.Address == a);
-            string state;
-            if (mine != null) state = "уже в счёте";
-            else
-            {
-                try { var s = await wallet.Backend.AccountAsync(a); state = s.Nonce > 0 || s.Balances.Count > 0 ? "есть монеты или транзакции" : "не использовался"; }
-                catch (Exception e) when (e is HttpRequestException or ChainApiException or TaskCanceledException) { state = "не проверен"; }
-            }
+            string state = mine != null ? "уже в счёте"
+                : states != null && states.TryGetValue(a, out var s) ? (s.Nonce > 0 || s.Balances.Count > 0 ? "есть монеты или транзакции" : "не использовался")
+                : "не проверен";
             Derived.Add(new DerivedItem(derivedNext + (uint)i, a, state, mine != null));
         }
         derivedNext += (uint)addresses.Count;
@@ -262,6 +281,7 @@ public sealed class AccountsViewModel : ScreenModel
 
     private void AddNow()
     {
+        EnsureReady();
         var title = Name.Trim().Length > 0 ? Name.Trim() : $"Счёт {Groups.Count + 1}";
         var session = main.Shell.Session!;
         try
@@ -309,7 +329,8 @@ public sealed class AccountsViewModel : ScreenModel
             [("Счёт", main.Shell.Store!.NameOf(account.SecretId))], ["Фраза даёт полный доступ ко всем адресам из неё. Убедитесь, что экран никто не видит и нет записи экрана."], "Показать фразу"));
         if (password == null) return;
         if (!await main.Shell.CheckPasswordAsync(password)) { Say("Неверный пароль — фраза не показана.", Tone.Error); return; }
-        shownPhrase = main.Shell.Session!.RevealMnemonic(account.SecretId);
+        if (main.Shell.Session?.IsLocked != false) return;
+        shownPhrase = main.Shell.Session.RevealMnemonic(account.SecretId);
         ShownWords = shownPhrase.Split(' ').Select((w, i) => new PhraseWord(i + 1, w)).ToArray();
         Say("");
     }
@@ -325,8 +346,9 @@ public sealed class AccountsViewModel : ScreenModel
             [("Адрес", $"{main.Selected!.Title}\n{Display.Address(account.Address)}")], [RemoveWarning], CanRemoveAddress ? "Убрать адрес" : "Удалить счёт"));
         if (password == null) { ConfirmingRemove = false; return; }
         if (!await main.Shell.CheckPasswordAsync(password)) { Say("Неверный пароль — ничего не удалено.", Tone.Error); return; }
+        if (main.Shell.Session?.IsLocked != false) return;
         var title = main.Selected!.Title;
-        main.Shell.Session!.Remove(account.Id);
+        main.Shell.Session.Remove(account.Id);
         main.LoadAccounts();
         Say($"«{title}» удалён из кошелька.", Tone.Success);
     }
@@ -341,8 +363,9 @@ public sealed class AccountsViewModel : ScreenModel
             [("Счёт", $"{g.Name}\nадресов: {g.Addresses.Count}")], [GroupRemoveWarning], "Удалить счёт"));
         if (password == null) { ConfirmingGroupRemove = false; return; }
         if (!await main.Shell.CheckPasswordAsync(password)) { Say("Неверный пароль — счёт не удалён.", Tone.Error); return; }
-        if (g.SecretId is { } secretId) main.Shell.Session!.RemoveSecret(secretId);
-        else foreach (var a in g.Addresses) main.Shell.Session!.Remove(a.Item.Account.Id);
+        if (main.Shell.Session?.IsLocked != false) return;
+        if (g.SecretId is { } secretId) main.Shell.Session.RemoveSecret(secretId);
+        else foreach (var a in g.Addresses) main.Shell.Session.Remove(a.Item.Account.Id);
         main.LoadAccounts();
         Say($"Счёт «{g.Name}» удалён из кошелька.", Tone.Success);
     }

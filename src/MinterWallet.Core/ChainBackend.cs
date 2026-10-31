@@ -67,6 +67,13 @@ public interface IChainBackend
     SourceTrust Trust { get; }
     Task<ChainStatus> StatusAsync(CancellationToken ct = default);
     Task<AccountState> AccountAsync(Address address, CancellationToken ct = default);
+    async Task<IReadOnlyDictionary<Address, AccountState>> AccountsAsync(IReadOnlyList<Address> addresses, CancellationToken ct = default)
+    {
+        var result = new Dictionary<Address, AccountState>(addresses.Count);
+        foreach (var address in addresses.Distinct())
+            result[address] = await AccountAsync(address, ct);
+        return result;
+    }
     Task<CoinDetails?> CoinAsync(uint id, CancellationToken ct = default);
     Task<CoinDetails?> CoinAsync(string symbol, CancellationToken ct = default);
     Task<PriceCommissions> PricesAsync(CancellationToken ct = default);

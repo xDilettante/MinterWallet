@@ -15,6 +15,7 @@ internal static class ApiChecks
     {
         ["status"] = (HttpStatusCode.OK, """{"version":"3.3.0-testnet","network":"minter-devnet","initial_height":"1","latest_block_hash":"38F6","latest_app_hash":"AF64","latest_block_height":"10","latest_block_time":"2026-10-27T00:03:57.268023243+03:00","keep_last_states":"120"}"""),
         [$"address/{A}?delegated=true"] = (HttpStatusCode.OK, """{"balance":[{"coin":{"id":"0","symbol":"MNT"},"value":"999999765655397708875992189","bip_value":"999999765655397708875992189"},{"coin":{"id":"2","symbol":"LP-1"},"value":"99999999999999999000","bip_value":"0"}],"delegated":[{"coin":{"id":"0","symbol":"MNT"},"value":"950000000000000000000","bip_value":"950000000000000000000","delegate_bip_value":"1000000000000000000000"}],"total":[],"transaction_count":"17","bip_value":"1000000715655397708875992189","locked_stake_until_block":"0","multisig":null}"""),
+        [$"addresses?delegated=true&addresses={A}&addresses=Mx1111111111111111111111111111111111111111"] = (HttpStatusCode.OK, $$$$"""{"addresses":{"{{{{A}}}}":{"balance":[{"coin":{"id":"0","symbol":"MNT"},"value":"5000000000000000000","bip_value":"5000000000000000000"}],"delegated":[],"transaction_count":"3","bip_value":"5000000000000000000"},"Mx1111111111111111111111111111111111111111":{"balance":[],"delegated":[],"transaction_count":"0","bip_value":"0"}}}"""),
         ["coin_info_by_id/1"] = (HttpStatusCode.OK, """{"id":"1","name":"Wallet E2E","symbol":"WALLET0010","volume":"1005000000000000000000","crr":"0","reserve_balance":"0","max_supply":"1000000000000000000000000","owner_address":"Mx0ee51895545fac3a24f6845ad24af12d2753100e","mintable":true,"burnable":true}"""),
         ["coin_info_by_id/999"] = (HttpStatusCode.NotFound, """{"error":{"code":"102","message":"Coin not found","data":{"coin_id":"999"}}}"""),
         ["min_gas_price"] = (HttpStatusCode.OK, """{"min_gas_price":"1"}"""),
@@ -42,6 +43,9 @@ internal static class ApiChecks
         Assert.Equal(BigInteger.Parse("999999765655397708875992189"), account.BalanceOf(0), "base balance");
         Assert.Equal("LP-1", account.Balances[1].Coin.Symbol, "LP token");
         Assert.Equal(BigInteger.Parse("950000000000000000000"), account.Delegated[0].Value, "delegated");
+        var batch = await api.AccountsAsync([Address.Parse(A), Address.Parse("Mx1111111111111111111111111111111111111111")]);
+        Assert.Equal((2, 3UL, 0UL), (batch.Count, batch[Address.Parse(A)].Nonce, batch[Address.Parse("Mx1111111111111111111111111111111111111111")].Nonce), "batch addresses");
+        Assert.Equal("safe\nline2", History.SanitizeText("sa\u202Efe\u0007\nline2"), "bidi overrides and control chars stripped from payload");
         var coin = await api.CoinAsync(1);
         Assert.Equal(("WALLET0010", true), (coin!.Symbol, coin.Mintable), "coin");
         Assert.True(await api.CoinAsync(999) == null, "missing coin is null");

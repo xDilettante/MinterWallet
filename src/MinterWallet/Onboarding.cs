@@ -143,8 +143,11 @@ public sealed class CreateWalletViewModel : ScreenModel
         Say("Шифрование ключей…", Tone.Progress);
         try
         {
-            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, Password));
-            session.AddMnemonic(mnemonic, "Основной");
+            var pass = Password;
+            var phrase = mnemonic;
+            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, pass));
+            session.AddMnemonic(phrase, "Основной");
+            mnemonic = ""; Words = []; answer1 = answer2 = answer3 = ""; Password = ""; Repeat = "";
             shell.Opened(store, session);
         }
         finally { Busy = false; }
@@ -184,9 +187,17 @@ public static class Secrets
         return kind switch
         {
             ImportKind.Mnemonic => Display.PhraseProblem(text),
-            ImportKind.PrivateKey => KeyHex(text) is { Length: 64 } hex && Hex.IsHex(hex) ? null : "Ключ — 64 шестнадцатеричных символа (можно с 0x).",
+            ImportKind.PrivateKey => CheckPrivateKey(text),
             _ => Address.TryParse(text, out _) ? null : "Адрес — Mx и 40 шестнадцатеричных символов."
         };
+    }
+
+    private static string? CheckPrivateKey(string text)
+    {
+        if (KeyHex(text) is not { Length: 64 } hex || !Hex.IsHex(hex)) return "Ключ — 64 шестнадцатеричных символа (можно с 0x).";
+        var bytes = Hex.Parse(hex);
+        try { return Secp256k1.IsValidPrivateKey(bytes) ? null : "Недопустимый приватный ключ."; }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
     public static string Check(ImportKind kind, string text) => Problem(kind, text) ?? kind switch
@@ -277,10 +288,11 @@ public sealed class ImportViewModel : ScreenModel
         Say("Шифрование ключей…", Tone.Progress);
         try
         {
-            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, Password));
+            var pass = Password;
+            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, pass));
             try { Secrets.Add(session, Kind, text, Name); }
             catch { session.Dispose(); File.Delete(shell.KeystorePath); File.Delete(shell.KeystorePath + ".bak"); throw; }
-            Secret = "";
+            Secret = ""; Password = ""; Repeat = "";
             shell.Opened(store, session);
         }
         finally { Busy = false; }
@@ -301,10 +313,10 @@ public sealed class UnlockViewModel : ScreenModel
         StartOver = new Command(() => shell.StartOver());
     }
 
+    public string Version => $"v{Program.Version}";
     public string Password { get => password; set { Set(ref password, value); if (Tone == Tone.Error) Say(""); } }
     public bool Busy { get => busy; set { Set(ref busy, value); Unlock.Refresh(); } }
     public bool Forgetting { get => forgot; set => Set(ref forgot, value); }
-    public string Accounts => string.Join(", ", shell.Store!.Accounts.Select(a => a.Name));
     public string StartOverText => $"Пароль нигде не хранится и не восстанавливается. Если у вас сохранена фраза или ключ, восстановите кошелёк заново: " +
         $"нынешний файл ключей не удалится, а будет переименован в {Keystore.FileName}.old-…";
     public AsyncCommand Unlock { get; }
@@ -317,7 +329,8 @@ public sealed class UnlockViewModel : ScreenModel
         Say(""); Busy = true;
         try
         {
-            var session = await Task.Run(() => shell.Store!.Unlock(Password));
+            var pass = Password;
+            var session = await Task.Run(() => shell.Store!.Unlock(pass));
             Password = "";
             shell.Opened(shell.Store!, session);
         }

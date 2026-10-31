@@ -1,20 +1,34 @@
 # Local check of the wallet: build (warnings are errors), protocol checks against the Go and JS fixtures, wallet core
-# and API client checks, the single-file wallet for Windows and Linux with its self-test. -Devnet http://WSL-IP:38843
-# adds the end-to-end runs against a local devnet node (tools/devnet/start.sh): protocol, wallet core and the headless
-# window with screenshots in artifacts/ui-checks. Works in Windows PowerShell 5.1.
+# and API client checks, headless UI scenarios, the single-file wallet for Windows and Linux with its self-test.
+# -Devnet http://WSL-IP:38843 adds the end-to-end runs against a local devnet node (tools/devnet/start.sh): protocol,
+# wallet core and the headless window with screenshots in artifacts/ui-checks. Works in Windows PowerShell 5.1.
 param([string]$Devnet = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+$prevUsageUrl = $env:MINTERWALLET_USAGE_URL
 Push-Location $root
 try {
+    $env:MINTERWALLET_USAGE_URL = 'off'
+
     dotnet build MinterWallet.slnx -c Release -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        python tools/i18n-missing.py
+        if ($LASTEXITCODE -ne 0) { throw 'i18n check failed' }
+    }
 
     dotnet run -c Release --no-build --project tests/Minter.Protocol.Checks
     if ($LASTEXITCODE -ne 0) { throw 'protocol checks failed' }
 
     dotnet run -c Release --no-build --project tests/MinterWallet.Checks
     if ($LASTEXITCODE -ne 0) { throw 'wallet checks failed' }
+
+    dotnet run -c Release --no-build --project tests/MinterWallet.UiChecks -- --derivation
+    if ($LASTEXITCODE -ne 0) { throw 'UI derivation checks failed' }
+
+    dotnet run -c Release --no-build --project tests/MinterWallet.UiChecks -- --telemetry
+    if ($LASTEXITCODE -ne 0) { throw 'UI telemetry checks failed' }
 
     foreach ($rid in 'win-x64', 'linux-x64') {
         dotnet publish src/MinterWallet -c Release -r $rid -p:PublishSingleFile=true -o "artifacts/wallet-$rid" -nologo -v q
@@ -38,4 +52,7 @@ try {
     }
     Write-Host 'All checks passed.'
 }
-finally { Pop-Location }
+finally {
+    $env:MINTERWALLET_USAGE_URL = $prevUsageUrl
+    Pop-Location
+}

@@ -4,10 +4,12 @@ if (args is ["--devnet", var devnet]) return await DevnetWalletChecks.Run(devnet
 
 var groups = new (string Name, Func<Task> Run)[]
 {
+    ("derivation paths and storage", DerivationChecks.PathsAndStorage),
     ("argon2id vectors", KeystoreChecks.Argon2),
     ("keystore", KeystoreChecks.Store),
     ("keystore tampering", KeystoreChecks.Tampering),
     ("api v2 parsing", ApiChecks.Parsing),
+    ("source rate limits", RateLimitChecks.Run),
     ("send queue", QueueChecks.Run),
     ("guards", GuardChecks.Run),
     ("history decoding", HistoryChecks.Run),
@@ -22,6 +24,11 @@ var groups = new (string Name, Func<Task> Run)[]
 };
 
 var failed = 0;
+if (args.Length > 0)
+{
+    groups = groups.Where(g => args.Contains(g.Name)).ToArray();
+    if (groups.Length == 0) { Console.WriteLine("No matching check group."); return 2; }
+}
 foreach (var (name, run) in groups)
 {
     try { await run(); Console.WriteLine($"PASS {name}"); }

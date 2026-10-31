@@ -117,11 +117,19 @@ public static class HdKey
     }
 
     public static PrivateKey FromMnemonic(string mnemonic, uint index = 0, string passphrase = "")
+        => FromMnemonic(mnemonic, MinterAccountPath(index), passphrase);
+
+    public static PrivateKey FromMnemonic(string mnemonic, string path, string passphrase = "")
     {
+        var canonical = HdPath.Parse(path).Text;
         var seed = Mnemonic.ToSeed(mnemonic, passphrase);
-        var key = DerivePrivateKey(seed, MinterAccountPath(index));
-        try { return new PrivateKey(key); }
-        finally { CryptographicOperations.ZeroMemory(seed); CryptographicOperations.ZeroMemory(key); }
+        try
+        {
+            var key = DerivePrivateKey(seed, canonical);
+            try { return new PrivateKey(key); }
+            finally { CryptographicOperations.ZeroMemory(key); }
+        }
+        finally { CryptographicOperations.ZeroMemory(seed); }
     }
 
     private static (byte[] Key, byte[] Chain) Master(ReadOnlySpan<byte> seed)
@@ -158,7 +166,7 @@ public static class HdKey
         if (parts[0] != "m") throw new FormatException("Derivation path must start with m.");
         foreach (var part in parts.Skip(1))
         {
-            var hardened = part.EndsWith('\'') || part.EndsWith('h');
+            var hardened = part.EndsWith('\'') || part.EndsWith('h') || part.EndsWith('H');
             if (!uint.TryParse(hardened ? part[..^1] : part, out var index) || index >= 0x80000000u) throw new FormatException($"Bad path element '{part}'.");
             yield return hardened ? index | 0x80000000u : index;
         }

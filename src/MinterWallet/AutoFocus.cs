@@ -17,14 +17,31 @@ public static class AutoFocus
         IsEnabledProperty.Changed.AddClassHandler<Control>((control, e) =>
         {
             if (e.NewValue is not true) return;
+            EventHandler onActivated = (_, _) => Later(control);
+            EventHandler<AvaloniaPropertyChangedEventArgs> onVisible = (_, change) =>
+            {
+                if (change.Property == Visual.IsVisibleProperty && change.NewValue is true) Later(control);
+            };
+            Window? attachedWindow = null;
+            var attachedAncestors = new List<Visual>();
+
             control.Loaded += (_, _) => Later(control);
-            control.PropertyChanged += (_, change) => { if (change.Property == Visual.IsVisibleProperty && change.NewValue is true) Later(control); };
+            control.PropertyChanged += onVisible;
             control.AttachedToVisualTree += (_, _) =>
             {
-                if (TopLevel.GetTopLevel(control) is Window window) window.Activated += (_, _) => Later(control);
+                if (TopLevel.GetTopLevel(control) is Window window) { attachedWindow = window; window.Activated += onActivated; }
                 // A step of a form shows by its panel becoming visible, not the field itself.
                 foreach (var ancestor in control.GetVisualAncestors())
-                    ancestor.PropertyChanged += (_, change) => { if (change.Property == Visual.IsVisibleProperty && change.NewValue is true) Later(control); };
+                {
+                    attachedAncestors.Add(ancestor);
+                    ancestor.PropertyChanged += onVisible;
+                }
+            };
+            control.DetachedFromVisualTree += (_, _) =>
+            {
+                if (attachedWindow != null) { attachedWindow.Activated -= onActivated; attachedWindow = null; }
+                foreach (var ancestor in attachedAncestors) ancestor.PropertyChanged -= onVisible;
+                attachedAncestors.Clear();
             };
         });
     }

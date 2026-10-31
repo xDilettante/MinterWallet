@@ -263,6 +263,16 @@
   <Style Selector="ListBox.rows ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.rows ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
   </Style>
+  <Style Selector="ListBox.rows ListBoxItem.dateHeaderItem">
+    <Setter Property="Padding" Value="0,6,0,2" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem.dateHeaderItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.rows ListBoxItem.dateHeaderItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
 
   <!-- First-run steps -->
   <Style Selector="Border.step"><Setter Property="Padding" Value="0,0,0,8" /><Setter Property="BorderThickness" Value="0,0,0,2" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
@@ -314,5 +324,27 @@
         <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360" /></KeyFrame>
       </Animation>
     </Style.Animations>
+  </Style>
+  <Style Selector="Button.help">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" /><Setter Property="Width" Value="18" /><Setter Property="Height" Value="18" />
+    <Setter Property="MinHeight" Value="0" /><Setter Property="MinWidth" Value="0" /><Setter Property="FontSize" Value="12" />
+    <Setter Property="CornerRadius" Value="9" /><Setter Property="Foreground" Value="{DynamicResource Muted}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.help:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="Button.help TextBlock">
+    <Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.derivationCard">
+    <Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Button.derivationCard.current">
+    <Setter Property="Background" Value="{DynamicResource AccentSubtle}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
   </Style>
 </Styles>

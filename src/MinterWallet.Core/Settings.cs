@@ -51,6 +51,10 @@ public sealed class WalletSettings
     public string? InstallId { get; set; }
     public bool AllDecimals { get; set; }
     public string? LastAccountId { get; set; }
+    public string? LastWalletId { get; set; }
+    public Dictionary<string, string> WalletCoordinates { get; set; } = [];
+    public bool DerivationCollapsed { get; set; }
+    public int DerivationPageSize { get; set; } = 5;
 
     [JsonIgnore] public SourceSettings Source => Sources[Math.Clamp(SelectedSource, 0, Sources.Count - 1)];
 

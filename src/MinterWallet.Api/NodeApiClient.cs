@@ -14,6 +14,7 @@ namespace MinterWallet.Api;
 public sealed class NodeApiClient : IChainBackend, IDisposable
 {
     private readonly HttpClient http;
+    private bool batchSupported = true;
     public string Name { get; }
     public SourceTrust Trust => SourceTrust.Node;
     public Uri BaseUri { get; }
@@ -27,12 +28,13 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         BaseUri = new Uri(text + "/");
         Name = name ?? $"Нода {baseUri.Authority}";
         // A node on this machine or in the local network is reached directly, not through a system proxy.
+        var suppliedHandler = handler != null;
         handler ??= new SocketsHttpHandler
         {
             UseProxy = !IsLocal(baseUri.Host), PooledConnectionLifetime = TimeSpan.FromMinutes(2), AutomaticDecompression = DecompressionMethods.All,
             SslOptions = skipCertificateCheck ? new System.Net.Security.SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true } : new(),
         };
-        http = new HttpClient(handler) { BaseAddress = BaseUri, Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = 32 * 1024 * 1024 };
+        http = new HttpClient(new SourceRequestHandler(handler, suppliedHandler ? TimeSpan.Zero : SourceRequestHandler.DefaultInterval)) { BaseAddress = BaseUri, Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = 32 * 1024 * 1024 };
     }
 
     public void Dispose() => http.Dispose();
@@ -44,9 +46,53 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
             DateTimeOffset.Parse(Str(j, "latest_block_time"), CultureInfo.InvariantCulture));
     }
 
-    public async Task<AccountState> AccountAsync(Address address, CancellationToken ct = default)
+    public async Task<AccountState> AccountAsync(Address address, CancellationToken ct = default) =>
+        ParseAccount(address, await Get($"address/{address}?delegated=true", ct));
+
+    public async Task<IReadOnlyDictionary<Address, AccountState>> AccountsAsync(IReadOnlyList<Address> addresses, CancellationToken ct = default)
     {
-        var j = await Get($"address/{address}?delegated=true", ct);
+        var unique = addresses.Distinct().ToList();
+        var result = new Dictionary<Address, AccountState>(unique.Count);
+        if (unique.Count == 0) return result;
+        if (unique.Count == 1)
+        {
+            result[unique[0]] = await AccountAsync(unique[0], ct);
+            return result;
+        }
+        if (!batchSupported) return await FallbackAccountsAsync(unique, ct);
+
+        foreach (var chunk in unique.Chunk(25))
+        {
+            var query = string.Join("&", chunk.Select(a => $"addresses={a}"));
+            JsonElement j;
+            try { j = await Get($"addresses?delegated=true&{query}", ct); }
+            catch (ChainApiException e) when (e.Code is 404 or 405 or 501)
+            {
+                batchSupported = false;
+                return await FallbackAccountsAsync(unique, ct);
+            }
+            if (!j.TryGetProperty("addresses", out var map) || map.ValueKind != JsonValueKind.Object)
+            {
+                batchSupported = false;
+                return await FallbackAccountsAsync(unique, ct);
+            }
+            var byKey = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+            foreach (var prop in map.EnumerateObject()) byKey[prop.Name] = prop.Value;
+            foreach (var address in chunk)
+                result[address] = byKey.TryGetValue(address.ToString(), out var item) ? ParseAccount(address, item) : await AccountAsync(address, ct);
+        }
+        return result;
+    }
+
+    private async Task<Dictionary<Address, AccountState>> FallbackAccountsAsync(IReadOnlyList<Address> addresses, CancellationToken ct)
+    {
+        var result = new Dictionary<Address, AccountState>(addresses.Count);
+        foreach (var address in addresses) result[address] = await AccountAsync(address, ct);
+        return result;
+    }
+
+    private static AccountState ParseAccount(Address address, JsonElement j)
+    {
         var balances = j.GetProperty("balance").EnumerateArray().Select(b => new Balance(Coin(b.GetProperty("coin")), Big(b, "value"), Big(b, "bip_value"))).ToList();
         var delegated = j.TryGetProperty("delegated", out var d) && d.ValueKind == JsonValueKind.Array
             ? d.EnumerateArray().Select(x => new Delegation(Coin(x.GetProperty("coin")), Big(x, "value"), Big(x, "bip_value"))).ToList() : [];
@@ -54,8 +100,8 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         if (j.TryGetProperty("multisig", out var m) && m.ValueKind == JsonValueKind.Object)
         {
             var weights = m.GetProperty("weights").EnumerateArray().Select(w => (uint)ParseU64(w)).ToList();
-            var addresses = m.GetProperty("addresses").EnumerateArray().Select(a => Address.Parse(a.GetString()!)).ToList();
-            multisig = new MultisigInfo((uint)U64(m, "threshold"), addresses.Zip(weights, (a, w) => new MultisigMember(a, w)).ToList());
+            var members = m.GetProperty("addresses").EnumerateArray().Select(a => Address.Parse(a.GetString()!)).ToList();
+            multisig = new MultisigInfo((uint)U64(m, "threshold"), members.Zip(weights, (a, w) => new MultisigMember(a, w)).ToList());
         }
         return new AccountState(address, U64(j, "transaction_count"), balances, delegated, Big(j, "bip_value"), multisig, U64(j, "locked_stake_until_block"));
     }
@@ -117,6 +163,7 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
     {
         using var content = new StringContent($"{{\"tx\":\"0x{tx.ToHex()}\"}}", Encoding.UTF8, "application/json");
         using var reply = await http.PostAsync("send_transaction", content, ct);
+        if (reply.StatusCode == HttpStatusCode.TooManyRequests) throw RateLimited();
         JsonElement j;
         try { j = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct)).RootElement; }
         catch (JsonException) { throw new ChainApiException((int)reply.StatusCode, $"{(int)reply.StatusCode}: ответ не JSON"); }
@@ -134,11 +181,17 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
     // Sent and received (tx.to: Send and single recipients), newest first, merged by hash.
     public async Task<IReadOnlyList<TxRecord>> HistoryAsync(Address address, int page, int perPage, CancellationToken ct = default)
     {
-        var hex = Convert.ToHexStringLower(address.Span);
-        var sent = await Query($"tags.tx.from='{hex}'", page, perPage, ct);
-        var received = await Query($"tags.tx.to='{hex}'", page, perPage, ct);
-        return sent.Concat(received).GroupBy(r => r.Hash).Select(g => g.First()).OrderByDescending(r => r.Height).ToList();
+        var sentTask = SentHistoryAsync(address, page, perPage, ct);
+        var receivedTask = ReceivedHistoryAsync(address, page, perPage, ct);
+        await Task.WhenAll(sentTask, receivedTask);
+        return sentTask.Result.Concat(receivedTask.Result).GroupBy(r => r.Hash).Select(g => g.First()).OrderByDescending(r => r.Height).ToList();
     }
+
+    public async Task<IReadOnlyList<TxRecord>> SentHistoryAsync(Address address, int page, int perPage, CancellationToken ct = default) =>
+        await Query($"tags.tx.from='{Convert.ToHexStringLower(address.Span)}'", page, perPage, ct);
+
+    public async Task<IReadOnlyList<TxRecord>> ReceivedHistoryAsync(Address address, int page, int perPage, CancellationToken ct = default) =>
+        await Query($"tags.tx.to='{Convert.ToHexStringLower(address.Span)}'", page, perPage, ct);
 
     // The time of a block; "size" keeps the answer short (the list of fields has no "time": it comes anyway).
     public async Task<DateTimeOffset> BlockTimeAsync(long height, CancellationToken ct = default)
@@ -225,6 +278,7 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         try
         {
             using var reply = await http.GetAsync("../gate/v1/info", ct);
+            if (reply.StatusCode == HttpStatusCode.TooManyRequests) throw RateLimited();
             if (!reply.IsSuccessStatusCode) return null;
             using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct));
             var j = doc.RootElement;
@@ -247,6 +301,7 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
     private async Task<JsonElement> Get(string path, CancellationToken ct)
     {
         using var reply = await http.GetAsync(path, ct);
+        if (reply.StatusCode == HttpStatusCode.TooManyRequests) throw RateLimited();
         var text = await reply.Content.ReadAsStringAsync(ct);
         JsonElement j;
         try { j = JsonDocument.Parse(text).RootElement; }
@@ -256,6 +311,8 @@ public sealed class NodeApiClient : IChainBackend, IDisposable
         if (!reply.IsSuccessStatusCode) throw new ChainApiException((int)reply.StatusCode, $"HTTP {(int)reply.StatusCode}");
         return j;
     }
+
+    private static ChainApiException RateLimited() => new(429, "Источник временно ограничил частоту запросов. Подождите немного и обновите данные.");
 
     private static TxRecord Record(JsonElement t)
     {

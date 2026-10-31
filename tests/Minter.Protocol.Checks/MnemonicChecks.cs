@@ -37,5 +37,9 @@ internal static class MnemonicChecks
             Assert.True(Mnemonic.IsValid(generated), "generated mnemonic is valid");
         }
         Assert.True(Mnemonic.IsValid("  Abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon ABOUT "), "case and spaces ignored");
+        const string Abandon = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        using (var apostrophe = HdKey.FromMnemonic(Abandon, "m/44'/60'/0'/0/0"))
+        using (var upperH = HdKey.FromMnemonic(Abandon, "m/44H/60H/0H/0/0"))
+            Assert.Equal(apostrophe.Address, upperH.Address, "uppercase H hardened path matches apostrophe");
     }
 }

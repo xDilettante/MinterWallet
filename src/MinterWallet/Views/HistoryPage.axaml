@@ -23,21 +23,35 @@
     <Panel Grid.Row="2">
       <DockPanel>
       <Button DockPanel.Dock="Bottom" Content="Показать ещё" Command="{Binding More}" IsVisible="{Binding HasMore}" HorizontalAlignment="Center" Margin="0,10,0,0" />
-      <ListBox Classes="rows" ItemsSource="{Binding Items}" AutomationProperties.Name="Транзакции" x:Name="Transactions">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="local:HistoryItem">
-            <StackPanel Spacing="10">
+      <ListBox Classes="rows" ItemsSource="{Binding GroupedItems}" AutomationProperties.Name="Транзакции" x:Name="Transactions">
+        <ListBox.DataTemplates>
+          <DataTemplate DataType="local:DateGroupHeader" x:DataType="local:DateGroupHeader">
+            <Border Classes="dateHeader" Margin="0,16,0,8" Focusable="False" IsHitTestVisible="False">
+              <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="14" VerticalAlignment="Center">
+                <Border Height="1" Background="{DynamicResource Line}" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Background="{DynamicResource Well}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="12" Padding="14,5">
+                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <local:Icon Kind="history" Width="14" Height="14" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource Text}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Height="1" Background="{DynamicResource Line}" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+          <DataTemplate DataType="local:HistoryItem" x:DataType="local:HistoryItem">
+            <StackPanel Spacing="10" Margin="0,4">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <Border Classes="avatar" Classes.success="{Binding Incoming}" Classes.danger="{Binding Failed}" Width="32" Height="32" VerticalAlignment="Top">
-                  <local:Icon Kind="{Binding Glyph}" Width="16" Height="16" />
+                <Border Classes="avatar" Classes.success="{Binding Incoming}" Classes.danger="{Binding Failed}" Width="36" Height="36" VerticalAlignment="Top">
+                  <local:Icon Kind="{Binding Glyph}" Width="18" Height="18" />
                 </Border>
                 <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="2">
                   <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                  <TextBlock local:AddressMarks.Text="{Binding Subtitle}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasSubtitle}" />
+                  <TextBlock local:AddressMarks.Text="{Binding PartiesLine}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPartiesLine}" />
                   <TextBlock Text="{Binding Payload}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPayload}" />
                   <TextBlock Text="{Binding FailedText}" Classes="caption" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" IsVisible="{Binding Failed}" />
                 </StackPanel>
-                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2" MinWidth="120">
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2" MinWidth="130">
                   <ItemsControl ItemsSource="{Binding Moves}" HorizontalAlignment="Right">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="local:MoveItem">
@@ -46,10 +60,10 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                   <TextBlock Text="{Binding CommissionText}" Classes="caption" HorizontalAlignment="Right" IsVisible="{Binding HasCommission}" />
-                  <TextBlock Text="{Binding HeightText}" Classes="caption" HorizontalAlignment="Right" />
+                  <TextBlock Text="{Binding TimeAndHeight}" Classes="caption" HorizontalAlignment="Right" />
                 </StackPanel>
               </Grid>
-              <Border Classes="well" IsVisible="{Binding Expanded}" Margin="44,0,0,0">
+              <Border Classes="well" IsVisible="{Binding Expanded}" Margin="48,0,0,0">
                 <StackPanel Spacing="8">
                   <ItemsControl ItemsSource="{Binding Rows}">
                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -75,7 +89,7 @@
               </Border>
             </StackPanel>
           </DataTemplate>
-        </ListBox.ItemTemplate>
+        </ListBox.DataTemplates>
       </ListBox>
       </DockPanel>
       <StackPanel IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Margin="0,0,0,60">

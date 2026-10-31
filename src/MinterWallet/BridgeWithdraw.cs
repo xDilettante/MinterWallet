@@ -20,6 +20,7 @@ public sealed class BridgeViewModel : ScreenModel
     private IReadOnlyList<BridgeTx> activity = [];
     private DateTime activityAt;
     private string? link;
+    private CancellationTokenSource stop = new();
 
     public BridgeViewModel(MainViewModel main)
     {
@@ -28,6 +29,13 @@ public sealed class BridgeViewModel : ScreenModel
         Own = new Command(() => { if (main.Selected != null) Recipient = Bridge.OwnAddress(main.Selected.Account.Address); });
         All = new Command(() => { if (Coin != null) Amount = Units.FormatCoins(Coin.Value); });
         OpenLink = new AsyncCommand(async () => { if (link != null && main.Shell.OpenUrl != null) await main.Shell.OpenUrl(new Uri(link)); }, Fail);
+    }
+
+    public void Cancel()
+    {
+        stop.Cancel();
+        stop.Dispose();
+        stop = new();
     }
 
     public bool IsAvailable => main.Shell.Status?.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) == true;
@@ -82,10 +90,10 @@ public sealed class BridgeViewModel : ScreenModel
     }
 
     // The bridge's latest work, read again after two minutes.
-    private async Task<IReadOnlyList<BridgeTx>> ActivityAsync(bool fresh = false)
+    private async Task<IReadOnlyList<BridgeTx>> ActivityAsync(bool fresh = false, CancellationToken ct = default)
     {
         if (!fresh && activity.Count > 0 && DateTime.UtcNow - activityAt < TimeSpan.FromMinutes(2)) return activity;
-        activity = await main.Shell.Explorer.BridgeActivityAsync();
+        activity = await main.Shell.Explorer.BridgeActivityAsync(ct: ct);
         activityAt = DateTime.UtcNow;
         return activity;
     }
@@ -139,33 +147,37 @@ public sealed class BridgeViewModel : ScreenModel
             $"Перевод на мост не отменить: монеты уйдут на {to} в сети {net}. Проверьте адрес и сеть — у биржи или кошелька, куда выводите.",
             "Minter Hub — мост команды Minter, не этого кошелька: кошелёк только отправляет ему перевод с командой.",
         };
+        var ct = stop.Token;
         var outcome = await main.ConfirmAndSendAsync($"Вывод в {net}", new SendData(c.Coin.Id, Bridge.Multisig, value), 0, payload, rows, warnings, this);
-        if (outcome?.Succeeded != true) return;
+        if (outcome?.Succeeded != true || ct.IsCancellationRequested) return;
         Amount = "";
         link = Bridge.ExplorerOf(Network, to);
         Tracking = "Перевод на мост в блоке. Ждём, когда мост его обработает — обычно несколько минут…";
-        _ = TrackAsync(outcome.Hash, c.Symbol, net, to);
+        _ = TrackAsync(outcome.Hash, c.Symbol, net, to, ct);
     }
 
     // The bridge's multisend that settles this withdrawal, looked for every 20 s for up to 30 minutes.
-    private async Task TrackAsync(string hash, string symbol, string net, string to)
+    private async Task TrackAsync(string hash, string symbol, string net, string to, CancellationToken ct)
     {
         var until = DateTime.UtcNow.AddMinutes(30);
-        while (DateTime.UtcNow < until)
+        while (DateTime.UtcNow < until && !ct.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(20));
+            try { await Task.Delay(TimeSpan.FromSeconds(20), ct); }
+            catch (OperationCanceledException) { return; }
             try
             {
-                var latest = await ActivityAsync(fresh: true);
+                var latest = await ActivityAsync(fresh: true, ct);
                 if (latest.FirstOrDefault(t => string.Equals(t.Hash, hash, StringComparison.OrdinalIgnoreCase)) is { } mine && Bridge.SettlementOf(mine, latest) is { } s)
                 {
+                    if (ct.IsCancellationRequested) return;
                     Tracking = $"Мост обработал вывод: удержал 1 % ({Display.Amount(s.HubFee)} {symbol}) и газ ({Display.Amount(s.GasFee)} {symbol}); "
                         + $"{Display.Amount(mine.Value - s.HubFee - s.GasFee)} {symbol} отправлены в {net} на {to}. Зачисление видно в обозревателе сети.";
                     return;
                 }
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
+            catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
         }
-        Tracking = $"За 30 минут мост вывод не отметил — так бывает при загрузке сетей. Проверьте получателя в обозревателе {net} позже.";
+        if (!ct.IsCancellationRequested)
+            Tracking = $"За 30 минут мост вывод не отметил — так бывает при загрузке сетей. Проверьте получателя в обозревателе {net} позже.";
     }
 }

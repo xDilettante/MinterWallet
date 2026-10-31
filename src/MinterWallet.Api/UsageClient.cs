@@ -15,11 +15,22 @@ public sealed class UsageClient : IDisposable
 {
     private readonly HttpClient http;
 
-    public UsageClient(Uri gate, HttpMessageHandler? handler = null)
+    public UsageClient(Uri gate, HttpMessageHandler? handler = null, bool skipCertificateCheck = false)
     {
-        handler ??= new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2), AutomaticDecompression = DecompressionMethods.All };
-        http = new HttpClient(handler) { BaseAddress = new Uri(gate.AbsoluteUri.TrimEnd('/') + "/"), Timeout = TimeSpan.FromSeconds(10) };
+        var suppliedHandler = handler != null;
+        handler ??= new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2), AutomaticDecompression = DecompressionMethods.All,
+            SslOptions = skipCertificateCheck ? new System.Net.Security.SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true } : new(),
+        };
+        http = new HttpClient(new SourceRequestHandler(handler, suppliedHandler ? TimeSpan.Zero : SourceRequestHandler.DefaultInterval)) { BaseAddress = new Uri(gate.AbsoluteUri.TrimEnd('/') + "/"), Timeout = TimeSpan.FromSeconds(10) };
     }
+
+    // Certificate consent belongs to this configured HTTPS origin, never to an unrelated selected source.
+    public static bool SkipCertificateCheckFor(Uri endpoint, IEnumerable<SourceSettings> sources) => sources.Any(s =>
+        s.SkipCertificateCheck && Uri.TryCreate(s.Url, UriKind.Absolute, out var configured)
+        && endpoint.Scheme == "https" && configured.Scheme == endpoint.Scheme
+        && configured.IdnHost.Equals(endpoint.IdnHost, StringComparison.OrdinalIgnoreCase) && configured.Port == endpoint.Port);
 
     public static Uri? Endpoint() => Environment.GetEnvironmentVariable("MINTERWALLET_USAGE_URL") switch
     {
@@ -45,12 +56,14 @@ public sealed class UsageClient : IDisposable
 
     public async Task PingAsync(string id, string version, string os, string language, string network, CancellationToken ct = default)
     {
+        using var _ = SourceRequestHandler.EnterBackground();
         using var reply = await http.PostAsync("gate/v1/ping", new StringContent(Body(id, version, os, language, network), Encoding.UTF8, "application/json"), ct);
         reply.EnsureSuccessStatusCode();
     }
 
     public async Task<UsageStats> StatsAsync(CancellationToken ct = default)
     {
+        using var _ = SourceRequestHandler.EnterBackground();
         using var reply = await http.GetAsync("gate/v1/stats", ct);
         reply.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct));

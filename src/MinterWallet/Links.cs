@@ -36,7 +36,7 @@ public sealed class PaymentRequestViewModel : Observable
     {
         get
         {
-            if (main.Selected == null || Coin == null || Amount.Trim().Length == 0) return "";
+            if (!main.CanReceive || main.Selected == null || Coin == null || Amount.Trim().Length == 0) return "";
             BigInteger value;
             try { value = Units.ParseCoins(Amount.Trim().Replace(',', '.')); } catch (FormatException) { return ""; }
             if (value.Sign <= 0) return "";
@@ -45,7 +45,7 @@ public sealed class PaymentRequestViewModel : Observable
         }
     }
     public bool HasLink => Link.Length > 0;
-    public string QrText => HasLink ? Link : main.Address;
+    public string QrText => !main.CanReceive ? "" : HasLink ? Link : main.Address;
     public string Problem
     {
         get
@@ -75,7 +75,7 @@ public sealed class PaymentRequestViewModel : Observable
 
     private async Task CopyAsync()
     {
-        if (!HasLink || main.Shell.CopyText == null) return;
+        if (!HasLink || main.Shell.CopyText == null || !main.Derivation.PrepareReceive()) return;
         await main.Shell.CopyText(Link);
         CopyLabel = "Скопировано";
         DispatcherTimer.RunOnce(() => CopyLabel = "Копировать", TimeSpan.FromSeconds(2));

@@ -43,6 +43,8 @@ public sealed class Icon : Control
         ["search"] = Geometry.Parse("M17 11 A6 6 0 1 1 5 11 A6 6 0 1 1 17 11 Z M15.5 15.5 L20 20"),
         ["chevron-left"] = Geometry.Parse("M15 6 L9 12 L15 18"),
         ["chevron-right"] = Geometry.Parse("M9 6 L15 12 L9 18"),
+        ["chevron-down"] = Geometry.Parse("M6 9 L12 15 L18 9"),
+        ["help"] = Geometry.Parse("M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 Z M9.5 9 A2.5 2.5 0 0 1 12 6.5 A2.5 2.5 0 0 1 14.5 9 C14.5 11 12 11.8 12 13.5 M12 16.8 V17.2"),
         ["users"] = Geometry.Parse("M12 8 A3.5 3.5 0 1 1 5 8 A3.5 3.5 0 1 1 12 8 Z M2.5 20 C3 16 5.5 14.5 8.5 14.5 C11.5 14.5 14 16 14.5 20 M15.5 4.8 A3.5 3.5 0 0 1 15.5 11.2 M17 14.8 C19.5 15.3 21 17 21.5 20"),
         ["moon"] = Geometry.Parse("M20 14.5 A8 8 0 1 1 9.5 4 A6.5 6.5 0 0 0 20 14.5 Z"),
     };

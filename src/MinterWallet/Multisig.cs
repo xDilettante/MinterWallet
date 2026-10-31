@@ -287,7 +287,7 @@ public sealed class MultisigViewModel : ScreenModel
         var data = tx.DecodeData();
         var rows = new List<(string, string)> { ("Операция", Core.History.Describe(data, tx.Sender(), tx.Sender(), main.Symbol)), ("От общего счёта", Display.Address(tx.Sender())) };
         if (data is SendData s) { rows.Add(("Получатель", Display.Address(s.To))); rows.Add(("Сумма", $"{Units.FormatCoins(s.Value)} {main.Symbol(s.Coin)} (id {s.Coin})")); }
-        if (tx.Payload.Length > 0) rows.Add(("Сообщение", Encoding.UTF8.GetString(tx.Payload)));
+        if (tx.Payload.Length > 0) rows.Add(("Сообщение", Core.History.PayloadText(tx.Payload)));
         rows.Add(("Номер транзакции", tx.Nonce.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         rows.Add(("Уже подписали", string.Join("\n", tx.MultisigSigners().Select(Display.Address))));
         var warnings = new List<string>();
@@ -299,13 +299,17 @@ public sealed class MultisigViewModel : ScreenModel
 
     private async Task<bool> ConfirmAndSignAsync(string title, Transaction target, List<(string, string)> rows, List<string> warnings)
     {
+        if (main.Derivation.Parameters) { Say("Примените параметры или закройте редактор пути.", Tone.Warning); return false; }
         var account = main.Selected?.Account ?? throw new InvalidOperationException("Выберите счёт.");
+        var context = main.ContextVersion;
+        var phrase = main.Selected?.Phrase == true;
         if (account.WatchOnly) throw new InvalidOperationException("Этот счёт только для просмотра: подписать нечем.");
-        rows.Insert(1, ("Подписывает", $"{account.Name}\n{Display.Address(account.Address)}"));
+        rows.Insert(1, ("Подписывает", $"{account.Name}\n{Display.Address(account.Address)}" + (phrase ? $"\n{account.Path}" : "")));
         rows.Add(("Сеть", $"{main.Shell.Status?.Network} (chain ID {target.ChainId})"));
         var password = main.Shell.Confirm == null ? null : await main.Shell.Confirm(new ConfirmRequest(title, rows, warnings, "Подписать"));
         if (password == null) { Say("Отменено — ничего не подписано.", Tone.Info); return false; }
         if (!await main.Shell.CheckPasswordAsync(password)) { Say("Неверный пароль — ничего не подписано.", Tone.Error); return false; }
+        if (context != main.ContextVersion || main.Shell.Session?.IsLocked != false) { Say("Адрес или источник изменился. Подпись отменена; повторите расчёт.", Tone.Warning); return false; }
         var wallet = await main.WalletAsync();
         wallet.SignMultisig(account, target);
         Say("Подписано. Передайте текст ниже следующему участнику — или отправьте, если подписей уже хватает.", Tone.Success);

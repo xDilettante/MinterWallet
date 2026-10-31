@@ -10,6 +10,7 @@ public sealed class Shell : Observable
 {
     private object page = null!;
     public object Page { get => page; private set => Set(ref page, value); }
+    public string Title => $"Minter Wallet v{Program.Version}";
 
     public string DataDirectory { get; }
     public WalletSettings Settings { get; }
@@ -41,35 +42,54 @@ public sealed class Shell : Observable
     public Func<Uri, Task>? OpenUrl { get; set; }
     // Saves a text file the user names (suggested name, contents); false when they cancel.
     public Func<string, string, Task<bool>>? SaveText { get; set; }
+    public Func<Task<string?>>? OpenText { get; set; }
     // Where the anonymous usage pings go (the project's gate); null: nowhere (MINTERWALLET_USAGE_URL=off, the checks).
     public Uri? UsageEndpoint { get; set; } = UsageClient.Endpoint();
     private Avalonia.Threading.DispatcherTimer? usageTimer;
+    private bool sendingUsage;
+    private string usageStatus = "Отправка статистики ещё не выполнялась.";
+    public string UsageStatus { get => usageStatus; private set => Set(ref usageStatus, value); }
+    public UsageClient CreateUsageClient(Uri endpoint) => new(endpoint, skipCertificateCheck: UsageClient.SkipCertificateCheckFor(endpoint, Settings.Sources));
 
     // A ping now and every 5 minutes while the wallet is open, locked or not, unless turned off in the settings.
     public void StartUsage()
     {
         if (usageTimer != null) return;
         usageTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
-        usageTimer.Tick += (_, _) => _ = PingAsync();
+        usageTimer.Tick += (_, _) => _ = PingUsageAsync();
         usageTimer.Start();
-        _ = PingAsync();
+        _ = PingUsageAsync();
     }
 
-    private async Task PingAsync()
+    public async Task PingUsageAsync()
     {
-        if (!Settings.Telemetry || UsageEndpoint is not { } endpoint) return;
-        if (Settings.InstallId is not { Length: 32 })
-        {
-            Settings.InstallId = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
-            Settings.Save(DataDirectory);
-        }
-        var network = Status?.Network is not { } n ? "unknown" : n.StartsWith("minter-mainnet", StringComparison.Ordinal) ? "mainnet" : "test";
+        if (!Settings.Telemetry || UsageEndpoint is not { } endpoint) { UsageStatus = "Отправка анонимной статистики отключена."; return; }
+        if (sendingUsage) return;
+        sendingUsage = true;
+        var succeeded = false;
         try
         {
-            using var usage = new UsageClient(endpoint);
+            if (Settings.InstallId is not { Length: 32 } id || !id.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            {
+                var previous = Settings.InstallId;
+                Settings.InstallId = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+                try { Settings.Save(DataDirectory); }
+                catch { Settings.InstallId = previous; throw; }
+            }
+            UsageStatus = "Отправка анонимной статистики…";
+            var network = Status?.Network is not { } n ? "unknown" : n.StartsWith("minter-mainnet", StringComparison.Ordinal) ? "mainnet" : "test";
+            using var usage = CreateUsageClient(endpoint);
             await usage.PingAsync(Settings.InstallId, Program.Version, UsageClient.Os, Localization.English ? "en" : "ru", network);
+            succeeded = true;
+            UsageStatus = $"Гейт подтвердил статистику: {DateTime.Now:HH:mm:ss}.";
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
+        { UsageStatus = $"Статистика не отправлена: {ScreenModel.Describe(e)}"; }
+        finally
+        {
+            sendingUsage = false;
+            if (usageTimer != null) usageTimer.Interval = succeeded ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(30);
+        }
     }
 
     // Coins coming to the wallet's addresses, looked for every 5 seconds while the wallet runs (locked too, once a
@@ -99,13 +119,15 @@ public sealed class Shell : Observable
         watching = true;
         try
         {
-            var arrivals = await income.CheckAsync(store.Accounts);
+            IReadOnlyList<Arrival> arrivals;
+            using (SourceRequestHandler.EnterBackground())
+                arrivals = await income.CheckAsync(store.Accounts);
             foreach (var arrival in arrivals)
                 if (arrival.Kind != ArrivalKind.Reward || Settings.NotifyRewards) Arrived?.Invoke(arrival);
             // The open account's balances follow at once.
             if (Page is MainViewModel main && arrivals.Any(a => a.Account.Address == main.Selected?.Account.Address)) main.Refresh.Execute(null);
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or System.Text.Json.JsonException or FormatException or KeyNotFoundException) { }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or System.Text.Json.JsonException or FormatException or KeyNotFoundException or ObjectDisposedException) { }
         finally { watching = false; }
     }
 
@@ -170,13 +192,23 @@ public sealed class Shell : Observable
 
     public void Lock()
     {
+        connectionGeneration++; connecting = null;
+        if (Page is MainViewModel main) main.Stop();
         Session?.Lock();
         Session = null; Wallet = null;
         Page = Store == null ? new WelcomeViewModel(this) : new UnlockViewModel(this);
     }
 
+    public void StopTimers()
+    {
+        usageTimer?.Stop(); usageTimer = null;
+        incomeTimer?.Stop(); incomeTimer = null;
+        if (Page is MainViewModel main) main.Stop();
+    }
+
     public void Disconnect()
     {
+        connectionGeneration++; connecting = null; active = null;
         Backend?.Dispose();
         Backend = null; Wallet = null; Status = null;
     }
@@ -185,15 +217,41 @@ public sealed class Shell : Observable
     // The source in use: the selected one, or another of the same network while the selected one is unreachable.
     public SourceSettings ActiveSource => active ?? Settings.Source;
     private SourceSettings? active;
+    private int connectionGeneration;
+    private Task<ChainStatus>? connecting;
 
     public async Task<ChainStatus> ConnectAsync(SourceSettings? fallback = null)
     {
+        if (connecting != null) return await connecting;
+        var task = ConnectCoreAsync(fallback);
+        connecting = task;
+        try { return await task; }
+        finally { if (ReferenceEquals(connecting, task)) connecting = null; }
+    }
+    private async Task<ChainStatus> ConnectCoreAsync(SourceSettings? fallback)
+    {
+        var generation = ++connectionGeneration;
+        var selected = Settings.Source;
         Backend?.Dispose();
+        Wallet = null; Status = null;
         active = fallback;
         var source = ActiveSource;
-        Backend = new NodeApiClient(new Uri(source.Url), source.Name, skipCertificateCheck: source.SkipCertificateCheck);
-        var status = await Backend.StatusAsync();
-        var gate = await Backend.GateAsync();
+        var backend = new NodeApiClient(new Uri(source.Url), source.Name, skipCertificateCheck: source.SkipCertificateCheck);
+        Backend = backend;
+        void EnsureCurrent()
+        {
+            if (generation != connectionGeneration || !ReferenceEquals(Backend, backend) || !ReferenceEquals(Settings.Source, selected) || Session?.IsLocked != false)
+                throw new OperationCanceledException("Источник или кошелёк изменён во время подключения.");
+        }
+        var statusTask = backend.StatusAsync();
+        var gateTask = backend.GateAsync();
+        var coinTask = backend.CoinAsync(0);
+        _ = gateTask.ContinueWith(static t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+        _ = coinTask.ContinueWith(static t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+        var status = await statusTask;
+        EnsureCurrent();
+        var gate = await gateTask;
+        EnsureCurrent();
         var kind = gate != null ? "gate" : "node";
         GateIndexFrom = gate?.IndexFrom ?? 0;
         if (source.Kind != kind) { source.Kind = kind; Settings.Save(DataDirectory); }
@@ -203,10 +261,11 @@ public sealed class Shell : Observable
             Wallet = null; Status = null;
             throw new InvalidOperationException($"Источник «{source.Name}» теперь сообщает сеть {status.Network}, а раньше была {source.ExpectedNetwork}. Отправка с него отключена; проверьте адрес или подтвердите новую сеть в настройках.");
         }
-        var baseCoin = await Backend.CoinAsync(0);
+        var baseCoin = await coinTask;
+        EnsureCurrent();
         if (baseCoin != null) Coins.Observe(new CoinRef(0, baseCoin.Symbol));
         Status = status;
-        Wallet = new WalletService(Backend, Session ?? throw new InvalidOperationException("Кошелёк заблокирован."), WalletService.ChainIdOf(status.Network),
+        Wallet = new WalletService(backend, Session ?? throw new InvalidOperationException("Кошелёк заблокирован."), WalletService.ChainIdOf(status.Network),
             new GasPolicy { Cap = Settings.GasPriceCap });
         return status;
     }

@@ -31,16 +31,24 @@ public sealed class BridgeDepositViewModel : ScreenModel
     private BigInteger native, gasPrice;
     private string? link;
     private int refreshing;
+    private CancellationTokenSource stop = new();
 
     public BridgeDepositViewModel(MainViewModel main)
     {
         this.main = main;
         SendNow = new AsyncCommand(SendAsync, Fail, () => IsAvailable && Token != null);
         Refresh = new AsyncCommand(RefreshAsync, Fail);
-        Own = new Command(() => { if (main.Selected != null) Recipient = main.Selected.Account.Address.ToString(); });
+        Own = new Command(() => { if (main.Selected != null && main.Derivation.PrepareReceive()) Recipient = main.Selected.Account.Address.ToString(); });
         All = new Command(() => { if (Token is { } t) Amount = EvmUnits.Format(Spendable(t), t.Token.Decimals); });
-        CopyAddress = new AsyncCommand(async () => { if (main.Shell.CopyText != null && EvmAddress.Length > 0) { await main.Shell.CopyText(EvmAddress); Say("Адрес скопирован.", Tone.Success); } }, Fail);
+        CopyAddress = new AsyncCommand(async () => { if (main.Shell.CopyText != null && EvmAddress.Length > 0 && main.Derivation.PrepareReceive()) { await main.Shell.CopyText(EvmAddress); Say("Адрес скопирован.", Tone.Success); } }, Fail);
         OpenLink = new AsyncCommand(async () => { if (link != null && main.Shell.OpenUrl != null) await main.Shell.OpenUrl(new Uri(link)); }, Fail);
+    }
+
+    public void Cancel()
+    {
+        stop.Cancel();
+        stop.Dispose();
+        stop = new();
     }
 
     public bool IsAvailable => main.Shell.Status?.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) == true;
@@ -48,7 +56,12 @@ public sealed class BridgeDepositViewModel : ScreenModel
     public int NetworkIndex { get => networkIndex; set { if (value >= 0 && Set(ref networkIndex, value)) { Changed(nameof(NetworkName)); Changed(nameof(EvmAddressText)); _ = RefreshAsync(); } } }
     public BridgeNetwork Network => (BridgeNetwork)networkIndex;
     public string NetworkName => Bridge.NameOf(Network);
-    public string EvmAddress => main.Selected == null ? "" : Bridge.OwnAddress(main.Selected.Account.Address);
+    public string EvmAddress => main.Selected == null || !main.CanReceive ? "" : Bridge.OwnAddress(main.Selected.Account.Address);
+    public void ReceiveSafetyChanged()
+    {
+        Changed(nameof(EvmAddress));
+        if (!main.CanReceive && main.Selected != null && Recipient == main.Selected.Account.Address.ToString()) Recipient = "";
+    }
     public string EvmAddressText => main.Selected == null ? "" : $"Ваш адрес в {NetworkName} — тот же ключ, что у счёта «{main.Selected.Name}»:";
     public string Balances { get => balances; private set => Set(ref balances, value); }
     public ObservableCollection<DepositToken> Tokens { get; } = [];
@@ -78,7 +91,7 @@ public sealed class BridgeDepositViewModel : ScreenModel
     public void AccountChanged()
     {
         Changed(nameof(EvmAddress)); Changed(nameof(EvmAddressText)); Changed(nameof(IsAvailable)); Changed(nameof(IsUnavailable));
-        if (main.Selected != null && (Recipient.Length == 0 || main.Accounts.Any(a => a.Account.Address.ToString() == Recipient))) Recipient = main.Selected.Account.Address.ToString();
+        if (main.Selected != null && main.CanReceive && (Recipient.Length == 0 || main.Accounts.Any(a => a.Account.Address.ToString() == Recipient))) Recipient = main.Selected.Account.Address.ToString();
         Tokens.Clear(); Token = null; Balances = "";
         if (IsAvailable) _ = RefreshAsync();
     }
@@ -104,7 +117,7 @@ public sealed class BridgeDepositViewModel : ScreenModel
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException or EvmRpcException or FormatException) { return (t, Balance: BigInteger.Zero); }
             finally { gate.Release(); }
         }));
-        if (run != refreshing || network != Network) return;
+        if (run != refreshing || network != Network || main.Selected?.Account.Address != owner) return;
         native = nativeBalance; gasPrice = price;
         var keep = Token?.Token;
         Tokens.Clear();
@@ -137,6 +150,7 @@ public sealed class BridgeDepositViewModel : ScreenModel
     private async Task SendAsync()
     {
         if (!IsAvailable) { Say("Мост Minter Hub работает только в основной сети Minter.", Tone.Error); return; }
+        if (main.Derivation.Parameters) { Say("Примените параметры или закройте редактор пути.", Tone.Warning); return; }
         if (main.Selected?.Account is not { } account) { Say("Выберите счёт.", Tone.Error); return; }
         if (account.WatchOnly) { Say("Этот счёт только для просмотра: подписать нечем.", Tone.Error); return; }
         if (Token is not { } t) { Say("Выберите монету.", Tone.Error); return; }
@@ -144,6 +158,8 @@ public sealed class BridgeDepositViewModel : ScreenModel
         BigInteger value;
         try { value = EvmUnits.Parse(Amount, t.Token.Decimals); } catch (FormatException e) { Say(e.Message, Tone.Error); return; }
         if (value.Sign <= 0) { Say("Укажите сумму.", Tone.Error); return; }
+        var context = main.ContextVersion;
+        var phrase = main.Selected.Phrase;
         var network = t.Token.Network;
         var net = Bridge.NameOf(network);
         var nativeName = Bridge.NativeOf(network);
@@ -179,12 +195,13 @@ public sealed class BridgeDepositViewModel : ScreenModel
                 : $"Не хватает {nativeName} на газ: нужно до {EvmUnits.Format(gasCost, 18)}, на адресе {EvmUnits.Format(nativeNow, 18)}.", Tone.Error);
             return;
         }
+        if (context != main.ContextVersion || main.Derivation.Parameters) { Say("Адрес или источник изменился. Повторите расчёт.", Tone.Warning); return; }
 
         var credited = EvmUnits.ToMinter(value, t.Token.Decimals);
         var ours = main.Accounts.FirstOrDefault(a => a.Account.Address == to);
         var rows = new List<(string, string)>
         {
-            ("Откуда", $"{net}, адрес счёта «{account.Name}»\n{from}"),
+            ("Откуда", $"{net}, адрес счёта «{account.Name}»\n{from}" + (phrase ? $"\n{account.Path}" : "")),
             ("Куда", $"Minter — через мост Minter Hub\n{(ours != null ? $"счёт «{ours.Name}»: {Display.Address(to)}" : Display.Address(to))}"),
             ("Монета", $"{EvmUnits.Format(value, t.Token.Decimals)} {t.Symbol} → {t.MinterSymbol} (id {t.Token.MinterId})"),
             ("Мост удержит", $"1 % — придёт ≈ {Units.FormatCoins(credited - Bridge.HubFee(credited))} {t.MinterSymbol}"),
@@ -201,28 +218,32 @@ public sealed class BridgeDepositViewModel : ScreenModel
         if (password == null) { Say("Отменено — ничего не отправлено.", Tone.Info); return; }
         Say("Проверка пароля…", Tone.Progress);
         if (!await main.Shell.CheckPasswordAsync(password)) { Say("Неверный пароль — ничего не отправлено.", Tone.Error); return; }
+        if (context != main.ContextVersion || main.Shell.Session?.IsLocked != false) { Say("Адрес или источник изменился. Подпись отменена; повторите расчёт.", Tone.Warning); return; }
         var wallet = await main.WalletAsync();
 
+        var ct = stop.Token;
+        using var hold = main.HoldAutoLock();
         var started = DateTimeOffset.UtcNow;
-        var nonce = await evm.NonceAsync(from);
+        var nonce = await evm.NonceAsync(from, ct);
         string hash = "";
         for (var i = 0; i < steps.Count; i++)
         {
+            if (main.Shell.Session?.IsLocked != false || ct.IsCancellationRequested) return;
             var step = steps[i];
             var gas = step.Gas;
             if (i == steps.Count - 1 && i > 0) gas = await GasOf(evm, from, step.To, step.Value, step.Data, TransferGas);
             var raw = wallet.SignEvm(account, new EvmTx(nonce++, price, gas, Convert.FromHexString(step.To[2..]), step.Value, step.Data), chainId);
-            hash = await evm.SendRawAsync(raw);
+            hash = await evm.SendRawAsync(raw, ct);
             link = Bridge.TxExplorerOf(network, hash); Changed(nameof(HasLink));
             Say($"Шаг {i + 1} из {steps.Count}: {step.Name} — {hash}, ждём блок…", Tone.Progress);
-            var receipt = await ReceiptAsync(evm, hash);
+            var receipt = await ReceiptAsync(evm, hash, ct);
             if (receipt == null) { Say($"Транзакция {hash} за 10 минут не попала в блок {net}. Дальнейшие шаги не отправлены; проверьте её в обозревателе.", Tone.Warning); return; }
             if (!receipt.Succeeded) { Say($"Транзакция {hash} в блоке {Display.Integer(receipt.Block)} {net} не выполнена. Дальнейшие шаги не отправлены.", Tone.Error); return; }
         }
         Amount = "";
         Say($"Готово — монеты переданы мосту в {net}: {hash}.", Tone.Success);
         Tracking = $"Мост зачислит ≈ {Display.Amount(credited - Bridge.HubFee(credited))} {t.MinterSymbol} на {Display.Address(to)} — обычно за несколько минут…";
-        _ = TrackAsync(to, t.Token.MinterId, t.MinterSymbol, started.AddMinutes(-1));
+        _ = TrackAsync(to, t.Token.MinterId, t.MinterSymbol, started.AddMinutes(-1), ct);
         _ = RefreshAsync();
     }
 
@@ -232,36 +253,40 @@ public sealed class BridgeDepositViewModel : ScreenModel
         catch (EvmRpcException) { return fallback; }
     }
 
-    private static async Task<EvmReceipt?> ReceiptAsync(EvmClient evm, string hash)
+    private static async Task<EvmReceipt?> ReceiptAsync(EvmClient evm, string hash, CancellationToken ct)
     {
         var until = DateTime.UtcNow.AddMinutes(10);
-        while (DateTime.UtcNow < until)
+        while (DateTime.UtcNow < until && !ct.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(3));
-            try { if (await evm.ReceiptAsync(hash) is { } r) return r; }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or EvmRpcException) { }
+            try { await Task.Delay(TimeSpan.FromSeconds(3), ct); }
+            catch (OperationCanceledException) { return null; }
+            try { if (await evm.ReceiptAsync(hash, ct) is { } r) return r; }
+            catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or EvmRpcException) { }
         }
         return null;
     }
 
     // The bridge's multisend to the recipient on Minter, looked for every 20 s for up to 30 minutes.
-    private async Task TrackAsync(Address to, uint coin, string symbol, DateTimeOffset since)
+    private async Task TrackAsync(Address to, uint coin, string symbol, DateTimeOffset since, CancellationToken ct)
     {
         var until = DateTime.UtcNow.AddMinutes(30);
-        while (DateTime.UtcNow < until)
+        while (DateTime.UtcNow < until && !ct.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(20));
+            try { await Task.Delay(TimeSpan.FromSeconds(20), ct); }
+            catch (OperationCanceledException) { return; }
             try
             {
-                if (Bridge.ArrivalOf(to, coin, since, await main.Shell.Explorer.BridgeActivityAsync()) is { } arrived)
+                if (Bridge.ArrivalOf(to, coin, since, await main.Shell.Explorer.BridgeActivityAsync(ct: ct)) is { } arrived)
                 {
+                    if (ct.IsCancellationRequested) return;
                     Tracking = $"Мост зачислил {Units.FormatCoins(arrived.Value)} {symbol} на {Display.Address(to)}.";
                     main.Refresh.Execute(null);
                     return;
                 }
             }
-            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
+            catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
         }
-        Tracking = "За 30 минут мост зачисление не отметил — так бывает при загрузке сетей. Баланс в Minter обновится, когда монеты придут.";
+        if (!ct.IsCancellationRequested)
+            Tracking = "За 30 минут мост зачисление не отметил — так бывает при загрузке сетей. Баланс в Minter обновится, когда монеты придут.";
     }
 }

@@ -97,6 +97,9 @@ internal static class RejectionChecks
         Assert.Throws<FormatException>(() => Rlp.Decode(Convert.FromHexString("820001")).UInt32(), "integer with a leading zero");
         Assert.Throws<FormatException>(() => Rlp.Decode(Convert.FromHexString("850102030405")).UInt32(), "uint32 overflow");
         Assert.Throws<FormatException>(() => Rlp.Decode(Convert.FromHexString("02")).Bool(), "bool 2");
+        var deep = Rlp.List();
+        for (var i = 0; i < 17; i++) deep = Rlp.List(deep);
+        Assert.Throws<FormatException>(() => Rlp.Decode(deep), "excessive RLP nesting rejected");
 
         var send = Fixtures.Go.GetProperty("transactions")[0].GetProperty("hex").GetString()!;
         var tx = Transaction.FromHex(send);

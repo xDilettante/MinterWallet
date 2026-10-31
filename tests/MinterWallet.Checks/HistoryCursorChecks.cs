@@ -42,6 +42,25 @@ internal static class HistoryCursorChecks
         await plain.NextAsync(); await plain.NextAsync();
         Assert.True(!plain.HasMore, "source only");
 
+        // Two-stream cursor (sent + received): merges strictly by height across page boundaries without redundant exhausted queries.
+        var streamCalls = new List<string>();
+        Task<IReadOnlyList<TxRecord>> Sent(int p)
+        {
+            streamCalls.Add($"sent {p}");
+            return Task.FromResult<IReadOnlyList<TxRecord>>(p switch { 1 => [.. Enumerable.Range(71, 30).Reverse().Select(h => R(h))], 2 => [R(65)], _ => [] });
+        }
+        Task<IReadOnlyList<TxRecord>> Received(int p)
+        {
+            streamCalls.Add($"recv {p}");
+            return Task.FromResult<IReadOnlyList<TxRecord>>(p == 1 ? [new($"Mt1{85:x63}", 85, 0, "", [], new Dictionary<string, string>())] : []);
+        }
+        var merged = new HistoryCursor(Sent, Received, 30);
+        var m1 = await merged.NextAsync();
+        Assert.True(m1.Count == 30 && m1[0].Record.Height == 100 && m1[^1].Record.Height == 72 && m1.Zip(m1.Skip(1)).All(pair => pair.First.Record.Height >= pair.Second.Record.Height), "merged first page strictly descending");
+        var m2 = await merged.NextAsync();
+        Assert.Equal("71,65", string.Join(",", m2.Select(x => x.Record.Height)), "buffered item 71 merged cleanly with sent page 2");
+        Assert.True(!merged.HasMore && string.Join(",", streamCalls) == "sent 1,recv 1,sent 2", "exhausted received stream not queried again");
+
         // The explorer's page: raw bytes decoded by the wallet, more pages announced by its meta.
         using var explorer = new ExplorerClient(new Uri("https://explorer.test/api/v2/"), new Recorded($$$"""
             {"data":[{"txn":6114103,"hash":"Mtb4bee989b6254f3144afd97871c0ec5711e1148021dccfbb5e35131424f2f014","nonce":841,"height":40385997,"timestamp":"2026-10-27T16:07:46Z","type":13,"payload":"","from":"{{{Sender}}}","raw_tx":"{{{Raw}}}"}],

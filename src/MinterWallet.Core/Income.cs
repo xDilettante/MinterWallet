@@ -29,10 +29,12 @@ public sealed class IncomeWatch(IChainBackend backend)
         // Balances change only with a block: the same height again (checks every few seconds) asks nothing more.
         if (height == seen && accounts.All(a => looks.ContainsKey(a.Address))) return result;
         seen = height;
-        foreach (var account in accounts.DistinctBy(a => a.Address))
+        var unique = accounts.DistinctBy(a => a.Address).ToList();
+        var states = await backend.AccountsAsync(unique.Select(a => a.Address).ToList(), ct);
+        foreach (var account in unique)
         {
-            var state = await backend.AccountAsync(account.Address, ct);
-            var coins = state.Balances.GroupBy(b => b.Coin.Id).ToDictionary(g => g.Key, g => g.Aggregate(BigInteger.Zero, (s, b) => s + b.Value));
+            var state = states.TryGetValue(account.Address, out var s) ? s : await backend.AccountAsync(account.Address, ct);
+            var coins = state.Balances.GroupBy(b => b.Coin.Id).ToDictionary(g => g.Key, g => g.Aggregate(BigInteger.Zero, (sum, b) => sum + b.Value));
             var had = looks.GetValueOrDefault(account.Address);
             looks[account.Address] = new Look(state.Nonce, coins, height);
             if (had == null) continue;

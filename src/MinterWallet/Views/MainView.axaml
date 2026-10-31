@@ -10,21 +10,24 @@
       <DockPanel Margin="12,18,12,12">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="6,0,0,20">
           <Border Classes="logo"><TextBlock /></Border>
-          <TextBlock Text="Minter Wallet" Classes="h2" VerticalAlignment="Center" />
+          <StackPanel VerticalAlignment="Center" Spacing="1">
+            <TextBlock Text="Minter Wallet" Classes="h2" />
+            <TextBlock Text="{Binding AppVersion}" Classes="caption" Foreground="{DynamicResource Muted}" ToolTip.Tip="{Binding VersionTip}" />
+          </StackPanel>
         </StackPanel>
 
         <DockPanel DockPanel.Dock="Top" Margin="6,0,0,4">
-          <Button DockPanel.Dock="Right" Classes="icon" Padding="5" Command="{Binding AddAddress}" ToolTip.Tip="Новый адрес или импорт"
-                  AutomationProperties.Name="Добавить счёт"><local:Icon Kind="plus" Width="15" Height="15" /></Button>
-          <TextBlock Text="Счёт" Classes="caption" VerticalAlignment="Center" />
+          <Button DockPanel.Dock="Right" Classes="icon" Padding="5" Command="{Binding AddAddress}" ToolTip.Tip="Создать или импортировать кошелёк"
+                  AutomationProperties.Name="Добавить кошелёк"><local:Icon Kind="plus" Width="15" Height="15" /></Button>
+          <TextBlock Text="Кошелёк" Classes="caption" VerticalAlignment="Center" />
         </DockPanel>
-        <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Accounts}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch"
-                  Margin="0,0,0,18" AutomationProperties.Name="Счёт">
+        <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Derivation.Wallets}" SelectedItem="{Binding Derivation.SelectedWallet}" HorizontalAlignment="Stretch"
+                  Margin="0,0,0,18" AutomationProperties.Name="Кошелёк">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="local:AccountItem">
               <StackPanel Spacing="1" Classes.child="{Binding IsChild}">
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding Caption}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding WalletTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding WalletCaption}" Classes="caption" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </DataTemplate>
           </ComboBox.ItemTemplate>
@@ -51,10 +54,10 @@
               </Button>
             </Grid>
           </Border>
-          <StackPanel Orientation="Horizontal" Spacing="6" Margin="6,0,0,0" IsVisible="{Binding HasUsageLine}" ToolTip.Tip="{Binding UsageTip}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" Margin="6,0,0,0" IsVisible="{Binding HasUsageLine}" ToolTip.Tip="{Binding UsageTip}">
             <local:Icon Kind="users" Width="13" Height="13" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding UsageLine}" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" />
-          </StackPanel>
+            <TextBlock Grid.Column="1" Text="{Binding UsageLine}" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" />
+          </Grid>
           <Button Classes="ghost" Command="{Binding LockNow}" HorizontalAlignment="Stretch" Padding="12,9">
             <StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="lock" /><TextBlock Text="Заблокировать" /></StackPanel>
           </Button>
@@ -69,7 +72,7 @@
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="coin" /><TextBlock Text="Токены" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="key" /><TextBlock Text="Общий счёт" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="history" /><TextBlock Text="История" /></StackPanel></ListBoxItem>
-          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="users" /><TextBlock Text="Счета" /></StackPanel></ListBoxItem>
+          <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="users" /><TextBlock Text="Кошельки" /></StackPanel></ListBoxItem>
           <ListBoxItem><StackPanel Orientation="Horizontal" Spacing="12"><local:Icon Kind="settings" /><TextBlock Text="Настройки" /></StackPanel></ListBoxItem>
         </ListBox>
       </DockPanel>
