@@ -3,6 +3,9 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Minter.Protocol;
 using MinterWallet.Api;
@@ -31,8 +34,9 @@ public sealed record AccountItem(WalletAccount Account, string Kind, string Glyp
     public override string ToString() => $"{Title} · {Short}";
 }
 
-public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipValue, string BaseSymbol, string Usd = "")
+public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipValue, string BaseSymbol, string Usd = "", string Rub = "")
 {
+    public uint CoinId => Coin.Id;
     public string Symbol => Coin.Symbol;
     public string Id => Coin.Id.ToString(CultureInfo.InvariantCulture);
     public string IdText => $"id {Id}";
@@ -40,21 +44,26 @@ public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipV
     public string AmountShort => Display.Amount(Value);
     public string Bip => Units.FormatCoins(BipValue);
     // A token with no pool to the base coin has no estimate (the source says 0): said so rather than "≈ 0 · $0".
-    public string BipText => Coin.Id == 0 ? Usd.Length > 0 ? $"≈ {Usd}" : ""
+    public string BipText => Coin.Id == 0 ? (Usd.Length > 0 ? $"≈ {Usd}{(Rub.Length > 0 ? $" · {Rub}" : "")}" : "")
         : BipValue.IsZero && !Value.IsZero ? $"нет оценки в {BaseSymbol}"
-        : $"≈ {Display.Amount(BipValue)} {BaseSymbol}{(Usd.Length > 0 ? $" · {Usd}" : "")}";
+        : Usd.Length > 0
+            ? $"≈ {Usd}{(Rub.Length > 0 ? $" · {Rub}" : "")} · {Display.Amount(BipValue)} {BaseSymbol}"
+            : $"≈ {Display.Amount(BipValue)} {BaseSymbol}";
     public string? BipTip => Coin.Id == 0 || BipValue.IsZero ? null : $"≈ {Bip} {BaseSymbol}";
     public string Initial => Symbol.Length > 0 ? Symbol[..1] : "?";
     public override string ToString() => $"{Symbol} (id {Id}) — {Amount}";
 }
 
-public sealed record DelegationItem(Delegation Delegation, string BaseSymbol)
+public sealed record DelegationItem(Delegation Delegation, string BaseSymbol, string Usd = "", string Rub = "")
 {
+    public uint CoinId => Delegation.Coin.Id;
     public string Symbol => Delegation.Coin.Symbol;
     public string Initial => Symbol.Length > 0 ? Symbol[..1] : "?";
     public string Amount => Units.FormatCoins(Delegation.Value);
     public string AmountShort => Display.Amount(Delegation.Value);
-    public string BipText => $"≈ {Display.Amount(Delegation.BipValue)} {BaseSymbol}";
+    public string BipText => Usd.Length > 0
+        ? $"≈ {Usd}{(Rub.Length > 0 ? $" · {Rub}" : "")} · {Display.Amount(Delegation.BipValue)} {BaseSymbol}"
+        : $"≈ {Display.Amount(Delegation.BipValue)} {BaseSymbol}";
     public string BipTip => $"≈ {Units.FormatCoins(Delegation.BipValue)} {BaseSymbol}";
 }
 
@@ -74,7 +83,7 @@ public sealed partial class MainViewModel : ScreenModel
     private readonly DispatcherTimer autoLock;
     private AccountItem? selected;
     private Section section;
-    private string sourceName, networkText = "подключение…", blockText = "", updated = "", totalText = "—", totalCaption = "", totalUsd = "", copyLabel = "Копировать", updateText = "";
+    private string sourceName, networkText = "подключение…", blockText = "", updated = "", totalText = "—", totalCaption = "", totalUsd = "", totalUsdLarge = "", totalRub = "", totalBipSubtitle = "", copyLabel = "Копировать", updateText = "";
     private bool connected, showReceive, initializing = true;
     private int autoLockHolds;
     private Uri? updatePage;
@@ -115,12 +124,16 @@ public sealed partial class MainViewModel : ScreenModel
         Orders = new OrdersViewModel(this);
         RedeemCheck = new CheckRedeemViewModel(this);
         Derivation = new DerivationViewModel(this);
+        LoadStateCache();
         LoadAccounts(shell.Settings.LastAccountId);
         autoLock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         autoLock.Tick += (_, _) =>
         {
             if (autoLockHolds > 0) { LastActivity = DateTime.UtcNow; return; }
-            if (DateTime.UtcNow - LastActivity > TimeSpan.FromMinutes(Math.Max(1, shell.Settings.AutoLockMinutes))) { autoLock.Stop(); shell.Lock(); }
+            if (shell.Settings.AutoLockEnabled && shell.Settings.AutoLockMinutes > 0)
+            {
+                if (DateTime.UtcNow - LastActivity > TimeSpan.FromMinutes(shell.Settings.AutoLockMinutes)) { autoLock.Stop(); shell.Lock(); }
+            }
         };
         autoLock.Start();
         pulse = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
@@ -232,6 +245,10 @@ public sealed partial class MainViewModel : ScreenModel
     public bool ShowReceive { get => showReceive; set => Set(ref showReceive, value && CanReceive); }
     public string TotalUsd { get => totalUsd; set { Set(ref totalUsd, value); Changed(nameof(HasUsd)); } }
     public bool HasUsd => TotalUsd.Length > 0;
+    public string TotalUsdLarge { get => totalUsdLarge; set => Set(ref totalUsdLarge, value); }
+    public string TotalRub { get => totalRub; set { Set(ref totalRub, value); Changed(nameof(HasRub)); } }
+    public bool HasRub => TotalRub.Length > 0;
+    public string TotalBipSubtitle { get => totalBipSubtitle; set => Set(ref totalBipSubtitle, value); }
     public string UpdateText { get => updateText; set { Set(ref updateText, value); Changed(nameof(HasUpdate)); } }
     public bool HasUpdate => UpdateText.Length > 0;
     public string AppVersion => $"v{Program.Version}";
@@ -262,10 +279,39 @@ public sealed partial class MainViewModel : ScreenModel
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException) { }
     }
 
+public sealed class StateCacheDto
+{
+    public string? UsdPerCoin { get; set; }
+    public decimal RubPerUsd { get; set; }
+    public List<CoinRateDto> Rates { get; set; } = [];
+}
+
+public sealed class CoinRateDto
+{
+    public uint Id { get; set; }
+    public string BipPerCoin { get; set; } = "0";
+    public string? UsdPerCoin { get; set; }
+}
+
+[JsonSerializable(typeof(StateCacheDto))]
+internal partial class StateCacheJson : JsonSerializerContext;
+
+    public static bool IsStablecoin(uint id, string? symbol)
+    {
+        if (id is 1993 or 3494 or 1994 or 1995 or 1996 or 1998 or 1999 or 2024) return true;
+        if (string.IsNullOrWhiteSpace(symbol)) return false;
+        var s = symbol.ToUpperInvariant();
+        return s.StartsWith("USDT", StringComparison.Ordinal)
+            || s.StartsWith("USDC", StringComparison.Ordinal)
+            || s.StartsWith("BUSD", StringComparison.Ordinal)
+            || s.StartsWith("DAI", StringComparison.Ordinal)
+            || s.Equals("MUSD", StringComparison.Ordinal);
+    }
+
     // Dollars per base coin from the mainnet pool with USDTE (coin 1993), in pip; null elsewhere or without the pool.
     // Coins the source gives no value for (Minter nodes value a token only in some cases: USDTBSC comes as 0 although it
     // has a pool with BIP): what selling all of it would bring along the best route of pools, in the base coin and, on
-    // mainnet, in USDTE. Kept a minute per coin and amount, so that the refresh every few seconds does not ask again.
+    // mainnet, in USDTE. Kept in rates and exact amounts so switching accounts or restarting doesn't drop estimates.
     private (Dictionary<uint, (BigInteger Bip, BigInteger? Usd)> Priced, List<Balance> Missing) CachedEstimates(IReadOnlyList<Balance> balances)
     {
         var priced = new Dictionary<uint, (BigInteger, BigInteger?)>();
@@ -273,11 +319,37 @@ public sealed partial class MainViewModel : ScreenModel
         var now = DateTime.UtcNow;
         foreach (var b in balances.Where(b => b.Coin.Id != 0 && b.BipValue.IsZero && b.Value.Sign > 0))
         {
-            if (estimates.TryGetValue((b.Coin.Id, b.Value), out var kept) && now - kept.At < TimeSpan.FromMinutes(1))
+            if (estimates.TryGetValue((b.Coin.Id, b.Value), out var kept) && kept.Bip.Sign > 0)
             {
-                if (kept.Bip.Sign > 0) priced[b.Coin.Id] = (kept.Bip, kept.Usd);
+                priced[b.Coin.Id] = (kept.Bip, kept.Usd);
+                if (now - kept.At >= TimeSpan.FromMinutes(2)) missing.Add(b);
+                continue;
             }
-            else missing.Add(b);
+
+            if (coinRates.TryGetValue(b.Coin.Id, out var rate) && rate.BipPerCoin.Sign > 0)
+            {
+                var bip = b.Value * rate.BipPerCoin / Units.PipPerCoin;
+                var usd = rate.UsdPerCoin is { } u ? b.Value * u / Units.PipPerCoin : (BigInteger?)null;
+                priced[b.Coin.Id] = (bip, usd);
+                if (now - rate.At >= TimeSpan.FromMinutes(2)) missing.Add(b);
+                continue;
+            }
+
+            if (IsStablecoin(b.Coin.Id, b.Coin.Symbol))
+            {
+                var usd = b.Value;
+                BigInteger? bip = usdCache.Value is { Sign: > 0 } usdPip
+                    ? b.Value * Units.PipPerCoin / usdPip
+                    : null;
+                if (bip is { Sign: > 0 } bVal)
+                {
+                    priced[b.Coin.Id] = (bVal, usd);
+                    missing.Add(b);
+                    continue;
+                }
+            }
+
+            missing.Add(b);
         }
         return (priced, missing);
     }
@@ -297,7 +369,13 @@ public sealed partial class MainViewModel : ScreenModel
                     var bip = (await backend.BestTradeAsync(b.Coin.Id, 0, b.Value, exactInput: true))?.Result ?? 0;
                     BigInteger? usd = !mainnet ? null : b.Coin.Id == 1993 ? b.Value : (await backend.BestTradeAsync(b.Coin.Id, 1993, b.Value, exactInput: true))?.Result;
                     estimates[(b.Coin.Id, b.Value)] = (DateTime.UtcNow, bip, usd);
-                    if (bip.Sign > 0) updated = true;
+                    if (bip.Sign > 0 && b.Value.Sign > 0)
+                    {
+                        var bipPerCoin = bip * Units.PipPerCoin / b.Value;
+                        var usdPerCoinRate = usd is { } u ? u * Units.PipPerCoin / b.Value : (BigInteger?)null;
+                        coinRates[b.Coin.Id] = (DateTime.UtcNow, bipPerCoin, usdPerCoinRate);
+                        updated = true;
+                    }
                 }
                 catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or ObjectDisposedException) { }
             }
@@ -305,11 +383,112 @@ public sealed partial class MainViewModel : ScreenModel
         if (!updated || !Current()) return;
         var (priced, _) = CachedEstimates(targetState.Balances);
         ApplyBalances(targetState, usdPerCoin, priced, observeCoins: false);
+        SaveStateCache();
         Swap.BalancesChanged();
     }
 
+    private void SaveStateCache()
+    {
+        try
+        {
+            var dto = new StateCacheDto
+            {
+                UsdPerCoin = usdCache.Value?.ToString(),
+                RubPerUsd = rubPerUsd,
+                Rates = coinRates.Select(r => new CoinRateDto
+                {
+                    Id = r.Key,
+                    BipPerCoin = r.Value.BipPerCoin.ToString(),
+                    UsdPerCoin = r.Value.UsdPerCoin?.ToString()
+                }).ToList()
+            };
+
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(dto, StateCacheJson.Default.StateCacheDto);
+            WalletPaths.WriteAtomic(Path.Combine(shell.DataDirectory, "state_cache.json"), bytes, secret: false);
+        }
+        catch { }
+    }
+
+    private void LoadStateCache()
+    {
+        try
+        {
+            var path = Path.Combine(shell.DataDirectory, "state_cache.json");
+            if (!File.Exists(path)) return;
+            var bytes = File.ReadAllBytes(path);
+            var dto = JsonSerializer.Deserialize(bytes, StateCacheJson.Default.StateCacheDto);
+            if (dto == null) return;
+
+            if (dto.RubPerUsd > 0) rubPerUsd = dto.RubPerUsd;
+            if (!string.IsNullOrEmpty(dto.UsdPerCoin) && BigInteger.TryParse(dto.UsdPerCoin, out var uVal) && uVal > 0)
+                usdCache = (DateTime.UtcNow, "minter-mainnet", uVal);
+
+            foreach (var r in dto.Rates)
+            {
+                if (BigInteger.TryParse(r.BipPerCoin, out var bipPerCoin) && bipPerCoin > 0)
+                {
+                    BigInteger? usdPerCoinRate = !string.IsNullOrEmpty(r.UsdPerCoin) && BigInteger.TryParse(r.UsdPerCoin, out var uRate) ? uRate : null;
+                    coinRates[r.Id] = (DateTime.UtcNow, bipPerCoin, usdPerCoinRate);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private readonly Dictionary<uint, (DateTime At, BigInteger BipPerCoin, BigInteger? UsdPerCoin)> coinRates = [];
     private readonly Dictionary<(uint, BigInteger), (DateTime At, BigInteger Bip, BigInteger? Usd)> estimates = [];
     private (DateTime At, string Network, BigInteger? Value) usdCache;
+    private static decimal rubPerUsd = 80.5m;
+    private static DateTime rubRateFetchedAt;
+    private static readonly HttpClient rateHttp = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        ConnectTimeout = TimeSpan.FromSeconds(5)
+    }) { Timeout = TimeSpan.FromSeconds(5) };
+
+    private static async Task<decimal> FetchRubRateAsync()
+    {
+        if (DateTime.UtcNow - rubRateFetchedAt < TimeSpan.FromHours(1) && rubPerUsd > 0)
+            return rubPerUsd;
+        try
+        {
+            using var resp = await rateHttp.GetAsync("https://www.cbr-xml-daily.ru/daily_json.js");
+            if (resp.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                if (doc.RootElement.TryGetProperty("Valute", out var valute) &&
+                    valute.TryGetProperty("USD", out var usd) &&
+                    usd.TryGetProperty("Value", out var val) &&
+                    val.TryGetDecimal(out var rate) && rate > 0)
+                {
+                    rubPerUsd = rate;
+                    rubRateFetchedAt = DateTime.UtcNow;
+                    return rubPerUsd;
+                }
+            }
+        }
+        catch
+        {
+            try
+            {
+                using var resp2 = await rateHttp.GetAsync("https://open.er-api.com/v6/latest/USD");
+                if (resp2.IsSuccessStatusCode)
+                {
+                    using var doc2 = JsonDocument.Parse(await resp2.Content.ReadAsStringAsync());
+                    if (doc2.RootElement.TryGetProperty("rates", out var rates) &&
+                        rates.TryGetProperty("RUB", out var rubVal) &&
+                        rubVal.TryGetDecimal(out var rate2) && rate2 > 0)
+                    {
+                        rubPerUsd = rate2;
+                        rubRateFetchedAt = DateTime.UtcNow;
+                        return rubPerUsd;
+                    }
+                }
+            }
+            catch { }
+        }
+        return rubPerUsd;
+    }
 
     private async Task<BigInteger?> UsdPerCoinAsync(ChainStatus s)
     {
@@ -318,8 +497,8 @@ public sealed partial class MainViewModel : ScreenModel
         try
         {
             var value = await shell.Backend.SwapPoolAsync(0, 1993) is ({ Sign: > 0 } bip, var usd) ? usd * Units.PipPerCoin / bip : (BigInteger?)null;
-            usdCache = (DateTime.UtcNow, s.Network, value);
-            return value;
+            if (value != null) usdCache = (DateTime.UtcNow, s.Network, value);
+            return usdCache.Network == s.Network ? usdCache.Value : value;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or ChainApiException or ObjectDisposedException)
         {
@@ -368,15 +547,19 @@ public sealed partial class MainViewModel : ScreenModel
         get => selected;
         set
         {
+            var addressChanged = selected?.Account.Address != value?.Account.Address;
             if (!Set(ref selected, value)) return;
-            ClearAccountState();
+            if (addressChanged) ClearAccountState();
             if (value == null) { ReceiveSafetyChanged(); return; }
             Derivation.SelectedChanged();
             foreach (var name in new[] { nameof(Address), nameof(AddressText), nameof(CanSign), nameof(IsWatchOnly), nameof(AccountName) }) Changed(name);
             Request?.Update();
             shell.Settings.LastAccountId = value.Account.Id; shell.Settings.Save(shell.DataDirectory);
-            History.Reset(); Tokens?.Reset(); Multisig?.AccountChanged(); Validator?.Reset();
-            if (IsBridge) HubIn.AccountChanged();
+            if (addressChanged)
+            {
+                History.Reset(); Tokens?.Reset(); Multisig?.AccountChanged(); Validator?.Reset();
+                if (IsBridge) HubIn.AccountChanged();
+            }
             AccountsPage.Reload();
             RequestRefresh();
         }
@@ -664,29 +847,30 @@ public sealed partial class MainViewModel : ScreenModel
         accountVersion++;
         state = null; totalBip = 0;
         Balances.Clear(); Delegations.Clear(); Frozen.Clear();
-        TotalText = "—"; TotalUsd = ""; TotalCaption = "Загрузка выбранного адреса…"; ShowReceive = false;
+        TotalText = "—"; TotalUsd = ""; TotalUsdLarge = ""; TotalRub = ""; TotalBipSubtitle = ""; TotalCaption = "Загрузка выбранного адреса…"; ShowReceive = false;
         foreach (var name in new[] { nameof(State), nameof(TotalExact), nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
         Recent.Clear(); RecentText = "Загрузка операций…";
         if (Send != null) { Send.BalancesChanged(); Multisend.BalancesChanged(); Swap.AccountChanged(); Request.BalancesChanged(); }
     }
 
-    private static void SyncList<T>(ObservableCollection<T> target, IReadOnlyList<T> items)
+    public static void SyncList<T>(ObservableCollection<T> target, IReadOnlyList<T> items)
     {
         if (items.Count == 0) { if (target.Count > 0) target.Clear(); return; }
-        if (target.Count != items.Count)
-        {
-            target.Clear();
-            foreach (var item in items) target.Add(item);
-            return;
-        }
-        for (var i = 0; i < items.Count; i++)
+        var common = Math.Min(target.Count, items.Count);
+        for (var i = 0; i < common; i++)
             if (!EqualityComparer<T>.Default.Equals(target[i], items[i])) target[i] = items[i];
+        while (target.Count > items.Count) target.RemoveAt(target.Count - 1);
+        for (var i = common; i < items.Count; i++) target.Add(items[i]);
     }
+
+    private string EstimateUsd(BigInteger bip, BigInteger? usdPerCoin) => usdPerCoin is { } p ? Display.Usd(bip * p / Units.PipPerCoin) : "";
+    private string EstimateRub(BigInteger bip, BigInteger? usdPerCoin) => (usdPerCoin is { } p && rubPerUsd > 0) ? Display.Rub(bip * p / Units.PipPerCoin, rubPerUsd) : "";
 
     private List<string> ApplyBalances(AccountState next, BigInteger? usdPerCoin, Dictionary<uint, (BigInteger Bip, BigInteger? Usd)> priced, bool observeCoins)
     {
         var conflicts = new List<string>();
-        string Usd(BigInteger bip) => usdPerCoin is { } p ? Display.Usd(bip * p / Units.PipPerCoin) : "";
+        string Usd(BigInteger bip) => EstimateUsd(bip, usdPerCoin);
+        string Rub(BigInteger bip) => EstimateRub(bip, usdPerCoin);
         var nextBalances = new List<BalanceItem>(next.Balances.Count);
         totalBip = next.TotalBipValue;
         foreach (var b in next.Balances)
@@ -695,14 +879,44 @@ public sealed partial class MainViewModel : ScreenModel
             if (priced.TryGetValue(b.Coin.Id, out var p))
             {
                 totalBip += p.Bip;
-                nextBalances.Add(new BalanceItem(b.Coin, b.Value, p.Bip, BaseSymbol, p.Usd is { } usd ? Display.Usd(usd) : Usd(p.Bip)));
+                var itemUsd = p.Usd is { } usd ? Display.Usd(usd) : Usd(p.Bip);
+                var itemRub = p.Usd is { } usdVal && rubPerUsd > 0 ? Display.Rub(usdVal, rubPerUsd) : Rub(p.Bip);
+                nextBalances.Add(new BalanceItem(b.Coin, b.Value, p.Bip, BaseSymbol, itemUsd, itemRub));
             }
-            else nextBalances.Add(new BalanceItem(b.Coin, b.Value, b.BipValue, BaseSymbol, Usd(b.BipValue)));
+            else nextBalances.Add(new BalanceItem(b.Coin, b.Value, b.BipValue, BaseSymbol, Usd(b.BipValue), Rub(b.BipValue)));
         }
+        nextBalances.Sort((x, y) =>
+        {
+            if (x.Coin.Id == 0) return -1;
+            if (y.Coin.Id == 0) return 1;
+            var cmp = y.BipValue.CompareTo(x.BipValue);
+            return cmp != 0 ? cmp : x.Coin.Id.CompareTo(y.Coin.Id);
+        });
         SyncList(Balances, nextBalances);
-        TotalUsd = usdPerCoin == null ? "" : "≈ " + Usd(totalBip);
-        TotalText = Display.Amount(totalBip);
+
+        var hasUnpricedBalances = next.Balances.Any(b => b.Coin.Id != 0 && b.BipValue.IsZero && b.Value.Sign > 0 && !priced.ContainsKey(b.Coin.Id));
+        if (totalBip == 0 && hasUnpricedBalances)
+        {
+            TotalUsd = "";
+            TotalUsdLarge = "—";
+            TotalRub = "";
+            TotalBipSubtitle = "расчёт оценки…";
+            TotalText = "—";
+        }
+        else
+        {
+            TotalUsd = usdPerCoin == null ? "" : "≈ " + Usd(totalBip);
+            TotalUsdLarge = usdPerCoin != null ? Usd(totalBip) : "";
+            TotalRub = (usdPerCoin != null && rubPerUsd > 0) ? "≈ " + Display.Rub(totalBip * usdPerCoin.Value / Units.PipPerCoin, rubPerUsd) : "";
+            TotalBipSubtitle = $"≈ {Display.Amount(totalBip)} {BaseSymbol}";
+            TotalText = Display.Amount(totalBip);
+        }
+
         Changed(nameof(TotalExact));
+        Changed(nameof(TotalUsdLarge));
+        Changed(nameof(TotalRub));
+        Changed(nameof(HasRub));
+        Changed(nameof(TotalBipSubtitle));
         return conflicts;
     }
 
@@ -720,7 +934,8 @@ public sealed partial class MainViewModel : ScreenModel
         var accountTask = wallet.Backend.AccountAsync(account.Address);
         var frozenTask = wallet.Backend.FrozenAsync(account.Address);
         var usdTask = UsdPerCoinAsync(s);
-        await Task.WhenAll(accountTask, frozenTask, usdTask);
+        var rubTask = FetchRubRateAsync();
+        await Task.WhenAll(accountTask, frozenTask, usdTask, rubTask);
         if (!Current()) return;
 
         var next = accountTask.Result;
@@ -731,11 +946,12 @@ public sealed partial class MainViewModel : ScreenModel
         state = next;
         Changed(nameof(State));
         var conflicts = ApplyBalances(state, usdPerCoin, priced, observeCoins: true);
-        SyncList(Delegations, state.Delegated.Select(d => new DelegationItem(d, BaseSymbol)).ToList());
+        SyncList(Delegations, state.Delegated.Select(d => new DelegationItem(d, BaseSymbol, EstimateUsd(d.BipValue, usdPerCoin), EstimateRub(d.BipValue, usdPerCoin))).ToList());
         TotalCaption = $"≈ всего в {BaseSymbol} по оценке источника и пулов · отправлено транзакций: {Display.Integer((long)state.Nonce)}";
         Changed(nameof(BaseSymbol));
         SyncList(Frozen, frozenFunds.Select(f => new FrozenItem($"{Units.FormatCoins(f.Value)} {f.Coin.Symbol}", $"{Display.Amount(f.Value)} {f.Coin.Symbol}",
             $"до блока {Display.Integer(f.UnlockHeight)}, ≈ {EstimateDate(s, f.UnlockHeight)}{(f.Candidate is { } k ? $" · из стейка у {Core.History.Short(k)}" : "")}")).ToList());
+        SaveStateCache();
         foreach (var name in new[] { nameof(HasBalances), nameof(HasNoBalances), nameof(HasDelegations), nameof(HasFrozen) }) Changed(name);
         if (conflicts.Count > 0) Say("Тикер указывает на другой id монеты, чем раньше: " + string.Join("; ", conflicts) + ". Проверьте монету перед отправкой.", Tone.Warning);
         else if (Tone == Tone.Error) Say("");
@@ -814,6 +1030,9 @@ public sealed class SendViewModel : ScreenModel
         this.main = main;
         SendNow = new AsyncCommand(SendAsync, Fail);
         All = new AsyncCommand(AllAsync, Fail);
+        Percent25 = new Command(() => SetPercent(25));
+        Percent50 = new Command(() => SetPercent(50));
+        Percent75 = new Command(() => SetPercent(75));
         Paste = new AsyncCommand(PasteAsync, Fail);
         PickContact = new RelayCommand(item => { if (item is ContactItem c) Recipient = c.Address; });
         main.Contacts.CollectionChanged += (_, _) => Changed(nameof(HasContacts));
@@ -846,7 +1065,17 @@ public sealed class SendViewModel : ScreenModel
     public string Available => Coin == null ? "" : $"Доступно: {Coin.AmountShort} {Coin.Symbol}";
     public AsyncCommand SendNow { get; }
     public AsyncCommand All { get; }
+    public Command Percent25 { get; }
+    public Command Percent50 { get; }
+    public Command Percent75 { get; }
     public AsyncCommand Paste { get; }
+
+    private void SetPercent(int percent)
+    {
+        if (Coin == null) return;
+        var fraction = Coin.Value * percent / 100;
+        Amount = Units.FormatCoins(fraction);
+    }
 
     public string RecipientCheck => !Minter.Protocol.Address.TryParse(Recipient.Trim(), out var a)
         ? (Recipient.Length == 0 ? "" : Bridge.RecipientProblem(Recipient.Trim()) == null
@@ -860,8 +1089,7 @@ public sealed class SendViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = Coin?.Coin.Id; var keepGas = GasCoin?.Coin.Id;
-        Coins.Clear();
-        foreach (var b in main.Balances) Coins.Add(b);
+        MainViewModel.SyncList(Coins, main.Balances);
         Coin = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
         GasCoin = Coins.FirstOrDefault(c => c.Coin.Id == keepGas) ?? Coins.FirstOrDefault(c => c.Coin.Id == 0) ?? Coins.FirstOrDefault();
     }
@@ -971,6 +1199,10 @@ public sealed class SwapViewModel : ScreenModel
         SwapNow = new AsyncCommand(SwapAsync, Fail, () => planned != null);
         // "Всё": the whole balance, kept whole when the balance changes, until the amount is edited or another coin chosen.
         All = new Command(() => { if (Sell == null) return; ExactInput = true; Amount = Units.FormatCoins(Sell.Value); sellAll = true; });
+        Percent25 = new Command(() => SetPercent(25));
+        Percent50 = new Command(() => SetPercent(50));
+        Percent75 = new Command(() => SetPercent(75));
+        Flip = new Command(FlipCoins);
         Buy = new CoinPickerViewModel(() => main.CoinOptions(Sell?.Coin.Id), () => main.HasCatalog, main.LookupCoinAsync);
         Buy.SelectedChanged += InputChanged;
         // The quote follows the inputs: asked 0.7 s after the last change.
@@ -1043,6 +1275,36 @@ public sealed class SwapViewModel : ScreenModel
     public AsyncCommand Estimate { get; }
     public AsyncCommand SwapNow { get; }
     public Command All { get; }
+    public Command Percent25 { get; }
+    public Command Percent50 { get; }
+    public Command Percent75 { get; }
+    public Command Flip { get; }
+
+    private void SetPercent(int percent)
+    {
+        if (Sell == null) return;
+        ExactInput = true;
+        var fraction = Sell.Value * percent / 100;
+        Amount = Units.FormatCoins(fraction);
+    }
+
+    private void FlipCoins()
+    {
+        if (Sell == null && Buy.Selected == null) return;
+        var currentSell = Sell;
+        var currentBuy = Buy.Selected;
+
+        if (currentBuy != null)
+        {
+            var target = Coins.FirstOrDefault(c => c.Coin.Id == currentBuy.Id);
+            if (target != null) Sell = target;
+        }
+
+        if (currentSell != null)
+        {
+            Buy.Selected = new CoinOption(currentSell.Coin.Id, currentSell.Symbol, "", currentSell.BipValue, "");
+        }
+    }
 
     private bool Ready
     {
@@ -1060,8 +1322,7 @@ public sealed class SwapViewModel : ScreenModel
         if (Coins.SequenceEqual(main.Balances)) return;
         var oldValue = Sell?.Value;
         updatingBalances = true;
-        Coins.Clear();
-        foreach (var b in main.Balances) Coins.Add(b);
+        MainViewModel.SyncList(Coins, main.Balances);
         Sell = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
         if (all && Sell is { } same && same.Coin.Id == keep)
         {
@@ -1212,8 +1473,26 @@ public sealed class SwapViewModel : ScreenModel
     }
 }
 
-public sealed record CandidateItem(CandidateInfo Info, string Base, string? Name = null)
+public sealed class CandidateItem : ScreenModel
 {
+    private Bitmap? avatar;
+    private bool avatarLoading;
+
+    public CandidateItem(CandidateInfo info, string @base, string? name = null, string? iconUrl = null, string? description = null)
+    {
+        Info = info;
+        Base = @base;
+        Name = name;
+        IconUrl = iconUrl;
+        Description = description;
+    }
+
+    public CandidateInfo Info { get; }
+    public string Base { get; }
+    public string? Name { get; }
+    public string? IconUrl { get; }
+    public string? Description { get; }
+
     public string Key => Info.PublicKey.ToString();
     public string Short => Name ?? Core.History.Short(Info.PublicKey);
     public override string ToString() => Short;
@@ -1222,6 +1501,31 @@ public sealed record CandidateItem(CandidateInfo Info, string Base, string? Name
     public string Stake => $"{Display.Amount(Info.TotalStake, 0)} {Base}";
     public string State => Info.Validator ? "валидатор" : Info.Status == 2 ? "кандидат" : "выключен";
     public bool IsValidator => Info.Validator;
+
+    public Bitmap? Avatar
+    {
+        get
+        {
+            if (avatar == null && !avatarLoading && IconUrl != null)
+            {
+                avatarLoading = true;
+                _ = LoadAvatarAsync();
+            }
+            return avatar;
+        }
+        private set { if (Set(ref avatar, value)) Changed(nameof(HasAvatar)); }
+    }
+    public bool HasAvatar => avatar != null;
+
+    private async Task LoadAvatarAsync()
+    {
+        var bmp = await ImageCache.LoadAsync(IconUrl);
+        if (bmp != null)
+            Dispatcher.UIThread.Post(() => Avatar = bmp);
+    }
+
+    public override bool Equals(object? obj) => obj is CandidateItem other && string.Equals(Key, other.Key, StringComparison.OrdinalIgnoreCase);
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Key);
 }
 
 public sealed class StakingViewModel : ScreenModel
@@ -1232,7 +1536,7 @@ public sealed class StakingViewModel : ScreenModel
     private BalanceItem? coin;
     private string amount = "", filter = "", count = "", myStake = "", locked = "";
     private CandidateItem? moveTarget;
-    private IReadOnlyDictionary<string, string>? names;
+    private IReadOnlyDictionary<string, ValidatorMeta>? metas;
 
     public StakingViewModel(MainViewModel main)
     {
@@ -1280,8 +1584,7 @@ public sealed class StakingViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = Coin?.Coin.Id;
-        Coins.Clear();
-        foreach (var b in main.Balances) Coins.Add(b);
+        MainViewModel.SyncList(Coins, main.Balances);
         Coin = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault(c => c.Coin.Id == 0) ?? Coins.FirstOrDefault();
         if (all.Count == 0) Load.Execute(null);
         var until = (long)(main.State?.LockedStakeUntil ?? 0);
@@ -1305,11 +1608,15 @@ public sealed class StakingViewModel : ScreenModel
         var wallet = await main.WalletAsync();
         var list = await wallet.Backend.CandidatesAsync();
         // Mainnet validators' own names, from the explorer; the keys alone elsewhere or when it does not answer.
-        if (names == null && main.Shell.Status?.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) == true)
-            try { names = await main.Shell.Explorer.ValidatorNamesAsync(); } catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
+        if (metas == null && main.Shell.Status?.Network.StartsWith("minter-mainnet", StringComparison.Ordinal) == true)
+            try { metas = await main.Shell.Explorer.ValidatorMetaAsync(); } catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
         all.Clear();
         all.AddRange(list.OrderByDescending(c => c.Validator).ThenByDescending(c => c.TotalStake)
-            .Select(c => new CandidateItem(c, main.Symbol(0), names?.GetValueOrDefault(c.PublicKey.ToString()))));
+            .Select(c =>
+            {
+                var meta = metas?.GetValueOrDefault(c.PublicKey.ToString());
+                return new CandidateItem(c, main.Symbol(0), meta?.Name, meta?.IconUrl, meta?.Description);
+            }));
         ApplyFilter();
         Count = $"Кандидатов: {Display.Integer(all.Count)}, из них валидаторов: {Display.Integer(all.Count(c => c.Info.Validator))}";
     }
@@ -1368,7 +1675,31 @@ public sealed class StakingViewModel : ScreenModel
 }
 
 public sealed record MoveItem(string Text, bool Up, bool Down);
-public sealed record DetailRow(string Label, string Value);
+public enum DetailKind
+{
+    Default,
+    Status,
+    AmountIn,
+    AmountOut,
+    Rate,
+    Address,
+    Hash,
+    Payload,
+    Muted
+}
+
+public sealed record DetailRow(string Label, string Value, DetailKind Kind = DetailKind.Default)
+{
+    public bool IsStatus => Kind == DetailKind.Status;
+    public bool IsAmountIn => Kind == DetailKind.AmountIn;
+    public bool IsAmountOut => Kind == DetailKind.AmountOut;
+    public bool IsRate => Kind == DetailKind.Rate;
+    public bool IsAddress => Kind == DetailKind.Address;
+    public bool IsHash => Kind == DetailKind.Hash;
+    public bool IsPayload => Kind == DetailKind.Payload;
+    public bool IsMuted => Kind == DetailKind.Muted;
+    public bool IsDefault => Kind == DetailKind.Default;
+}
 
 public sealed class DateGroupHeader(DateTime date)
 {
@@ -1399,11 +1730,27 @@ public sealed class HistoryItem : Observable
                 : $"{sign}{note}{Display.Amount(BigInteger.Abs(m.Amount))} {symbol(m.Coin)}";
             return new MoveItem(text, m.Amount.Sign > 0, m.Amount.Sign < 0 || m.Amount == BigInteger.Zero);
         }).ToList();
-        foreach (var (label, value) in details.Rows) Rows.Add(new DetailRow(label, value));
+        foreach (var (label, value) in details.Rows)
+        {
+            var kind = label switch
+            {
+                "Статус" => DetailKind.Status,
+                "Получено" or "Куплено" or "Покупка" or "Чек" => DetailKind.AmountIn,
+                "Отдано" or "Оплачено" or "Внесено" or "Продажа" => DetailKind.AmountOut,
+                "Сумма" => entry.Direction == Direction.Incoming ? DetailKind.AmountIn : DetailKind.AmountOut,
+                "Курс" or "Курс ордера" or "Начальный курс" => DetailKind.Rate,
+                "Отправитель" or "Получатель" or "Получатели" or "Валидатор" or "Откуда" or "Куда" => DetailKind.Address,
+                "Хеш" => DetailKind.Hash,
+                "Сообщение" => DetailKind.Payload,
+                "Gas price" or "Nonce" => DetailKind.Muted,
+                _ => DetailKind.Default
+            };
+            Rows.Add(new DetailRow(label, value, kind));
+        }
         if (time.HasValue && !isEstimated)
         {
             TimeKnown = true;
-            Rows.Insert(Math.Min(2, Rows.Count), new DetailRow("Время", time.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture)));
+            Rows.Insert(Math.Min(2, Rows.Count), new DetailRow("Время", time.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture), DetailKind.Muted));
         }
     }
 
@@ -1420,6 +1767,7 @@ public sealed class HistoryItem : Observable
     public string CommissionText => Details.Commission.Length > 0 ? $"комиссия {Details.Commission}" : "";
     public bool HasCommission => CommissionText.Length > 0;
     public ObservableCollection<DetailRow> Rows { get; } = [];
+    public IEnumerable<DetailRow> DisplayRows => Rows.Where(r => r.Label != "Статус");
     public bool Expanded { get => expanded; set => Set(ref expanded, value); }
     public bool TimeKnown { get; set; }
     public string Height => Display.Integer(Entry.Height);
@@ -1436,13 +1784,99 @@ public sealed class HistoryItem : Observable
 
     public string OverviewTimeAndHeight => TimeAndHeight;
 
+    public bool IsSwap => Entry.Type is TxType.SellCoin or TxType.SellAllCoin or TxType.SellSwapPool or TxType.SellAllSwapPool or TxType.BuyCoin or TxType.BuySwapPool;
+    public bool IsPool => Entry.Type is TxType.AddLiquidity or TxType.RemoveLiquidity or TxType.CreateSwapPool;
+    public bool IsOrder => Entry.Type is TxType.AddLimitOrder or TxType.RemoveLimitOrder;
+    public bool IsStake => Entry.Type is TxType.Delegate or TxType.Unbond or TxType.MoveStake or TxType.LockStake;
+    public bool IsCheck => Entry.Type == TxType.RedeemCheck;
+    public bool IsSelfTransfer => Entry.Success && Entry.Type == TxType.Send && Entry.Direction == Direction.Outgoing && Details.Counterparty == Entry.From;
+    public bool IsSuccessCategory => Entry.Success && Entry.Direction == Direction.Incoming && (Entry.Type is TxType.Send or TxType.Multisend or TxType.RedeemCheck);
+    public bool IsOutgoingSend => Entry.Success && Entry.Direction == Direction.Outgoing && (Entry.Type is TxType.Send or TxType.Multisend) && !IsSelfTransfer;
+    public bool IsNeutralCategory => !Entry.Success ? false : (IsSelfTransfer || (!IsSuccessCategory && !IsOutgoingSend && !IsSwap && !IsPool && !IsOrder && !IsStake && !IsCheck));
+
+    public string BadgeText => !Entry.Success ? "Ошибка" : Entry.Type switch
+    {
+        TxType.Send when IsSelfTransfer => "Перевод себе",
+        TxType.Send => Entry.Direction == Direction.Incoming ? "Получено" : "Перевод",
+        TxType.Multisend => Entry.Direction == Direction.Incoming ? "Получено" : "Мультисенд",
+        TxType.SellCoin or TxType.SellAllCoin or TxType.SellSwapPool or TxType.SellAllSwapPool or TxType.BuyCoin or TxType.BuySwapPool => "Обмен",
+        TxType.AddLiquidity or TxType.RemoveLiquidity or TxType.CreateSwapPool => "Пул",
+        TxType.AddLimitOrder => "Лимит-ордер",
+        TxType.RemoveLimitOrder => "Отмена ордера",
+        TxType.Delegate => "Стейкинг",
+        TxType.Unbond => "Вывод стейка",
+        TxType.MoveStake => "Перенос стейка",
+        TxType.LockStake => "Стейкинг",
+        TxType.RedeemCheck => "Чек",
+        TxType.MintToken or TxType.BurnToken => "Токен",
+        _ => Entry.Direction == Direction.Incoming ? "Получено" : "Перевод"
+    };
+
+    public string StatusBannerText => Entry.Success ? "Транзакция успешно выполнена" : $"Транзакция не выполнена: {Entry.Log}";
+    public string StatusBannerIcon => Entry.Success ? "check" : "error";
+    public string DetailedTimeAndHeight => timestamp.HasValue
+        ? $"{(isEstimatedTime ? "≈ " : "")}{timestamp.Value.ToLocalTime():dd.MM.yyyy HH:mm:ss} · {HeightText}"
+        : HeightText;
+
+    public string SwapSold => Rows.FirstOrDefault(r => r.Label is "Отдано" or "Оплачено")?.Value ?? "";
+    public string SwapBought => Rows.FirstOrDefault(r => r.Label is "Получено" or "Куплено")?.Value ?? "";
+    public string SwapRate => Rows.FirstOrDefault(r => r.Label is "Курс" or "Курс ордера" or "Начальный курс")?.Value ?? "";
+    public string SwapRoute => Rows.FirstOrDefault(r => r.Label is "Маршрут")?.Value ?? (Details.Subtitle.Contains('→', StringComparison.Ordinal) ? Details.Subtitle : "");
+
+    public bool HasSwapShowcase => IsSwap && !string.IsNullOrEmpty(SwapSold) && !string.IsNullOrEmpty(SwapBought);
+    public bool HasSwapRate => !string.IsNullOrEmpty(SwapRate);
+    public string SwapRatePillText => !string.IsNullOrEmpty(SwapRate) ? $"Курс: {SwapRate}" : "";
+
+    private static string CleanAmountText(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var idx = raw.IndexOf(" (", StringComparison.Ordinal);
+        return idx > 0 ? raw[..idx].Trim() : raw.Trim();
+    }
+
+    public string SwapSummaryLine
+    {
+        get
+        {
+            if (!IsSwap) return "";
+            var sold = CleanAmountText(SwapSold);
+            var bought = CleanAmountText(SwapBought);
+            if (!string.IsNullOrEmpty(sold) && !string.IsNullOrEmpty(bought))
+                return $"{sold} → {bought}";
+            return Details.Subtitle;
+        }
+    }
+    public bool HasSwapSummary => IsSwap && !string.IsNullOrEmpty(SwapSummaryLine);
+
+    public string SwapRateLine
+    {
+        get
+        {
+            if (!IsSwap) return "";
+            if (!string.IsNullOrEmpty(SwapRate) && !string.IsNullOrEmpty(SwapRoute))
+                return $"Курс: {SwapRate} · {SwapRoute}";
+            if (!string.IsNullOrEmpty(SwapRate))
+                return $"Курс: {SwapRate}";
+            if (!string.IsNullOrEmpty(SwapRoute))
+                return $"Маршрут: {SwapRoute}";
+            return "";
+        }
+    }
+    public bool HasSwapRateLine => IsSwap && !string.IsNullOrEmpty(SwapRateLine);
+    public bool HasPartiesForDisplay => !HasSwapSummary && HasPartiesLine;
+
+    public void NotifyDisplayRowsChanged() => Changed(nameof(DisplayRows));
+
     public void SetExactTimestamp(DateTimeOffset time)
     {
         timestamp = time;
         isEstimatedTime = false;
         TimeKnown = true;
         if (!Rows.Any(r => r.Label == "Время"))
-            Rows.Insert(Math.Min(2, Rows.Count), new DetailRow("Время", time.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture)));
+        {
+            Rows.Insert(Math.Min(2, Rows.Count), new DetailRow("Время", time.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture), DetailKind.Muted));
+            NotifyDisplayRowsChanged();
+        }
         Changed(nameof(Timestamp));
         Changed(nameof(IsEstimatedTime));
         Changed(nameof(HasTime));
@@ -1450,6 +1884,7 @@ public sealed class HistoryItem : Observable
         Changed(nameof(DateText));
         Changed(nameof(TimeAndHeight));
         Changed(nameof(OverviewTimeAndHeight));
+        Changed(nameof(DetailedTimeAndHeight));
     }
 
     private static string BuildPartiesLine(HistoryEntry entry, TxDetails details, Func<Minter.Protocol.Address, string?> nameOf, Minter.Protocol.Address? me)
@@ -1471,16 +1906,16 @@ public sealed class HistoryItem : Observable
                     {
                         return entry.From == to.Value
                             ? $"Себе: {Party(to.Value)}"
-                            : $"От: {Party(entry.From)} → Кому: {Party(to.Value)}";
+                            : $"Кому: {Party(to.Value)}";
                     }
-                    return $"От: {Party(entry.From)} → Кому: {Party(to.Value)}";
+                    return $"От: {Party(entry.From)}";
                 }
                 return details.Subtitle;
 
             case TxType.Multisend:
                 if (entry.Direction == Direction.Outgoing)
-                    return $"От: {Party(entry.From)} → Кому: {details.Subtitle}";
-                return $"От: {Party(entry.From)} (мультисенд)";
+                    return $"Кому: {details.Subtitle}";
+                return $"От: {Party(entry.From)}";
 
             case TxType.SellCoin or TxType.SellAllCoin or TxType.BuyCoin or TxType.SellSwapPool or TxType.BuySwapPool or TxType.SellAllSwapPool:
                 return details.Subtitle.Length > 0
@@ -1490,10 +1925,14 @@ public sealed class HistoryItem : Observable
                     : "";
 
             case TxType.Delegate:
-                return $"Кому: {details.Subtitle}";
+                var valIdx = details.Subtitle.IndexOf("Mp", StringComparison.Ordinal);
+                var valPub = valIdx >= 0 ? details.Subtitle[valIdx..] : details.Subtitle;
+                return $"Валидатор: {valPub}";
 
             case TxType.Unbond:
-                return $"От: {details.Subtitle}";
+                var unbondIdx = details.Subtitle.IndexOf("Mp", StringComparison.Ordinal);
+                var unbondVal = unbondIdx >= 0 ? details.Subtitle[unbondIdx..] : details.Subtitle;
+                return $"От валидатора: {unbondVal}";
 
             case TxType.MoveStake:
                 return $"Маршрут: {details.Subtitle}";
@@ -1557,7 +1996,8 @@ public sealed class HistoryViewModel : ScreenModel
             if (!item.TimeKnown)
             {
                 item.TimeKnown = true;
-                item.Rows.Insert(Math.Min(2, item.Rows.Count), new DetailRow("Время", item.Timestamp.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture)));
+                item.Rows.Insert(Math.Min(2, item.Rows.Count), new DetailRow("Время", item.Timestamp.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture), DetailKind.Muted));
+                item.NotifyDisplayRowsChanged();
             }
             return;
         }
@@ -1787,13 +2227,15 @@ public sealed class SettingsViewModel : ScreenModel
     private static readonly string[] Themes = ["system", "dark", "light"];
     private readonly MainViewModel main;
     private string gasCap, autoLock, newName = "", newUrl = "", currentPassword = "", newPassword = "", repeatPassword = "";
-    private bool adding, newSkipCertificate;
+    private bool adding, newSkipCertificate, autoLockEnabled;
 
     public SettingsViewModel(MainViewModel main)
     {
         this.main = main;
         var s = main.Shell.Settings;
-        gasCap = s.GasPriceCap.ToString(CultureInfo.InvariantCulture); autoLock = s.AutoLockMinutes.ToString(CultureInfo.InvariantCulture);
+        gasCap = s.GasPriceCap.ToString(CultureInfo.InvariantCulture);
+        autoLock = (s.AutoLockMinutes > 0 ? s.AutoLockMinutes : 10).ToString(CultureInfo.InvariantCulture);
+        autoLockEnabled = s.AutoLockEnabled && s.AutoLockMinutes > 0;
         SaveSecurity = new Command(SaveSecurityNow);
         AcceptNetwork = new AsyncCommand(async () => { main.Shell.Settings.Source.ExpectedNetwork = null; main.Shell.Settings.Save(main.Shell.DataDirectory); await ConnectAsync(); }, Fail);
         Reconnect = new AsyncCommand(ConnectAsync, Fail);
@@ -1838,6 +2280,7 @@ public sealed class SettingsViewModel : ScreenModel
     public string NewName { get => newName; set => Set(ref newName, value); }
     public string NewUrl { get => newUrl; set => Set(ref newUrl, value); }
     public string GasCap { get => gasCap; set => Set(ref gasCap, value); }
+    public bool AutoLockEnabled { get => autoLockEnabled; set => Set(ref autoLockEnabled, value); }
     public string AutoLock { get => autoLock; set => Set(ref autoLock, value); }
     public string CurrentPassword { get => currentPassword; set => Set(ref currentPassword, value); }
     public string NewPassword { get => newPassword; set { Set(ref newPassword, value); Changed(nameof(PasswordHint)); } }
@@ -2032,10 +2475,33 @@ public sealed class SettingsViewModel : ScreenModel
     private void SaveSecurityNow()
     {
         var s = main.Shell.Settings;
-        if (!int.TryParse(AutoLock, out var minutes) || minutes < 1) { Say("Автоблокировка — целое число минут, от 1.", Tone.Error); return; }
         if (!uint.TryParse(GasCap, out var cap) || cap < 1) { Say("Потолок gas price — целое число, от 1.", Tone.Error); return; }
-        s.AutoLockMinutes = minutes; s.GasPriceCap = cap;
+        if (AutoLockEnabled)
+        {
+            if (int.TryParse(AutoLock, out var zero) && zero == 0)
+            {
+                AutoLockEnabled = false;
+                s.AutoLockEnabled = false;
+            }
+            else if (!int.TryParse(AutoLock, out var minutes) || minutes < 1)
+            {
+                Say("Автоблокировка — целое число минут, от 1.", Tone.Error);
+                return;
+            }
+            else
+            {
+                s.AutoLockEnabled = true;
+                s.AutoLockMinutes = minutes;
+            }
+        }
+        else
+        {
+            s.AutoLockEnabled = false;
+            if (int.TryParse(AutoLock, out var m) && m >= 1) s.AutoLockMinutes = m;
+        }
+        s.GasPriceCap = cap;
         s.Save(main.Shell.DataDirectory);
+        main.LastActivity = DateTime.UtcNow;
         if (main.Shell.Wallet != null) main.Shell.Wallet.Gas.Cap = cap;
         Say("Сохранено.", Tone.Success);
     }

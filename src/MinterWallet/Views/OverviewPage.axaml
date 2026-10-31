@@ -57,12 +57,18 @@
             </Grid>
           </Border>
           <TextBlock local:PathMarks.Text="{Binding Derivation.CurrentPath}" Classes="mono caption" TextWrapping="Wrap" IsVisible="{Binding Derivation.IsHd}" ToolTip.Tip="Назначение / профиль монеты / группа / ветка / индекс. Апостроф обозначает усиление. Путь определяет адрес внутри вашей фразы." />
-          <StackPanel Spacing="2">
-            <StackPanel Orientation="Horizontal" Spacing="10">
+          <StackPanel Spacing="3">
+            <StackPanel Spacing="3" IsVisible="{Binding HasUsd}">
+              <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding TotalUsdLarge}" Classes="display" VerticalAlignment="Bottom" Margin="0,0,12,0" />
+                <TextBlock Text="{Binding TotalRub}" Classes="h1 muted" VerticalAlignment="Bottom" Margin="0,0,0,3" IsVisible="{Binding HasRub}" />
+              </WrapPanel>
+              <TextBlock Text="{Binding TotalBipSubtitle}" Classes="h2 muted" FontWeight="Medium" ToolTip.Tip="{Binding TotalExact}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding !HasUsd}">
               <TextBlock Text="{Binding TotalText}" Classes="display" ToolTip.Tip="{Binding TotalExact}" />
               <TextBlock Text="{Binding BaseSymbol}" Classes="h2 muted" VerticalAlignment="Bottom" Margin="0,0,0,7" />
             </StackPanel>
-            <TextBlock Text="{Binding TotalUsd}" Classes="h2 muted" FontWeight="Medium" IsVisible="{Binding HasUsd}" />
             <TextBlock Text="{Binding TotalCaption}" Classes="caption" TextWrapping="Wrap" />
           </StackPanel>
           <WrapPanel ItemSpacing="8" LineSpacing="8">
@@ -88,7 +94,7 @@
           <DataTemplate x:DataType="local:BalanceItem">
             <Border Classes="row">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <Border Classes="avatar"><TextBlock Text="{Binding Initial}" /></Border>
+                <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="36" />
                 <TextBlock Grid.Column="1" Text="{Binding Symbol}" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                   <SelectableTextBlock Text="{Binding AmountShort}" FontWeight="Medium" HorizontalAlignment="Right" ToolTip.Tip="{Binding Amount}" />
@@ -200,7 +206,7 @@
               <DataTemplate x:DataType="local:DelegationItem">
                 <Border Classes="row">
                   <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Border Classes="avatar"><local:Icon Kind="stake" /></Border>
+                    <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="36" />
                     <TextBlock Grid.Column="1" Text="{Binding Symbol}" FontWeight="SemiBold" Margin="12,0" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
                       <SelectableTextBlock Text="{Binding AmountShort}" FontWeight="Medium" HorizontalAlignment="Right" ToolTip.Tip="{Binding Amount}" />

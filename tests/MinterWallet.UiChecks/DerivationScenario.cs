@@ -68,6 +68,17 @@ public static class DerivationScenario
             hd.Pick.Execute(hd.Cards[1]);
             Check(main.Selected!.Account.Index == 1 && hd.CurrentName == "Накопления", "card selects address with personal name");
             await Wait(() => main.State != null);
+            var stateBefore = main.State;
+            hd.Pick.Execute(hd.Cards[1]);
+            Check(ReferenceEquals(main.State, stateBefore), "re-selecting same card preserves state without clearing");
+
+            var testCol = new System.Collections.ObjectModel.ObservableCollection<string>(["A", "B"]);
+            var resetFired = false;
+            testCol.CollectionChanged += (_, e) => { if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset) resetFired = true; };
+            MainViewModel.SyncList(testCol, ["A", "B", "C"]);
+            Check(!resetFired && testCol.Count == 3 && testCol[2] == "C", "SyncList appends without reset");
+            MainViewModel.SyncList(testCol, ["A", "D"]);
+            Check(!resetFired && testCol.Count == 2 && testCol[1] == "D", "SyncList updates and trims without reset");
             Shot(window, output, "overview-dark");
             hd.Toggle.Execute(null);
             Check(hd.Collapsed && main.Selected.Account.Index == 1, "collapse keeps selected address");

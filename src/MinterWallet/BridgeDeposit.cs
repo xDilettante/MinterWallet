@@ -10,6 +10,7 @@ namespace MinterWallet;
 // native coin, which the wallet wraps first.
 public sealed record DepositToken(BridgeToken Token, BigInteger Balance, BigInteger Native, string MinterSymbol)
 {
+    public uint CoinId => Token.MinterId;
     public bool Wraps => Bridge.IsWrappedNative(Token);
     public string Symbol => Wraps ? Bridge.NativeOf(Token.Network) : Token.Denom.ToUpperInvariant();
     public BigInteger Total => Wraps ? Balance + Native : Balance;

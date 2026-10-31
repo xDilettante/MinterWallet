@@ -90,8 +90,7 @@ public sealed class MultisendViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = Rows.Select(r => r.Coin?.Coin.Id).ToList();
-        Coins.Clear();
-        foreach (var b in main.Balances) Coins.Add(b);
+        MainViewModel.SyncList(Coins, main.Balances);
         for (var i = 0; i < Rows.Count; i++) Rows[i].Coin = Coins.FirstOrDefault(c => c.Coin.Id == keep[i]) ?? Coins.FirstOrDefault();
         SummaryChanged();
     }

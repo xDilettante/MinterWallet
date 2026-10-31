@@ -28,6 +28,7 @@ public sealed class WalletSettings
     public int SelectedSource { get; set; }
     public uint GasPriceCap { get; set; } = 10;
     public int AutoLockMinutes { get; set; } = 10;
+    public bool AutoLockEnabled { get; set; } = true;
     // "system", "dark" or "light".
     public string Theme { get; set; } = "system";
     // "system" (the OS language: Russian for ru/uk/be/kk, English otherwise), "ru" or "en".

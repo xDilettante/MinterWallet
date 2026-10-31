@@ -26,8 +26,11 @@
                   <ComboBox.ItemTemplate>
                     <DataTemplate x:DataType="local:BalanceItem">
                       <DockPanel>
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
-                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="24" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
                       </DockPanel>
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
@@ -113,8 +116,11 @@
                 <ComboBox.ItemTemplate>
                   <DataTemplate x:DataType="local:BalanceItem">
                     <DockPanel>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
-                      <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" />
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="24" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                      </StackPanel>
                     </DockPanel>
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
@@ -139,49 +145,77 @@
         <ListBoxItem Content="Купить точную сумму" />
       </ListBox>
 
-      <Border Classes="card">
-        <StackPanel Spacing="16">
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-            <StackPanel>
-              <TextBlock Text="Отдаю" Classes="label" />
-              <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Sell}" HorizontalAlignment="Stretch" AutomationProperties.Name="Отдаю">
+      <!-- Swap cards layout -->
+      <StackPanel Spacing="0">
+        <!-- Pay Card -->
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding Available}" Classes="caption" VerticalAlignment="Center" />
+              <TextBlock Text="Отдаю" Classes="label" Margin="0" />
+            </DockPanel>
+            <Grid ColumnDefinitions="*,190" ColumnSpacing="12">
+              <TextBox Text="{Binding Amount}" Classes="mono" FontSize="16" PlaceholderText="0.0" AutomationProperties.Name="{Binding AmountLabel}" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding Coins}" SelectedItem="{Binding Sell}" HorizontalAlignment="Stretch" AutomationProperties.Name="Отдаю">
                 <ComboBox.ItemTemplate>
                   <DataTemplate x:DataType="local:BalanceItem">
                     <DockPanel>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="12,0,0,0" />
-                      <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" />
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding AmountShort}" Classes="muted" Margin="8,0,0,0" VerticalAlignment="Center" />
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="24" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                      </StackPanel>
                     </DockPanel>
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
-              <TextBlock Text="{Binding Available}" Classes="caption" Margin="0,6,0,0" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" Margin="0,2,0,0">
+              <Button Content="25 %" Command="{Binding Percent25}" />
+              <Button Content="50 %" Command="{Binding Percent50}" />
+              <Button Content="75 %" Command="{Binding Percent75}" />
+              <Button Content="Всё" Command="{Binding All}" ToolTip.Tip="Весь баланс монеты за вычетом комиссии" />
             </StackPanel>
-            <StackPanel Grid.Column="1">
-              <TextBlock Text="Получаю" Classes="label" />
-              <views:CoinPicker DataContext="{Binding Buy}" />
-            </StackPanel>
-          </Grid>
-          <StackPanel>
-            <TextBlock Text="{Binding AmountLabel}" Classes="label" />
+          </StackPanel>
+        </Border>
+
+        <!-- Flip Button -->
+        <Button Classes="icon" Width="36" Height="36" CornerRadius="18" HorizontalAlignment="Center" Margin="0,-16,0,-16" ZIndex="2"
+                Command="{Binding Flip}" ToolTip.Tip="Поменять местами" AutomationProperties.Name="Поменять местами"
+                Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+          <local:Icon Kind="flip" Width="16" Height="16" />
+        </Button>
+
+        <!-- Receive Card -->
+        <Border Classes="card">
+          <StackPanel Spacing="10">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Content="Всё" Command="{Binding All}" Margin="8,0,0,0"
-                      ToolTip.Tip="Продать весь баланс монеты: комиссия платится ею же и вычитается" />
-              <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" />
+              <TextBlock DockPanel.Dock="Right" Text="{Binding QuoteExpected}" Classes="mono" FontWeight="SemiBold" IsVisible="{Binding HasQuote}" VerticalAlignment="Center" />
+              <TextBlock Text="Получаю" Classes="label" Margin="0" />
             </DockPanel>
+            <Grid ColumnDefinitions="*,190" ColumnSpacing="12">
+              <SelectableTextBlock Text="{Binding QuoteExpected}" Classes="mono" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding HasQuote}" />
+              <TextBlock Text="—" Classes="muted mono" FontSize="16" VerticalAlignment="Center" IsVisible="{Binding !HasQuote}" />
+              <views:CoinPicker Grid.Column="1" DataContext="{Binding Buy}" />
+            </Grid>
           </StackPanel>
-          <StackPanel>
-            <TextBlock Text="Допустимое проскальзывание" Classes="label" />
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <ListBox Classes="segmented" SelectedIndex="{Binding SlippageIndex}" AutomationProperties.Name="Проскальзывание">
-                <ListBoxItem Content="0.5 %" />
-                <ListBoxItem Content="1 %" />
-                <ListBoxItem Content="3 %" />
-              </ListBox>
-              <TextBox Text="{Binding Slippage}" Width="80" VerticalAlignment="Center" AutomationProperties.Name="Своё проскальзывание, %" />
-              <TextBlock Text="%" VerticalAlignment="Center" Classes="muted" />
-            </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- Slippage Setting Card -->
+      <Border Classes="well" Padding="14,10">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <ListBox Classes="segmented" SelectedIndex="{Binding SlippageIndex}" AutomationProperties.Name="Проскальзывание">
+              <ListBoxItem Content="0.5 %" />
+              <ListBoxItem Content="1 %" />
+              <ListBoxItem Content="3 %" />
+            </ListBox>
+            <TextBox Text="{Binding Slippage}" Width="64" VerticalAlignment="Center" AutomationProperties.Name="Своё проскальзывание, %" />
+            <TextBlock Text="%" VerticalAlignment="Center" Classes="muted" />
           </StackPanel>
-        </StackPanel>
+          <TextBlock Text="Допустимое проскальзывание" Classes="label" Margin="0" VerticalAlignment="Center" />
+        </DockPanel>
       </Border>
 
       <Border Classes="card" IsVisible="{Binding HasQuote}">

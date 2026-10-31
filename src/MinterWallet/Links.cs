@@ -61,9 +61,9 @@ public sealed class PaymentRequestViewModel : Observable
     public void BalancesChanged()
     {
         var keep = Coin?.Id ?? 0;
-        Coins.Clear();
-        Coins.Add(new CoinChoice(0, main.BaseSymbol));
-        foreach (var b in main.Balances.Where(b => b.Coin.Id != 0)) Coins.Add(new CoinChoice(b.Coin.Id, b.Symbol));
+        var list = new List<CoinChoice> { new(0, main.BaseSymbol) };
+        foreach (var b in main.Balances.Where(b => b.Coin.Id != 0)) list.Add(new CoinChoice(b.Coin.Id, b.Symbol));
+        MainViewModel.SyncList(Coins, list);
         Coin = Coins.FirstOrDefault(c => c.Id == keep) ?? Coins[0];
         Update();
     }

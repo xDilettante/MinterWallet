@@ -25,6 +25,20 @@ public static class Display
     // An estimate, so never every decimal.
     public static string Usd(BigInteger pip) => "$" + Format(pip, 2, 3, false);
 
+    // Rubles from an amount in pip of USD and the USD/RUB rate.
+    public static string Rub(BigInteger pip, decimal rubPerUsd)
+    {
+        if (pip.IsZero || rubPerUsd <= 0) return "0 ₽";
+        var usdCoins = (decimal)pip / 1_000_000_000_000_000_000m;
+        var rubles = usdCoins * rubPerUsd;
+        var culture = CultureInfo.InvariantCulture;
+        if (rubles >= 100)
+            return Math.Round(rubles, 0).ToString("N0", culture).Replace(',', ' ') + " ₽";
+        if (rubles >= 1)
+            return Math.Round(rubles, 2).ToString("N2", culture).Replace(',', '.') + " ₽";
+        return Math.Round(rubles, 4).ToString("N4", culture).Replace(',', '.') + " ₽";
+    }
+
     // An address as the settings ask: in one piece (as everywhere in Minter) or in groups of four.
     public static string Address(Address address) => GroupAddresses ? Core.AddressBook.Grouped(address) : address.ToString();
 

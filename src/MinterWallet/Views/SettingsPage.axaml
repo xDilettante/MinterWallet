@@ -62,8 +62,11 @@
         <TextBlock Text="Безопасность" Classes="h2" />
         <Border Classes="card">
           <StackPanel Spacing="14">
+            <CheckBox IsChecked="{Binding AutoLockEnabled}">
+              <TextBlock Classes="prose" Text="Автоматически блокировать при неактивности" />
+            </CheckBox>
             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-              <StackPanel><TextBlock Text="Автоблокировка, минут" Classes="label" /><TextBox Text="{Binding AutoLock}" /></StackPanel>
+              <StackPanel IsEnabled="{Binding AutoLockEnabled}"><TextBlock Text="Автоблокировка, минут" Classes="label" /><TextBox Text="{Binding AutoLock}" /></StackPanel>
               <StackPanel Grid.Column="1"><TextBlock Text="Потолок gas price" Classes="label" ToolTip.Tip="Выше этого кошелёк не подпишет" /><TextBox Text="{Binding GasCap}" /></StackPanel>
             </Grid>
             <DockPanel>

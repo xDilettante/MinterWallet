@@ -6,6 +6,8 @@ using MinterWallet.Core;
 
 namespace MinterWallet.Api;
 
+public sealed record ValidatorMeta(string Name, string? Description = null, string? IconUrl = null, string? SiteUrl = null);
+
 // The Minter explorer (explorer-api.minter.network, mainnet only): the history of an address older than a MinterGate's
 // index. Like a source, it is not checked; the wallet decodes each transaction from its raw bytes. It lists
 // transactions that were executed, so each comes with code 0.
@@ -22,16 +24,31 @@ public sealed class ExplorerClient : IDisposable
         http.DefaultRequestHeaders.UserAgent.ParseAdd("MinterWallet");
     }
 
-    // Names validators gave themselves (mainnet), by public key.
-    public async Task<IReadOnlyDictionary<string, string>> ValidatorNamesAsync(CancellationToken ct = default)
+    // Names and metadata validators gave themselves (mainnet), by public key.
+    public async Task<IReadOnlyDictionary<string, ValidatorMeta>> ValidatorMetaAsync(CancellationToken ct = default)
     {
         using var reply = await http.GetAsync("validators", ct);
         reply.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync(ct));
-        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, ValidatorMeta>(StringComparer.OrdinalIgnoreCase);
         foreach (var v in doc.RootElement.GetProperty("data").EnumerateArray())
-            if (v.GetProperty("public_key").GetString() is { } key && v.TryGetProperty("name", out var n) && n.GetString() is { Length: > 0 } name) names[key] = name.Trim();
-        return names;
+        {
+            if (v.GetProperty("public_key").GetString() is not { } key) continue;
+            var name = v.TryGetProperty("name", out var n) && n.GetString() is { Length: > 0 } ns ? ns.Trim() : null;
+            var desc = v.TryGetProperty("description", out var d) && d.GetString() is { Length: > 0 } ds ? ds.Trim() : null;
+            var icon = v.TryGetProperty("icon_url", out var ic) && ic.GetString() is { Length: > 0 } is_ ? is_.Trim() : null;
+            var site = v.TryGetProperty("site_url", out var s) && s.GetString() is { Length: > 0 } ss ? ss.Trim() : null;
+            if (name != null || icon != null)
+                result[key] = new ValidatorMeta(name ?? "", desc, icon, site);
+        }
+        return result;
+    }
+
+    // Names validators gave themselves (mainnet), by public key.
+    public async Task<IReadOnlyDictionary<string, string>> ValidatorNamesAsync(CancellationToken ct = default)
+    {
+        var meta = await ValidatorMetaAsync(ct);
+        return meta.Where(k => k.Value.Name.Length > 0).ToDictionary(k => k.Key, v => v.Value.Name, StringComparer.OrdinalIgnoreCase);
     }
 
     // The latest transactions at the bridge's Minter address (newest first): withdrawals and the bridge's multisends.

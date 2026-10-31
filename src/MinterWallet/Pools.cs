@@ -58,8 +58,8 @@ public sealed class LiquidityViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = CoinA?.Coin.Id;
-        Coins.Clear();
-        foreach (var b in main.Balances.Where(b => !b.Symbol.StartsWith("LP-", StringComparison.Ordinal))) Coins.Add(b);
+        var newCoins = main.Balances.Where(b => !b.Symbol.StartsWith("LP-", StringComparison.Ordinal)).ToList();
+        MainViewModel.SyncList(Coins, newCoins);
         coinA = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
         Changed(nameof(CoinA));
     }
@@ -176,8 +176,8 @@ public sealed class OrdersViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = Sell?.Coin.Id;
-        Coins.Clear();
-        foreach (var b in main.Balances.Where(b => !b.Symbol.StartsWith("LP-", StringComparison.Ordinal))) Coins.Add(b);
+        var newCoins = main.Balances.Where(b => !b.Symbol.StartsWith("LP-", StringComparison.Ordinal)).ToList();
+        MainViewModel.SyncList(Coins, newCoins);
         sell = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
         Changed(nameof(Sell));
     }

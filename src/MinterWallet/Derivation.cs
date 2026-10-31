@@ -11,15 +11,10 @@ using MinterWallet.Core;
 
 namespace MinterWallet;
 
-public sealed class DerivationCard(WalletAccount account, string title, bool current, string balance, string activity)
+public sealed record DerivationCard(WalletAccount Account, string Title, bool Current, string Balance, string Activity)
 {
-    public WalletAccount Account { get; } = account;
-    public string Title { get; } = title;
     public string Address => Core.History.Short(Account.Address);
     public string Path => Account.Path;
-    public bool Current { get; } = current;
-    public string Balance { get; } = balance;
-    public string Activity { get; } = activity;
 }
 
 // One root in the sidebar; coordinates and public address observations belong to that root. Viewing a coordinate
@@ -158,7 +153,8 @@ public sealed class DerivationViewModel : ScreenModel
         var root = Wallets.FirstOrDefault(a => (a.Account.SecretId ?? a.Account.Id) == (account.SecretId ?? account.Id));
         if (root == null) return;
         Parameters = false;
-        main.Selected = new AccountItem(account, root.Kind, root.Glyph, root.Group, root.Phrase);
+        var existing = main.Accounts.FirstOrDefault(a => a.Account.Id == account.Id);
+        main.Selected = existing ?? new AccountItem(account, root.Kind, root.Glyph, root.Group, root.Phrase);
         if (IsHd) page = account.Index / (uint)pageSize * (uint)pageSize;
         ShowPage();
     }
@@ -189,18 +185,19 @@ public sealed class DerivationViewModel : ScreenModel
     }
     private void ShowPage()
     {
-        Cards.Clear();
+        var newCards = new List<DerivationCard>();
         if (IsHd && Current != null && Shell.Session is { IsLocked: false } session)
         {
             var count = (int)Math.Min((ulong)pageSize, (ulong)HdPath.MaxIndex - page + 1);
             foreach (var a in session.PreviewAddresses(Root, Current.Path, page, count))
             {
                 var seen = observations.GetValueOrDefault(Key(a.Path));
-                Cards.Add(new(a, PersonalName(a) is { Length: > 0 } name ? name : $"Адрес № {a.Index + 1}", a.Path == Current.Path,
+                newCards.Add(new(a, PersonalName(a) is { Length: > 0 } name ? name : $"Адрес № {a.Index + 1}", a.Path == Current.Path,
                     seen == null ? "—" : $"{Display.Amount(seen.State.TotalBipValue)} {main.BaseSymbol}",
                     seen == null ? "не проверен" : seen.Used ? "используется" : seen.EmptyKnown ? "не использован" : "история неполная"));
             }
         }
+        MainViewModel.SyncList(Cards, newCards);
         Changed(nameof(Range)); Changed(nameof(ToggleLabel)); Previous.Refresh(); Next.Refresh();
     }
 

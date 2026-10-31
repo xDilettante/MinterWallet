@@ -29,9 +29,14 @@
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="local:CandidateItem">
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <Border Classes="avatar" Width="32" Height="32"><local:Icon Kind="shield" Width="16" Height="16" /></Border>
+            <Border Classes="avatar" Width="34" Height="34" ClipToBounds="True">
+              <Panel>
+                <Image Source="{Binding Avatar}" IsVisible="{Binding HasAvatar}" Width="34" Height="34" Stretch="UniformToFill" />
+                <local:Icon Kind="shield" Width="16" Height="16" IsVisible="{Binding !HasAvatar}" />
+              </Panel>
+            </Border>
             <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
-              <TextBlock Text="{Binding Short}" Classes="mono" ToolTip.Tip="{Binding Key}" />
+              <TextBlock Text="{Binding Short}" FontWeight="SemiBold" ToolTip.Tip="{Binding Key}" />
               <TextBlock Text="{Binding CommissionText}" Classes="caption" />
             </StackPanel>
             <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
@@ -44,15 +49,28 @@
     </ListBox>
     <Border Grid.Row="3" Classes="card" Padding="16" IsVisible="{Binding IsDelegation}">
       <StackPanel Spacing="12">
-        <StackPanel>
-          <TextBlock Text="{Binding CandidateTitle}" Classes="mono" FontWeight="SemiBold" />
-          <TextBlock Text="{Binding CandidateCaption}" Classes="caption" />
-          <TextBlock Text="{Binding MyStake}" Classes="caption" FontWeight="SemiBold" Margin="0,4,0,0" />
-        </StackPanel>
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+          <Border Classes="avatar" Width="36" Height="36" ClipToBounds="True">
+            <Panel>
+              <Image Source="{Binding Candidate.Avatar}" IsVisible="{Binding Candidate.HasAvatar}" Width="36" Height="36" Stretch="UniformToFill" />
+              <local:Icon Kind="shield" Width="18" Height="18" IsVisible="{Binding !Candidate.HasAvatar}" />
+            </Panel>
+          </Border>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock Text="{Binding CandidateTitle}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding CandidateCaption}" Classes="caption" />
+            <TextBlock Text="{Binding MyStake}" Classes="caption" FontWeight="SemiBold" Margin="0,4,0,0" />
+          </StackPanel>
+        </Grid>
         <Grid ColumnDefinitions="200,*,Auto" ColumnSpacing="10">
           <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета">
             <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="local:BalanceItem"><TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" /></DataTemplate>
+              <DataTemplate x:DataType="local:BalanceItem">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="22" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
           <TextBox Grid.Column="1" Text="{Binding Amount}" Classes="mono" PlaceholderText="Сумма" AutomationProperties.Name="Сумма" />
@@ -92,7 +110,15 @@
               <DataTemplate x:DataType="local:CandidateItem">
                 <DockPanel>
                   <Border DockPanel.Dock="Right" Classes="badge neutral" Classes.success="{Binding IsValidator}"><TextBlock Text="{Binding State}" /></Border>
-                  <TextBlock Text="{Binding Key}" Classes="mono caption" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Border Classes="avatar" Width="26" Height="26" ClipToBounds="True">
+                      <Panel>
+                        <Image Source="{Binding Avatar}" IsVisible="{Binding HasAvatar}" Width="26" Height="26" Stretch="UniformToFill" />
+                        <local:Icon Kind="shield" Width="14" Height="14" IsVisible="{Binding !HasAvatar}" />
+                      </Panel>
+                    </Border>
+                    <TextBlock Text="{Binding Short}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  </StackPanel>
                 </DockPanel>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -149,7 +175,12 @@
                   <TextBlock Text="Монета стейка" Classes="label" />
                   <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding DeclareCoin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета стейка">
                     <ComboBox.ItemTemplate>
-                      <DataTemplate x:DataType="local:BalanceItem"><TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" /></DataTemplate>
+                      <DataTemplate x:DataType="local:BalanceItem">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="20" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </DataTemplate>
                     </ComboBox.ItemTemplate>
                   </ComboBox>
                 </StackPanel>

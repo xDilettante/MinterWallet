@@ -42,20 +42,47 @@
           <DataTemplate DataType="local:HistoryItem" x:DataType="local:HistoryItem">
             <StackPanel Spacing="10" Margin="0,4">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <Border Classes="avatar" Classes.success="{Binding Incoming}" Classes.danger="{Binding Failed}" Width="36" Height="36" VerticalAlignment="Top">
-                  <local:Icon Kind="{Binding Glyph}" Width="18" Height="18" />
+                <Border Classes="avatar"
+                        Classes.success="{Binding IsSuccessCategory}"
+                        Classes.outgoing="{Binding IsOutgoingSend}"
+                        Classes.swap="{Binding IsSwap}"
+                        Classes.stake="{Binding IsStake}"
+                        Classes.danger="{Binding Failed}"
+                        Classes.neutral="{Binding IsNeutralCategory}"
+                        Width="40" Height="40" VerticalAlignment="Top">
+                  <local:Icon Kind="{Binding Glyph}" Width="20" Height="20" />
                 </Border>
-                <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="2">
-                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                  <TextBlock local:AddressMarks.Text="{Binding PartiesLine}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPartiesLine}" />
-                  <TextBlock Text="{Binding Payload}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPayload}" />
+                <StackPanel Grid.Column="1" Margin="14,0" VerticalAlignment="Center" Spacing="4">
+                  <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="4">
+                    <Border Classes="badge"
+                            Classes.success="{Binding IsSuccessCategory}"
+                            Classes.outgoing="{Binding IsOutgoingSend}"
+                            Classes.swap="{Binding IsSwap}"
+                            Classes.stake="{Binding IsStake}"
+                            Classes.danger="{Binding Failed}"
+                            Classes.neutral="{Binding IsNeutralCategory}">
+                      <TextBlock Text="{Binding BadgeText}" />
+                    </Border>
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                  </WrapPanel>
+                  <StackPanel Spacing="2" IsVisible="{Binding HasSwapSummary}">
+                    <TextBlock Text="{Binding SwapSummaryLine}" FontWeight="Medium" FontSize="13" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SwapRateLine}" Classes="caption muted" TextWrapping="Wrap" IsVisible="{Binding HasSwapRateLine}" />
+                  </StackPanel>
+                  <TextBlock local:AddressMarks.Text="{Binding PartiesLine}" Classes="caption" TextWrapping="Wrap" IsVisible="{Binding HasPartiesForDisplay}" />
                   <TextBlock Text="{Binding FailedText}" Classes="caption" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" IsVisible="{Binding Failed}" />
+                  <Border Classes="payloadPill" HorizontalAlignment="Left" IsVisible="{Binding HasPayload}">
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                      <local:Icon Kind="chat" Width="12" Height="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Payload}" Classes="caption" FontStyle="Italic" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Border>
                 </StackPanel>
-                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2" MinWidth="130">
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="3" MinWidth="130">
                   <ItemsControl ItemsSource="{Binding Moves}" HorizontalAlignment="Right">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="local:MoveItem">
-                        <TextBlock Text="{Binding Text}" FontWeight="SemiBold" HorizontalAlignment="Right" Classes.up="{Binding Up}" Classes.down="{Binding Down}" />
+                        <TextBlock Text="{Binding Text}" FontWeight="Bold" HorizontalAlignment="Right" Classes.up="{Binding Up}" Classes.down="{Binding Down}" />
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
@@ -63,20 +90,63 @@
                   <TextBlock Text="{Binding TimeAndHeight}" Classes="caption" HorizontalAlignment="Right" />
                 </StackPanel>
               </Grid>
-              <Border Classes="well" IsVisible="{Binding Expanded}" Margin="48,0,0,0">
-                <StackPanel Spacing="8">
-                  <ItemsControl ItemsSource="{Binding Rows}">
+              <Border Classes="well" IsVisible="{Binding Expanded}" Margin="54,0,0,0" Padding="14,12">
+                <StackPanel Spacing="10">
+                  <Border Classes="statusBanner" Classes.success="{Binding !Failed}" Classes.danger="{Binding Failed}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" VerticalAlignment="Center">
+                      <local:Icon Kind="{Binding StatusBannerIcon}" Width="16" Height="16" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding StatusBannerText}" FontWeight="SemiBold"
+                                 Classes.up="{Binding !Failed}" Classes.down="{Binding Failed}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="{Binding DetailedTimeAndHeight}" Classes="caption" VerticalAlignment="Center" />
+                    </Grid>
+                  </Border>
+                  <Border Classes="swapCard" IsVisible="{Binding HasSwapShowcase}">
+                    <StackPanel Spacing="8">
+                      <Grid ColumnDefinitions="*,Auto,*" VerticalAlignment="Center">
+                        <StackPanel Spacing="3" HorizontalAlignment="Left">
+                          <TextBlock Text="Отдано" Classes="caption muted" />
+                          <SelectableTextBlock Text="{Binding SwapSold}" Classes="down" FontWeight="Bold" FontSize="15" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Classes="avatar swap" Width="32" Height="32" Margin="16,0" VerticalAlignment="Center">
+                          <local:Icon Kind="swap" Width="16" Height="16" />
+                        </Border>
+                        <StackPanel Grid.Column="2" Spacing="3" HorizontalAlignment="Right">
+                          <TextBlock Text="Получено" Classes="caption muted" HorizontalAlignment="Right" />
+                          <SelectableTextBlock Text="{Binding SwapBought}" Classes="up" FontWeight="Bold" FontSize="15" HorizontalAlignment="Right" />
+                        </StackPanel>
+                      </Grid>
+                      <Border Classes="ratePill" HorizontalAlignment="Center" IsVisible="{Binding HasSwapRate}">
+                        <SelectableTextBlock Text="{Binding SwapRatePillText}" />
+                      </Border>
+                    </StackPanel>
+                  </Border>
+                  <ItemsControl ItemsSource="{Binding DisplayRows}">
                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="local:DetailRow">
-                        <Grid ColumnDefinitions="130,*" ColumnSpacing="12">
-                          <TextBlock Text="{Binding Label}" Classes="muted" FontSize="13" />
-                          <SelectableTextBlock Grid.Column="1" local:AddressMarks.Text="{Binding Value}" FontSize="13" TextWrapping="Wrap" />
+                        <Grid ColumnDefinitions="140,*" ColumnSpacing="12" Margin="0,2">
+                          <TextBlock Text="{Binding Label}" Classes="muted" FontSize="13" VerticalAlignment="Center" />
+                          <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" FontSize="13" FontWeight="SemiBold"
+                                               Classes="up" IsVisible="{Binding IsAmountIn}" VerticalAlignment="Center" />
+                          <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" FontSize="13" FontWeight="SemiBold"
+                                               Classes="down" IsVisible="{Binding IsAmountOut}" VerticalAlignment="Center" />
+                          <Border Grid.Column="1" Classes="ratePill" HorizontalAlignment="Left" IsVisible="{Binding IsRate}">
+                            <SelectableTextBlock Text="{Binding Value}" />
+                          </Border>
+                          <SelectableTextBlock Grid.Column="1" local:AddressMarks.Text="{Binding Value}" FontSize="13"
+                                               Classes="mono" TextWrapping="Wrap" IsVisible="{Binding IsAddress}" VerticalAlignment="Center" />
+                          <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12"
+                                               Classes="mono muted" TextWrapping="Wrap" IsVisible="{Binding IsHash}" VerticalAlignment="Center" />
+                          <Border Grid.Column="1" Classes="payloadPill" HorizontalAlignment="Left" IsVisible="{Binding IsPayload}" Padding="8,4">
+                            <SelectableTextBlock Text="{Binding Value}" FontSize="13" FontStyle="Italic" TextWrapping="Wrap" />
+                          </Border>
+                          <SelectableTextBlock Grid.Column="1" local:AddressMarks.Text="{Binding Value}" FontSize="13"
+                                               Classes.muted="{Binding IsMuted}" TextWrapping="Wrap" IsVisible="{Binding IsDefault}" VerticalAlignment="Center" />
                         </Grid>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
-                  <WrapPanel ItemSpacing="8" LineSpacing="8">
+                  <WrapPanel ItemSpacing="8" LineSpacing="8" Margin="0,4,0,0">
                     <Button Command="{Binding $parent[ListBox].((local:HistoryViewModel)DataContext).CopyHash}" CommandParameter="{Binding Hash}">
                       <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="copy" Width="14" Height="14" /><TextBlock Text="Скопировать хеш" /></StackPanel>
                     </Button>

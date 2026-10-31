@@ -52,8 +52,9 @@ public sealed class BridgeViewModel : ScreenModel
             Changed(nameof(NetworkHint)); Changed(nameof(Available)); _ = EstimateAsync();
         }
     }
-    public int NetworkIndex { get => networkIndex; set { if (value >= 0 && Set(ref networkIndex, value)) { Changed(nameof(NetworkHint)); Changed(nameof(RecipientCheck)); _ = EstimateAsync(); } } }
+    public int NetworkIndex { get => networkIndex; set { if (value >= 0 && Set(ref networkIndex, value)) { Changed(nameof(DestinationNetworkName)); Changed(nameof(NetworkHint)); Changed(nameof(RecipientCheck)); _ = EstimateAsync(); } } }
     public BridgeNetwork Network => (BridgeNetwork)networkIndex;
+    public string DestinationNetworkName => Bridge.NameOf(Network);
     public string NetworkHint => Coin == null ? "" : Bridge.TokenOf(Coin.Coin.Id, Network) is { } t
         ? $"{Coin.Symbol} придёт в {Bridge.NameOf(Network)} как токен {t.Denom.ToUpperInvariant()} (контракт {t.Contract})."
         : $"{Coin.Symbol} через мост уходит только в {string.Join(" и ", Bridge.NetworksOf(Coin.Coin.Id).Select(Bridge.NameOf))}.";
@@ -83,8 +84,8 @@ public sealed class BridgeViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = Coin?.Coin.Id;
-        Coins.Clear();
-        foreach (var b in main.Balances.Where(b => Bridge.NetworksOf(b.Coin.Id).Any())) Coins.Add(b);
+        var newCoins = main.Balances.Where(b => Bridge.NetworksOf(b.Coin.Id).Any()).ToList();
+        MainViewModel.SyncList(Coins, newCoins);
         Coin = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
         Changed(nameof(IsAvailable)); Changed(nameof(IsUnavailable)); SendNow.Refresh();
     }

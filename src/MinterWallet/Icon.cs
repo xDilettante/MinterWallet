@@ -11,7 +11,7 @@ public sealed class Icon : Control
     public static readonly StyledProperty<string?> KindProperty = AvaloniaProperty.Register<Icon, string?>(nameof(Kind));
     public static readonly StyledProperty<IBrush?> ForegroundProperty = TextElement.ForegroundProperty.AddOwner<Icon>();
 
-    private static readonly Dictionary<string, Geometry> Shapes = new()
+    internal static readonly Dictionary<string, Geometry> Shapes = new()
     {
         ["wallet"] = Geometry.Parse("M3 7 H19 A2 2 0 0 1 21 9 V18 A2 2 0 0 1 19 20 H5 A2 2 0 0 1 3 18 Z M3 7 V6 A2 2 0 0 1 5 4 H16 M16 13.5 H17"),
         ["send"] = Geometry.Parse("M7 17 L17 7 M9 7 H17 V15"),
@@ -47,6 +47,25 @@ public sealed class Icon : Control
         ["help"] = Geometry.Parse("M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 Z M9.5 9 A2.5 2.5 0 0 1 12 6.5 A2.5 2.5 0 0 1 14.5 9 C14.5 11 12 11.8 12 13.5 M12 16.8 V17.2"),
         ["users"] = Geometry.Parse("M12 8 A3.5 3.5 0 1 1 5 8 A3.5 3.5 0 1 1 12 8 Z M2.5 20 C3 16 5.5 14.5 8.5 14.5 C11.5 14.5 14 16 14.5 20 M15.5 4.8 A3.5 3.5 0 0 1 15.5 11.2 M17 14.8 C19.5 15.3 21 17 21.5 20"),
         ["moon"] = Geometry.Parse("M20 14.5 A8 8 0 1 1 9.5 4 A6.5 6.5 0 0 0 20 14.5 Z"),
+        ["chat"] = Geometry.Parse("M21 15 A2 2 0 0 1 19 17 H7 L3 21 V5 A2 2 0 0 1 5 3 H19 A2 2 0 0 1 21 5 Z"),
+        ["flip"] = Geometry.Parse("M8 4 V17 M5 8 L8 4 L11 8 M16 20 V7 M13 16 L16 20 L19 16"),
+        ["ethereum"] = Geometry.Parse("M12 2 L19 13.5 L12 17.5 L5 13.5 Z M12 2 V17.5 M5 13.5 H19 M12 19 L19 14.5 L12 22 L5 14.5 Z M12 19 V22"),
+        ["bsc"] = Geometry.Parse("M12 9 L15 12 L12 15 L9 12 Z M12 2.5 L15 5.5 L12 8.5 L9 5.5 Z M12 15.5 L15 18.5 L12 21.5 L9 18.5 Z M2.5 12 L5.5 9 L8.5 12 L5.5 15 Z M15.5 12 L18.5 9 L21.5 12 L18.5 15 Z"),
+        ["minter"] = Geometry.Parse("M12 2.5 L20 7.5 V16.5 L12 21.5 L4 16.5 V7.5 Z M12 2.5 V12 M12 12 L20 7.5 M12 12 L4 7.5 M12 12 V21.5"),
+        ["btc"] = Geometry.Parse("M7 4 H14 C16.5 4 18 5.5 18 7.5 C18 9 17 10.2 15.5 10.8 C17.5 11.5 18.5 13 18.5 15 C18.5 17.5 16.5 19 13.5 19 H7 M10 4 V2 M14 4 V2 M10 19 V21 M14 19 V21 M10 4 V19 M7 11.5 H15"),
+        ["usdt"] = Geometry.Parse("M4 6 H20 M12 6 V19 M8 11.5 C8 13.8 12 13.8 12 13.8 C12 13.8 16 13.8 16 11.5 C16 9.2 12 9.2 12 9.2 C12 9.2 8 9.2 8 11.5 Z"),
+        ["usdc"] = Geometry.Parse("M12 3.5 A8.5 8.5 0 0 0 4.5 15.5 M12 20.5 A8.5 8.5 0 0 0 19.5 8.5 M14 9 H10.5 A1.5 1.5 0 0 0 9 10.5 A1.5 1.5 0 0 0 10.5 12 H13.5 A1.5 1.5 0 0 1 15 13.5 A1.5 1.5 0 0 1 13.5 15 H10 M12 7 V17"),
+        ["ton"] = Geometry.Parse("M12 3 L20 8.5 L16 20.5 L12 18 L8 20.5 L4 8.5 Z M12 3 L8 8.5 L12 18 L16 8.5 Z M4 8.5 H20"),
+        ["doge"] = Geometry.Parse("M8 4 H14 A7 7 0 0 1 14 18 H8 V4 Z M5 11 H13"),
+        ["dot"] = Geometry.Parse("M12 6.5 A5.5 5.5 0 1 0 12 17.5 A5.5 5.5 0 1 0 12 6.5 Z M12 20 A1.5 1.5 0 1 0 12 23 A1.5 1.5 0 1 0 12 20 Z"),
+        ["hub"] = Geometry.Parse("M3 17 H21 M3 9 H21 M5 9 V17 M19 9 V17 M5 9 C8 13 16 13 19 9"),
+        ["dai"] = Geometry.Parse("M7 5 H13 A6 6 0 0 1 13 19 H7 Z M5 10 H15 M5 14 H15"),
+        ["sol"] = Geometry.Parse("M4 7 L7 4 H20 L17 7 Z M4 13.5 L7 10.5 H20 L17 13.5 Z M4 20 L7 17 H20 L17 20 Z"),
+    };
+
+    internal static readonly HashSet<string> FilledShapes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "bsc", "dot"
     };
 
     static Icon()
@@ -65,6 +84,11 @@ public sealed class Icon : Control
         var scale = Math.Min(Bounds.Width, Bounds.Height) / 24;
         var offset = new Point((Bounds.Width - 24 * scale) / 2, (Bounds.Height - 24 * scale) / 2);
         using (context.PushTransform(Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(offset.X, offset.Y)))
-            context.DrawGeometry(null, new Pen(Foreground, 1.9, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), shape);
+        {
+            if (FilledShapes.Contains(Kind))
+                context.DrawGeometry(Foreground, null, shape);
+            else
+                context.DrawGeometry(null, new Pen(Foreground, 1.9, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), shape);
+        }
     }
 }

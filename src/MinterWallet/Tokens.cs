@@ -178,8 +178,7 @@ public sealed class TokensViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keepA = CoinA?.Coin.Id; var keepB = CoinB?.Coin.Id;
-        Coins.Clear();
-        foreach (var b in main.Balances) Coins.Add(b);
+        MainViewModel.SyncList(Coins, main.Balances);
         CoinA = Coins.FirstOrDefault(c => c.Coin.Id == keepA) ?? Coins.FirstOrDefault(c => c.Coin.Id != 0) ?? Coins.FirstOrDefault();
         CoinB = Coins.FirstOrDefault(c => c.Coin.Id == keepB) ?? Coins.FirstOrDefault(c => c.Coin.Id == 0);
     }

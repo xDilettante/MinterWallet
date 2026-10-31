@@ -5,6 +5,7 @@ namespace MinterWallet;
 
 public sealed record CoinOption(uint Id, string Symbol, string Name, BigInteger Liquidity, string Note)
 {
+    public uint CoinId => Id;
     public string Initial => Symbol.Length > 0 ? Symbol[..1] : "?";
     public string Caption => Name.Length > 0 && !string.Equals(Name, Symbol, StringComparison.OrdinalIgnoreCase) ? Name : "";
     public bool HasCaption => Caption.Length > 0;

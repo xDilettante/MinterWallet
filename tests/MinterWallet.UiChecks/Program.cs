@@ -796,6 +796,17 @@ public static class UiScenario
             "the project's gate offered first, the devnet still in use");
         Shot("settings");
 
+        // Auto-lock toggle and minutes
+        main.Settings.AutoLock = "15";
+        main.Settings.AutoLockEnabled = false;
+        main.Settings.SaveSecurity.Execute(null);
+        var secSaved = WalletSettings.Load(data);
+        Check(!secSaved.AutoLockEnabled && secSaved.AutoLockMinutes == 15, "auto-lock disabled and minutes saved");
+        main.Settings.AutoLockEnabled = true;
+        main.Settings.SaveSecurity.Execute(null);
+        secSaved = WalletSettings.Load(data);
+        Check(secSaved.AutoLockEnabled && secSaved.AutoLockMinutes == 15, "auto-lock enabled again");
+
         // «Вид»: addresses in groups of four and every decimal, then back.
         main.Settings.AddressIndex = 1; main.Settings.DecimalsIndex = 1;
         Dispatcher.UIThread.RunJobs();

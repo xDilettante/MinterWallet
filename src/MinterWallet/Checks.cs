@@ -39,8 +39,7 @@ public sealed class CheckIssueViewModel : ScreenModel
     public void BalancesChanged()
     {
         var keep = Coin?.Coin.Id;
-        Coins.Clear();
-        foreach (var b in main.Balances) Coins.Add(b);
+        MainViewModel.SyncList(Coins, main.Balances);
         Coin = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault(c => c.Coin.Id == 0) ?? Coins.FirstOrDefault();
     }
 
