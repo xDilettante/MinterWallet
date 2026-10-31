@@ -65,4 +65,9 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           cd dist && sha256sum MinterWallet-* minter-wallet_* > SHA256SUMS.txt && cd ..
           { if [ -f ".github/notes/$version.md" ]; then cat ".github/notes/$version.md"; fi; sed "s/{version}/$version/g" .github/release-notes.md; } > notes.md
-          gh release create "$GITHUB_REF_NAME" --title "Minter Wallet $version" --notes-file notes.md dist/*
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "Minter Wallet $version" --notes-file notes.md
+            gh release upload "$GITHUB_REF_NAME" --clobber dist/*
+          else
+            gh release create "$GITHUB_REF_NAME" --title "Minter Wallet $version" --notes-file notes.md dist/*
+          fi

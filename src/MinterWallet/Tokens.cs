@@ -70,6 +70,7 @@ public sealed class TokensViewModel : ScreenModel
         set
         {
             if (value < 0 || !Set(ref modeIndex, value)) return;
+            Say("");
             foreach (var n in new[] { nameof(IsMine), nameof(IsCreate), nameof(IsPool) }) Changed(n);
             if (value == 1 && Prices.Count == 0) _ = LoadPricesAsync();
         }
@@ -235,6 +236,7 @@ public sealed class TokensViewModel : ScreenModel
 
     private async Task MintAsync()
     {
+        Say("");
         if (Selected is not { } t || !MainViewModel.TryAmount(MintAmount, this, out var value)) return;
         if (value > t.Room) { Say($"Больше предела выпуска: можно ещё до {Units.FormatCoins(t.Room)} {t.Symbol}.", Tone.Error); return; }
         var outcome = await main.ConfirmAndSendAsync("Выпуск токена", new MintTokenData(t.Info.Id, value), 0, [],
@@ -244,6 +246,7 @@ public sealed class TokensViewModel : ScreenModel
 
     private async Task BurnAsync()
     {
+        Say("");
         if (Selected is not { } t || !MainViewModel.TryAmount(BurnAmount, this, out var value)) return;
         if (value > Balance(t.Info.Id)) { Say($"Сжечь можно только своё: на счёте {Units.FormatCoins(Balance(t.Info.Id))} {t.Symbol}.", Tone.Error); return; }
         var outcome = await main.ConfirmAndSendAsync("Сжигание токена", new BurnTokenData(t.Info.Id, value), 0, [],
@@ -253,6 +256,7 @@ public sealed class TokensViewModel : ScreenModel
 
     private async Task GiveAwayAsync()
     {
+        Say("");
         if (Selected is not { } t) return;
         if (!Minter.Protocol.Address.TryParse(NewOwner.Trim(), out var to)) { Say("Укажите адрес нового владельца: Mx и 40 шестнадцатеричных символов.", Tone.Error); return; }
         if (to == main.Selected!.Account.Address) { Say("Этот счёт уже владелец.", Tone.Warning); return; }
@@ -311,6 +315,7 @@ public sealed class TokensViewModel : ScreenModel
 
     private async Task CreateAsync()
     {
+        Say("");
         if (Planned(true) is not { } data) return;
         var wallet = await main.WalletAsync();
         if (!recreating && await wallet.Backend.CoinAsync(Symbol) is { } taken) { Say($"Тикер {Symbol} уже занят (id {taken.Id}).", Tone.Error); return; }
@@ -352,6 +357,7 @@ public sealed class TokensViewModel : ScreenModel
 
     private async Task CreatePoolAsync()
     {
+        Say("");
         if (CoinA == null || CoinB == null) { Say("Выберите обе монеты.", Tone.Error); return; }
         if (CoinA.Coin.Id == CoinB.Coin.Id) { Say("Монеты совпадают.", Tone.Error); return; }
         if (!MainViewModel.TryAmount(AmountA, this, out var a) || !MainViewModel.TryAmount(AmountB, this, out var b)) return;

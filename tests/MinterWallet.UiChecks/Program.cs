@@ -705,6 +705,7 @@ public static class UiScenario
         main.Tokens.AmountA = "10"; main.Tokens.AmountB = "1";
         Check(main.Tokens.PoolText.StartsWith($"Начальная цена: 1 {ticker} = 0.1 MNT", StringComparison.Ordinal), $"the pool's starting price: {main.Tokens.PoolText}");
         Shot("tokens-pool");
+        main.Tokens.Say("");
         main.Tokens.CreatePool.Execute(null);
         await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "pool created", 90, () => main.Tokens.Status);
         Check(await shell.Backend!.SwapPoolAsync(token2, 0) is { } pool && pool.Amount0 + pool.Amount1 > 0, "the pool exists");
@@ -712,6 +713,7 @@ public static class UiScenario
         main.Tokens.ModeIndex = 0;
         main.Tokens.Selected = main.Tokens.Mine.First(t => t.Info.Id == token2);
         main.Tokens.NewOwner = "Mxf1e0f934a415d37018a318c779441143ba20f8d5";
+        main.Tokens.Say("");
         main.Tokens.GiveAway.Execute(null);
         await Until(() => main.Tokens.Status.StartsWith("Готово", StringComparison.Ordinal) ? main : null, "ownership given", 90, () => main.Tokens.Status);
         Check(main.Tokens.Mine.All(t => t.Info.Id != token2) && (await shell.Backend!.CoinAsync(token2))?.Owner == Address.Parse("Mxf1e0f934a415d37018a318c779441143ba20f8d5"), "C owns the token");
