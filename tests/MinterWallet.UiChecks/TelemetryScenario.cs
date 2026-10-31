@@ -21,10 +21,22 @@ public static class TelemetryScenario
             Check(a.Settings.InstallId == null && server.Clients.Count == 0, "disabled telemetry sends nothing");
             a.Settings.Telemetry = true;
             a.Settings.Save(first);
-            using (var held = new FileStream(Path.Combine(first, WalletSettings.FileName), FileMode.Open, FileAccess.Read, FileShare.None))
+            if (OperatingSystem.IsWindows())
             {
+                using var held = new FileStream(Path.Combine(first, WalletSettings.FileName), FileMode.Open, FileAccess.Read, FileShare.None);
                 await a.PingUsageAsync();
                 Check(server.Clients.Count == 0 && a.Settings.InstallId == null && a.UsageStatus.StartsWith("Статистика не отправлена", StringComparison.Ordinal), "failed id persistence fails closed and can retry");
+            }
+            else
+            {
+                var mode = File.GetUnixFileMode(first);
+                try
+                {
+                    File.SetUnixFileMode(first, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+                    await a.PingUsageAsync();
+                    Check(server.Clients.Count == 0 && a.Settings.InstallId == null && a.UsageStatus.StartsWith("Статистика не отправлена", StringComparison.Ordinal), "failed id persistence fails closed and can retry");
+                }
+                finally { File.SetUnixFileMode(first, mode); }
             }
             await a.PingUsageAsync();
             Check(server.Clients.Count == 1 && a.UsageStatus.StartsWith("Гейт подтвердил", StringComparison.Ordinal), "first launch registered and acknowledged");
