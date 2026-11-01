@@ -69,6 +69,7 @@ jobs:
           ANDROID_RELEASE_SIGNING_LINEAGE_BASE64: ${{ secrets.ANDROID_RELEASE_SIGNING_LINEAGE_BASE64 }}
         run: |
           test -n "$ANDROID_RELEASE_KEYSTORE_BASE64" || { echo "Configure private Android release signing secrets before publishing."; exit 1; }
+          test -n "$ANDROID_RELEASE_SIGNING_LINEAGE_BASE64" || { echo "Configure Android signing lineage for existing installations."; exit 1; }
           export MINTERWALLET_ANDROID_KEYSTORE="$RUNNER_TEMP/minterwallet-release.keystore"
           umask 077
           printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$MINTERWALLET_ANDROID_KEYSTORE"
@@ -77,17 +78,14 @@ jobs:
           dotnet build src/MinterWallet.Android/MinterWallet.Android.csproj -c Release -nologo
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
-          cp "$(find src/MinterWallet.Android/bin/Release -name '*-Signed.apk' | head -n 1)" "dist/MinterWallet-${version}-android-arm64.apk"
-          if [ -n "$ANDROID_RELEASE_SIGNING_LINEAGE_BASE64" ]; then
-            printf '%s' "$ANDROID_RELEASE_SIGNING_LINEAGE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.lineage"
-            signer="$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' | sort -V | tail -n 1)"
-            java -jar "$signer" sign --ks "$MINTERWALLET_ANDROID_KEYSTORE" --ks-key-alias "$MINTERWALLET_ANDROID_KEY_ALIAS" \
-              --ks-pass env:MINTERWALLET_ANDROID_STORE_PASSWORD --key-pass env:MINTERWALLET_ANDROID_KEY_PASSWORD \
-              --lineage "$RUNNER_TEMP/release.lineage" --rotation-min-sdk-version 28 --min-sdk-version 28 \
-              --v1-signing-enabled false --v2-signing-enabled false --v3-signing-enabled true \
-              --out "dist/MinterWallet-${version}-android9plus-upgrade.apk" "dist/MinterWallet-${version}-android-arm64.apk"
-            java -jar "$signer" verify --min-sdk-version 28 "dist/MinterWallet-${version}-android9plus-upgrade.apk"
-          fi
+          printf '%s' "$ANDROID_RELEASE_SIGNING_LINEAGE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.lineage"
+          signer="$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' | sort -V | tail -n 1)"
+          java -jar "$signer" sign --ks "$MINTERWALLET_ANDROID_KEYSTORE" --ks-key-alias "$MINTERWALLET_ANDROID_KEY_ALIAS" \
+            --ks-pass env:MINTERWALLET_ANDROID_STORE_PASSWORD --key-pass env:MINTERWALLET_ANDROID_KEY_PASSWORD \
+            --lineage "$RUNNER_TEMP/release.lineage" --rotation-min-sdk-version 28 --min-sdk-version 28 \
+            --v1-signing-enabled false --v2-signing-enabled false --v3-signing-enabled true --v4-signing-enabled false \
+            --out "dist/MinterWallet-${version}-android-arm64.apk" "$(find src/MinterWallet.Android/bin/Release -name '*-Signed.apk' | head -n 1)"
+          java -jar "$signer" verify --min-sdk-version 28 "dist/MinterWallet-${version}-android-arm64.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: android

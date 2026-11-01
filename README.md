@@ -130,13 +130,12 @@ Russian and English interface (as the system, or chosen in the settings). MIT li
 | Linux x64, большинство дистрибутивов | `MinterWallet-<версия>-x86_64.AppImage` | `chmod +x` и запустить |
 | Debian, Ubuntu, Mint | `minter-wallet_<версия>_amd64.deb` | `sudo apt install ./minter-wallet_<версия>_amd64.deb`, затем «Minter Wallet» в меню |
 | Linux x64 | `MinterWallet-<версия>-linux-x64` | просто файл: `chmod +x` и запустить |
-| Android 8.0+ (arm64) | `MinterWallet-<версия>-android-arm64.apk` | открыть `.apk` на телефоне и установить |
-| Обновление старого APK на Android 9+ | `MinterWallet-<версия>-android9plus-upgrade.apk` | установить поверх прежней версии, сохранив данные |
+| Android 9+ (arm64) | `MinterWallet-<версия>-android-arm64.apk` | один файл для новой установки и обновления поверх прежней версии |
 
-В 0.8.5 заменён опубликованный ранее ключ подписи Android. Для обновления с 0.7.2 на Android 9+ используйте
-файл `android9plus-upgrade.apk`; для новой установки — `android-arm64.apk`. Android 8 не поддерживает такую
-смену подписи: сначала убедитесь, что сохранили фразы/ключи всех кошельков, затем устанавливайте заново и
-восстанавливайте их. Удаление приложения стирает его локальные данные.
+Для Android используется один APK: при первом запуске установите его, при обновлении откройте новый файл
+поверх установленного приложения. Удалять приложение не нужно — его данные сохраняются.
+В APK включена цепочка смены сертификата, поэтому он обновляет и прежние версии со старой подписью.
+Поддерживаются Android 9 и новее; Android 8 больше не поддерживается.
 
 PIN привязан к исходной установке: для восстановления на другом устройстве нужна фраза/приватный ключ.
 Подробности: [вход, биометрия и подпись APK](MOBILE_SECURITY.md).
@@ -146,7 +145,7 @@ PIN привязан к исходной установке: для восста
 из тега (`.github/workflows/release.yml`).
 
 *Download: [latest release](https://github.com/xDilettante/MinterWallet/releases/latest) — the `.exe` for Windows,
-an AppImage, a `.deb` or a plain file for Linux, an `.apk` for Android 8.0+ (arm64), and `SHA256SUMS.txt`.*
+an AppImage, a `.deb` or a plain file for Linux, an `.apk` for Android 9+ (arm64), and `SHA256SUMS.txt`.*
 
 ## Сборка
 

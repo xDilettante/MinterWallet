@@ -46,34 +46,39 @@ try {
     Copy-Item $apk.FullName $dest -Force
     Write-Host ('{0,-40} {1,6:N1} MB' -f 'artifacts\wallet-android\MinterWallet.apk', ((Get-Item $dest).Length / 1MB))
 
-    # A proof of rotation allows Android 9+ to retain data when replacing the former public signing certificate.
-    # The upgrade artifact uses only v3: Android 8 must reject it rather than trust the compromised old key.
+    # One Android 9+ APK supports fresh installs and updates, including the former signing certificate.
     $lineage = $env:MINTERWALLET_ANDROID_SIGNING_LINEAGE
     if (-not $lineage -and $env:MINTERWALLET_ANDROID_KEYSTORE) { $lineage = Join-Path (Split-Path $env:MINTERWALLET_ANDROID_KEYSTORE -Parent) 'release.lineage' }
-    $upgrade = $null
     if ($Configuration -eq 'Release' -and $lineage -and (Test-Path $lineage)) {
         $signer = Get-ChildItem (Join-Path $androidSdk 'build-tools') -Directory | Sort-Object Name -Descending |
             ForEach-Object { Join-Path $_.FullName 'lib\apksigner.jar' } | Where-Object { Test-Path $_ } | Select-Object -First 1
         if (-not $signer) { throw 'apksigner.jar not found.' }
-        $upgrade = Join-Path $outDir 'MinterWallet-upgrade-android9plus.apk'
+        $rotated = Join-Path $outDir 'MinterWallet-rotated.tmp.apk'
         & "$jdk\bin\java.exe" --enable-native-access=ALL-UNNAMED -jar $signer sign `
             --ks $env:MINTERWALLET_ANDROID_KEYSTORE --ks-key-alias $env:MINTERWALLET_ANDROID_KEY_ALIAS `
             --ks-pass env:MINTERWALLET_ANDROID_STORE_PASSWORD --key-pass env:MINTERWALLET_ANDROID_KEY_PASSWORD `
             --lineage $lineage --rotation-min-sdk-version 28 --min-sdk-version 28 `
-            --v1-signing-enabled false --v2-signing-enabled false --v3-signing-enabled true --out $upgrade $dest
+            --v1-signing-enabled false --v2-signing-enabled false --v3-signing-enabled true --v4-signing-enabled false --out $rotated $dest
         if ($LASTEXITCODE -ne 0) { throw 'Signing certificate rotation failed.' }
-        & "$jdk\bin\java.exe" --enable-native-access=ALL-UNNAMED -jar $signer verify --min-sdk-version 28 $upgrade
+        & "$jdk\bin\java.exe" --enable-native-access=ALL-UNNAMED -jar $signer verify --min-sdk-version 28 $rotated
         if ($LASTEXITCODE -ne 0) { throw 'Rotated APK verification failed.' }
-        Write-Host 'Android 9+ upgrade with signing certificate rotation is ready.'
+        Move-Item -LiteralPath $rotated -Destination $dest -Force
+        Write-Host 'One Android 9+ APK is ready for installation and updates.'
     }
+    foreach ($oldName in 'MinterWallet-upgrade-android9plus.apk', 'MinterWallet-upgrade-android9plus.apk.idsig') {
+        $oldFile = Join-Path $outDir $oldName
+        if (Test-Path -LiteralPath $oldFile) { Remove-Item -LiteralPath $oldFile }
+    }
+    $checksum = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText((Join-Path $outDir 'SHA256SUMS.txt'), "$checksum  MinterWallet.apk`n", [Text.UTF8Encoding]::new($false))
 
     if ($Install) {
         $adb = Join-Path $androidSdk 'platform-tools\adb.exe'
         if (-not (Test-Path $adb)) { $adb = 'adb' }
         $deviceApi = & $adb shell getprop ro.build.version.sdk
         if ($LASTEXITCODE -ne 0 -or $deviceApi -notmatch '^\d+$') { throw 'Could not identify one connected Android device.' }
-        $installApk = if ($upgrade -and [int]$deviceApi -ge 28) { $upgrade } else { $dest }
-        & $adb install -r $installApk
+        if ([int]$deviceApi -lt 28) { throw 'Android 9 or newer is required.' }
+        & $adb install -r $dest
         if ($LASTEXITCODE -ne 0) { throw 'adb install failed' }
     }
 }

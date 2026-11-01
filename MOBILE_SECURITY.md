@@ -57,20 +57,24 @@
 MINTERWALLET_ANDROID_KEYSTORE, MINTERWALLET_ANDROID_KEY_ALIAS, MINTERWALLET_ANDROID_KEY_PASSWORD,
 MINTERWALLET_ANDROID_STORE_PASSWORD. Release без приватной конфигурации завершается ошибкой.
 
-- `artifacts/wallet-android/MinterWallet.apk`: новая подпись, свежая установка Android 8+.
-- `MinterWallet-upgrade-android9plus.apk`: обновление старой установки Android 9+ без удаления данных через
-  proof-of-rotation. Создаётся при наличии release.lineage рядом с приватным ключом либо переменной
-  MINTERWALLET_ANDROID_SIGNING_LINEAGE. Файл lineage связывает прежний и новый сертификаты; сформирован один раз
-  штатным apksigner rotate с запретом rollback. В дальнейшем старый приватный ключ для подписи не нужен.
-  APK содержит только v3-подпись новым ключом. Android 8 его отвергает, а не доверяет старому ключу.
-- На Android 8 нет поддержки ротации сертификатов: переход со старой подписи требует сохранённой фразы/ключа
-  и новой установки с восстановлением. Скрипты никогда автоматически не удаляют установленный кошелёк.
-- `-Install` выбирает upgrade APK на Android 9+, если он создан. На ошибке установки скрипт останавливается.
+`artifacts/wallet-android/MinterWallet.apk` — единый APK для Android 9+ (arm64), новой установки и обновления.
+При наличии release.lineage рядом с приватным ключом либо переменной MINTERWALLET_ANDROID_SIGNING_LINEAGE
+скрипт включает proof-of-rotation в этот же файл; отдельного upgrade APK нет. Сертификат новый, подпись v3,
+ротация действует начиная с API 28; v1/v2/v4 отключены. Цепочка была сформирована штатным apksigner rotate
+с запретом rollback. Старый приватный ключ для выпусков не нужен. Android 8 больше не поддерживается.
+`-Install` устанавливает этот же файл через adb install -r; при ошибке не удаляет рабочий кошелёк.
 
 GitHub release требует секреты ANDROID_RELEASE_KEYSTORE_BASE64, ANDROID_RELEASE_KEY_ALIAS,
-ANDROID_RELEASE_KEY_PASSWORD, ANDROID_RELEASE_STORE_PASSWORD. Необязательный ANDROID_RELEASE_SIGNING_LINEAGE_BASE64
-добавляет APK обновления Android 9+. При подготовке публичного выпуска 0.8.5 эти секреты настроены в закрытом
-хранилище GitHub Actions; ключ/пароли не включаются в код, артефакты или логи.
+ANDROID_RELEASE_KEY_PASSWORD, ANDROID_RELEASE_STORE_PASSWORD и ANDROID_RELEASE_SIGNING_LINEAGE_BASE64.
+Они настроены в закрытом хранилище GitHub Actions; ключ/пароли не включаются в код, артефакты или логи.
+
+В уже опубликованном 0.8.5 состав загрузок упрощён без изменения тега: проверенный CI APK с ротацией теперь
+распространяется под общим именем android-arm64.apk; отдельный upgrade APK убран, SHA256SUMS обновлён.
+Следующие сборки также задают minSdkVersion=28 в манифесте (ранее APK с v3-ротацией имел minSdkVersion=26,
+но сама подпись требовала Android 9). Версия приложения не повышалась из-за изменения упаковки.
+
+Источники: https://developer.android.com/tools/apksigner,
+https://source.android.com/docs/security/features/apksigning/v3.
 
 ## Проверки
 

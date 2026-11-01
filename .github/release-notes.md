@@ -8,8 +8,8 @@
   - `minter-wallet_{version}_amd64.deb` — для Debian, Ubuntu, Mint: `sudo apt install ./minter-wallet_{version}_amd64.deb`,
     затем «Minter Wallet» в меню приложений;
   - `MinterWallet-{version}-linux-x64` — просто файл: `chmod +x` и запустить.
-- **Android 8.0+ (arm64):** `MinterWallet-{version}-android-arm64.apk` — скачайте и откройте файл на телефоне (при первом запуске разрешите установку из браузера или файлового менеджера).
-- **Обновление с прежней подписи на Android 9+:** `MinterWallet-{version}-android9plus-upgrade.apk` — установите поверх прежней версии, без удаления данных.
+- **Android 9+ (arm64):** `MinterWallet-{version}-android-arm64.apk` — скачайте и откройте файл на телефоне (при первом запуске разрешите установку из браузера или файлового менеджера).
+  Этот же файл используется для обновления: установите поверх прежней версии, без удаления приложения и его данных.
 
 Устанавливать .NET не нужно: всё нужное уже внутри. Проверить, что файл скачался без искажений:
 `sha256sum -c SHA256SUMS.txt --ignore-missing` в Linux или `Get-FileHash <файл>` в PowerShell.
