@@ -852,8 +852,8 @@ public static class UiScenario
         main.Settings.ThemeIndex = 1;
         const string NewPassword = "ui-check-новый-пароль";
         main.Settings.CurrentPassword = Password; main.Settings.NewPassword = NewPassword; main.Settings.RepeatPassword = NewPassword;
-        main.Settings.ChangePassword.Execute(null);
-        await Until(() => main.Settings.Status.StartsWith("Пароль изменён", StringComparison.Ordinal) ? main : null, "password changed", 30, () => main.Settings.Status);
+        await main.Settings.ChangePassword.RunAsync();
+        Check(main.Settings.Tone == Tone.Success, "password changed: " + main.Settings.Status);
         main.LockNow.Execute(null);
         var unlock = (UnlockViewModel)shell.Page;
         Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
