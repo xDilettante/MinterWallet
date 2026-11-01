@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Android APK for the wallet: hosts MinterWallet.Mobile inside an AvaloniaMainActivity, stores the wallet's files
+       in Context.FilesDir, posts incoming-coin notifications through Android's NotificationManager and sets FLAG_SECURE
+       while recovery phrases or keys are on screen. -->
+  <PropertyGroup>
+    <TargetFramework Condition="$(NETCoreSdkVersion.StartsWith('10.'))">net10.0-android</TargetFramework>
+    <TargetFramework Condition="!$(NETCoreSdkVersion.StartsWith('10.'))">net11.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>MinterWallet.Android</AssemblyName>
+    <RootNamespace>MinterWallet.Android</RootNamespace>
+    <ApplicationId>network.minter.wallet</ApplicationId>
+    <ApplicationVersion>72</ApplicationVersion>
+    <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <AndroidUseIntermediateDesignerFile>true</AndroidUseIntermediateDesignerFile>
+    <AndroidKeyStore>true</AndroidKeyStore>
+    <AndroidSigningKeyStore>minterwallet.keystore</AndroidSigningKeyStore>
+    <AndroidSigningKeyAlias>androiddebugkey</AndroidSigningKeyAlias>
+    <AndroidSigningKeyPass>android</AndroidSigningKeyPass>
+    <AndroidSigningStorePass>android</AndroidSigningStorePass>
+    <LatestSupportedJavaVersion>25.99.0</LatestSupportedJavaVersion>
+    <NoWarn>$(NoWarn);ANDAS0000</NoWarn>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Android" Version="12.1.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MinterWallet.Mobile\MinterWallet.Mobile.csproj" />
+  </ItemGroup>
+</Project>

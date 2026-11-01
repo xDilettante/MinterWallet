@@ -1,0 +1,110 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet"
+             xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Mobile.MobileMainView"
+             x:DataType="local:MainViewModel">
+  <!-- The wallet on a phone: the desktop's sidebar becomes a top bar (wallet, source, lock) and a bottom bar of the four
+       busiest sections; the others, the source and the version are under «Ещё». The pages are the desktop's own. -->
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- Top bar -->
+    <Border Classes="mobileTopBar">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
+        <ComboBox ItemsSource="{Binding Derivation.Wallets}" SelectedItem="{Binding Derivation.SelectedWallet}" HorizontalAlignment="Stretch"
+                  Classes="mobileWallet" AutomationProperties.Name="Кошелёк">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="local:AccountItem">
+              <StackPanel Spacing="1">
+                <TextBlock Text="{Binding WalletTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding WalletCaption}" Classes="caption" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Grid.Column="1" Classes="icon mobileBarButton" Command="{Binding AddAddress}" AutomationProperties.Name="Добавить кошелёк">
+          <local:Icon Kind="plus" Width="20" Height="20" />
+        </Button>
+        <Button Grid.Column="2" Classes="icon mobileBarButton" Command="{Binding Refresh}" AutomationProperties.Name="Обновить">
+          <Panel Width="26" Height="26">
+            <Ellipse Stroke="{DynamicResource Line}" StrokeThickness="2" />
+            <Arc Stroke="{DynamicResource Accent}" StrokeThickness="2" StartAngle="-90" SweepAngle="{Binding CountdownAngle}" IsVisible="{Binding Counting}" />
+            <local:Icon Kind="refresh" Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Counting}" />
+            <local:Icon Kind="loader" Width="14" Height="14" Classes="spin" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Reading}" />
+            <Ellipse Classes="dot" Classes.on="{Binding Connected}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-1,-1,0" />
+          </Panel>
+        </Button>
+        <Button Grid.Column="3" Classes="icon mobileBarButton" Command="{Binding LockNow}" AutomationProperties.Name="Заблокировать">
+          <local:Icon Kind="lock" Width="20" Height="20" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- The open section; the others keep their state while hidden. -->
+    <Panel Grid.Row="1" Classes="mobilePages">
+      <views:OverviewPage IsVisible="{Binding IsOverview}" />
+      <views:SendPage IsVisible="{Binding IsSend}" />
+      <views:SwapPage IsVisible="{Binding IsSwap}" />
+      <views:BridgePage IsVisible="{Binding IsBridge}" />
+      <views:StakingPage IsVisible="{Binding IsStaking}" />
+      <views:TokensPage IsVisible="{Binding IsTokens}" />
+      <views:MultisigPage IsVisible="{Binding IsMultisig}" />
+      <views:HistoryPage IsVisible="{Binding IsHistory}" />
+      <views:AccountsPage IsVisible="{Binding IsAccounts}" />
+      <views:SettingsPage IsVisible="{Binding IsSettings}" />
+
+      <!-- «Ещё»: the other sections, the source and the version, as a sheet over the page. -->
+      <Grid x:Name="More" RowDefinitions="*,Auto" IsVisible="False">
+        <Border Grid.RowSpan="2" Background="#99000000" PointerPressed="OnMoreBackdrop" />
+        <Border Grid.Row="1" Background="{DynamicResource Card}" CornerRadius="20,20,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+          <StackPanel Margin="12,10,12,12" Spacing="2">
+            <Border Width="40" Height="4" CornerRadius="2" Background="{DynamicResource LineStrong}" HorizontalAlignment="Center" Margin="0,0,0,10" />
+            <Button Classes="ghost mobileMenuItem" Click="OnSection" Tag="Bridge"><StackPanel Orientation="Horizontal" Spacing="14"><local:Icon Kind="bridge" /><TextBlock Text="Мост" /></StackPanel></Button>
+            <Button Classes="ghost mobileMenuItem" Click="OnSection" Tag="Staking"><StackPanel Orientation="Horizontal" Spacing="14"><local:Icon Kind="stake" /><TextBlock Text="Стейкинг" /></StackPanel></Button>
+            <Button Classes="ghost mobileMenuItem" Click="OnSection" Tag="Tokens"><StackPanel Orientation="Horizontal" Spacing="14"><local:Icon Kind="coin" /><TextBlock Text="Токены" /></StackPanel></Button>
+            <Button Classes="ghost mobileMenuItem" Click="OnSection" Tag="Multisig"><StackPanel Orientation="Horizontal" Spacing="14"><local:Icon Kind="key" /><TextBlock Text="Общий счёт" /></StackPanel></Button>
+            <Button Classes="ghost mobileMenuItem" Click="OnSection" Tag="Accounts"><StackPanel Orientation="Horizontal" Spacing="14"><local:Icon Kind="users" /><TextBlock Text="Кошельки" /></StackPanel></Button>
+            <Button Classes="ghost mobileMenuItem" Click="OnSection" Tag="Settings"><StackPanel Orientation="Horizontal" Spacing="14"><local:Icon Kind="settings" /><TextBlock Text="Настройки" /></StackPanel></Button>
+            <Border Classes="divider" Margin="0,8" />
+            <Border Classes="card" Padding="12,10">
+              <Grid ColumnDefinitions="Auto,*">
+                <Ellipse Classes="dot" Classes.on="{Binding Connected}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                  <TextBlock Text="{Binding SourceName}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding NetworkText}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding BlockText}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="сертификат не проверяется" FontSize="12" Foreground="{DynamicResource Warning}" IsVisible="{Binding CertificateUnchecked}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" Margin="4,6,0,0" IsVisible="{Binding HasUsageLine}">
+              <local:Icon Kind="users" Width="13" Height="13" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding UsageLine}" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock Text="{Binding VersionTip}" Classes="caption" Margin="4,6,0,0" />
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Panel>
+
+    <!-- Bottom bar -->
+    <Border Grid.Row="2" Classes="mobileNavBar">
+      <UniformGrid Rows="1">
+        <Button x:Name="NavOverview" Classes="mobileNav" Click="OnSection" Tag="Overview" Classes.selected="{Binding IsOverview}">
+          <StackPanel Spacing="3"><local:Icon Kind="wallet" /><TextBlock Text="Обзор" /></StackPanel>
+        </Button>
+        <Button x:Name="NavSend" Classes="mobileNav" Click="OnSection" Tag="Send" Classes.selected="{Binding IsSend}">
+          <StackPanel Spacing="3"><local:Icon Kind="send" /><TextBlock Text="Отправить" /></StackPanel>
+        </Button>
+        <Button x:Name="NavSwap" Classes="mobileNav" Click="OnSection" Tag="Swap" Classes.selected="{Binding IsSwap}">
+          <StackPanel Spacing="3"><local:Icon Kind="swap" /><TextBlock Text="Обмен" /></StackPanel>
+        </Button>
+        <Button x:Name="NavHistory" Classes="mobileNav" Click="OnSection" Tag="History" Classes.selected="{Binding IsHistory}">
+          <StackPanel Spacing="3"><local:Icon Kind="history" /><TextBlock Text="История" /></StackPanel>
+        </Button>
+        <Button x:Name="NavMore" Classes="mobileNav" Click="OnMore">
+          <StackPanel Spacing="3"><local:Icon Kind="menu" /><TextBlock Text="Ещё" /></StackPanel>
+        </Button>
+      </UniformGrid>
+    </Border>
+  </Grid>
+</UserControl>

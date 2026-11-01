@@ -114,7 +114,7 @@ for k in range(0, len(pairs) - 1, 2):
     known.add(pairs[k])
 
 missing = {}
-for folder in ('src/MinterWallet', 'src/MinterWallet.Core', 'src/MinterWallet.Api'):
+for folder in ('src/MinterWallet', 'src/MinterWallet.Mobile', 'src/MinterWallet.Core', 'src/MinterWallet.Api'):
     for base, dirs, names in os.walk(os.path.join(ROOT, folder)):
         dirs[:] = [d for d in dirs if d not in ('bin', 'obj')]
         for name in names:

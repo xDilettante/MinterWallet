@@ -1,0 +1,100 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:MinterWallet"
+        x:Class="MinterWallet.Mobile.MobileStyles">
+  <!-- Over the shared Theme.axaml: the phone's bars and sizes for a finger rather than a mouse pointer. -->
+
+  <!-- Bars -->
+  <Style Selector="Border.mobileTopBar">
+    <Setter Property="Background" Value="{DynamicResource Sidebar}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="10,6,4,6" />
+  </Style>
+  <Style Selector="Border.mobileNavBar">
+    <Setter Property="Background" Value="{DynamicResource Sidebar}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="2,2,2,4" />
+  </Style>
+  <Style Selector="Button.mobileBarButton">
+    <Setter Property="MinWidth" Value="44" />
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ComboBox.mobileWallet">
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+  </Style>
+
+  <!-- Bottom navigation -->
+  <Style Selector="Button.mobileNav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="0,8,0,6" />
+    <Setter Property="MinHeight" Value="56" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+  </Style>
+  <Style Selector="Button.mobileNav local|Icon">
+    <Setter Property="Width" Value="22" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.mobileNav TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <Style Selector="Button.mobileNav:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.mobileNav:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="Button.mobileNav.selected">
+    <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+  </Style>
+  <Style Selector="Button.mobileNav.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.mobileNav.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+  </Style>
+  <Style Selector="Button.mobileNav.selected TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- «Ещё» -->
+  <Style Selector="Button.mobileMenuItem">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="14,13" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+
+  <!-- Finger-sized controls in the shared pages -->
+  <Style Selector="Button:not(.link):not(.mobileNav)">
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.option TextBlock">
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBox[AcceptsReturn=True]">
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="44" />
+  </Style>
+  <Style Selector="CheckBox">
+    <Setter Property="MinHeight" Value="40" />
+  </Style>
+  <Style Selector="ListBox.segmented">
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" ItemSpacing="2" LineSpacing="2" /></ItemsPanelTemplate>
+    </Setter>
+  </Style>
+</Styles>

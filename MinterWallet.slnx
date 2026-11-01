@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Minter.Protocol/Minter.Protocol.csproj" />
     <Project Path="src/MinterWallet/MinterWallet.csproj" />
+    <Project Path="src/MinterWallet.Mobile/MinterWallet.Mobile.csproj" />
     <Project Path="src/MinterWallet.Api/MinterWallet.Api.csproj" />
     <Project Path="src/MinterWallet.Core/MinterWallet.Core.csproj" />
   </Folder>
@@ -9,5 +10,6 @@
     <Project Path="tests/Minter.Protocol.Checks/Minter.Protocol.Checks.csproj" />
     <Project Path="tests/MinterWallet.Checks/MinterWallet.Checks.csproj" />
     <Project Path="tests/MinterWallet.UiChecks/MinterWallet.UiChecks.csproj" />
+    <Project Path="tests/MinterWallet.MobileChecks/MinterWallet.MobileChecks.csproj" />
   </Folder>
 </Solution>

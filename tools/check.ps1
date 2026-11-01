@@ -30,6 +30,9 @@ try {
     dotnet run -c Release --no-build --project tests/MinterWallet.UiChecks -- --telemetry
     if ($LASTEXITCODE -ne 0) { throw 'UI telemetry checks failed' }
 
+    dotnet run -c Release --no-build --project tests/MinterWallet.MobileChecks
+    if ($LASTEXITCODE -ne 0) { throw 'mobile UI checks failed' }
+
     foreach ($rid in 'win-x64', 'linux-x64') {
         dotnet publish src/MinterWallet -c Release -r $rid -p:PublishSingleFile=true -o "artifacts/wallet-$rid" -nologo -v q
         if ($LASTEXITCODE -ne 0) { throw "wallet publish $rid failed" }

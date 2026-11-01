@@ -49,8 +49,30 @@ jobs:
         with:
           name: linux
           path: dist
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build APK
+        run: |
+          dotnet workload install android
+          dotnet build src/MinterWallet.Android/MinterWallet.Android.csproj -c Release -nologo
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          cp src/MinterWallet.Android/bin/Release/*/android-arm64/*-Signed.apk "dist/MinterWallet-${version}-android-arm64.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist
   publish:
-    needs: [windows, linux]
+    needs: [windows, linux, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,9 +1,8 @@
 # Minter Wallet
 
-Кошелёк для сети [Minter](https://www.minter.network/): Windows и Linux, один файл без установки, на русском и
-английском.
+Кошелёк для сети [Minter](https://www.minter.network/): Windows, Linux и Android, на русском и английском.
 
-*A desktop wallet for the Minter network (Windows, Linux): one self-contained file, keys stay on the device,
+*A wallet for the Minter network (Windows, Linux, Android): keys stay on the device,
 Russian and English interface (as the system, or chosen in the settings). MIT licence.*
 
 ## Что умеет
@@ -104,7 +103,7 @@ Russian and English interface (as the system, or chosen in the settings). MIT li
 `https://188.127.237.145:8851` (всегда ему, даже если источник — своя нода):
 
 - случайный номер установки — создаётся при первом запуске, с ключами и адресами не связан;
-- версию кошелька, систему (Windows или Linux), язык интерфейса и сеть (основная или тестовая).
+- версию кошелька, систему (Windows, Linux или Android), язык интерфейса и сеть (основная или тестовая).
 
 Больше ничего: ни адресов, ни балансов, ни транзакций. Гейт хранит только эти поля и время первого и последнего
 появления; IP-адрес не сохраняется. Общие цифры — сейчас, за сутки, за 30 дней, всего — видны внизу боковой панели кошелька
@@ -122,26 +121,27 @@ Russian and English interface (as the system, or chosen in the settings). MIT li
 | Linux x64, большинство дистрибутивов | `MinterWallet-<версия>-x86_64.AppImage` | `chmod +x` и запустить |
 | Debian, Ubuntu, Mint | `minter-wallet_<версия>_amd64.deb` | `sudo apt install ./minter-wallet_<версия>_amd64.deb`, затем «Minter Wallet» в меню |
 | Linux x64 | `MinterWallet-<версия>-linux-x64` | просто файл: `chmod +x` и запустить |
+| Android 8.0+ (arm64) | `MinterWallet-<версия>-android-arm64.apk` | открыть `.apk` на телефоне и установить |
 
 Проверить, что файл скачался без искажений: `sha256sum -c SHA256SUMS.txt --ignore-missing` в Linux или
 `Get-FileHash <файл>` в PowerShell — хеш должен совпасть со строкой в `SHA256SUMS.txt`. Файлы собирает GitHub Actions
 из тега (`.github/workflows/release.yml`).
 
 *Download: [latest release](https://github.com/xDilettante/MinterWallet/releases/latest) — the `.exe` for Windows,
-an AppImage, a `.deb` or a plain file for Linux, and `SHA256SUMS.txt`.*
+an AppImage, a `.deb` or a plain file for Linux, an `.apk` for Android 8.0+ (arm64), and `SHA256SUMS.txt`.*
 
 ## Сборка
 
-Нужен [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0). Пользователю .NET не нужен: файл
-самодостаточный.
+Нужен [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) (для Android — плюс workload `android` и Android SDK). Пользователю .NET не нужен: файлы самодостаточные.
 
 ```bash
 dotnet publish src/MinterWallet -c Release -r win-x64 -p:PublishSingleFile=true -o artifacts/wallet-win-x64
 dotnet publish src/MinterWallet -c Release -r linux-x64 -p:PublishSingleFile=true -o artifacts/wallet-linux-x64
+powershell -ExecutionPolicy Bypass -File tools/build-android.ps1
 ```
 
-Получится `MinterWallet.exe` (около 23 МБ) и `MinterWallet` для Linux x64. Файлы кошелька — в `%LOCALAPPDATA%\MinterWallet`
-(Windows) или `~/.local/share/MinterWallet` (Linux); файл `portable` рядом с программой держит всё в папке `data`
+Получится `MinterWallet.exe` (около 23 МБ), `MinterWallet` для Linux x64 и `artifacts/wallet-android/MinterWallet.apk` для Android. Файлы кошелька — в `%LOCALAPPDATA%\MinterWallet`
+(Windows), `~/.local/share/MinterWallet` (Linux) или во внутренней памяти приложения (Android, без облачного резервного копирования); на ПК файл `portable` рядом с программой держит всё в папке `data`
 рядом с ней. `--data DIR` — отдельная папка данных, `--self-test` — проверка файла без экрана.
 
 ## Проверки
@@ -175,8 +175,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/check.ps1 -Devnet 
 | `src/Minter.Protocol` | протокол Minter: RLP, транзакции всех типов, подпись secp256k1, комиссии, чеки, BIP39/BIP32 |
 | `src/MinterWallet.Core` | хранилище ключей, отправка с предпросмотром и очередью, история, настройки |
 | `src/MinterWallet.Api` | клиент API v2 ноды Minter и MinterGate |
-| `src/MinterWallet` | окно (Avalonia 12): экраны, тема, иконки |
-| `tests/*` | проверки протокола, ядра кошелька и окна |
+| `src/MinterWallet` | настольное окно (Avalonia 12): экраны, тема, иконки |
+| `src/MinterWallet.Mobile` | мобильная оболочка для тех же экранов: навигация, шторки, адаптация под узкий экран |
+| `src/MinterWallet.Android` | приложение Android (`.apk`): активность Avalonia, уведомления, `FLAG_SECURE` |
+| `tests/*` | проверки протокола, ядра кошелька, настольного и мобильного интерфейса |
 | `tools/oracle`, `tools/js-oracle` | эталоны для фикстур: Go-нода Minter и JS-библиотеки |
 | `tools/devnet` | локальная сеть из одного валидатора на Go-ноде Minter v3.3.0 |
 

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The phone's wallet interface (MobileRoot, 412×915) under Avalonia.Headless with Skia rendering: walks through
+       onboarding, unlock, the bottom navigation bar, the «Ещё» sheet, the confirmation bottom sheet, every section,
+       both themes, English localization and horizontal fit on a narrow screen, saving screenshots to
+       artifacts/mobile-checks. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MinterWallet.Mobile\MinterWallet.Mobile.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
+  </ItemGroup>
+</Project>

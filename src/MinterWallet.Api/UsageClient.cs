@@ -52,7 +52,7 @@ public sealed class UsageClient : IDisposable
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    public static string Os => OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsLinux() ? "linux" : OperatingSystem.IsMacOS() ? "macos" : "other";
+    public static string Os => OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsAndroid() ? "android" : OperatingSystem.IsLinux() ? "linux" : OperatingSystem.IsMacOS() ? "macos" : "other";
 
     public async Task PingAsync(string id, string version, string os, string language, string network, CancellationToken ct = default)
     {

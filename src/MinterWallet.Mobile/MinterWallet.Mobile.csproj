@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The wallet's interface for phones (Android). Not a copy: the view models, pages, theme and translations of
+       src/MinterWallet are compiled in from there as links; only the desktop pieces (window, tray, single instance,
+       Win32 notifications, the desktop Program and App code) stay out, and the mobile shell (Mobile/) takes their place.
+       The assembly keeps the name MinterWallet, so every avares://MinterWallet/… of the shared XAML resolves as is.
+       Platform heads (src/MinterWallet.Android) and tests/MinterWallet.MobileChecks reference this library. -->
+  <PropertyGroup>
+    <AssemblyName>MinterWallet</AssemblyName>
+    <RootNamespace>MinterWallet</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <SatelliteResourceLanguages>en;ru</SatelliteResourceLanguages>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Desktop>..\MinterWallet\</Desktop>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MinterWallet.Api\MinterWallet.Api.csproj" />
+  </ItemGroup>
+  <!-- Shared with the desktop wallet: everything but its window, tray and entry point. -->
+  <ItemGroup>
+    <Compile Include="$(Desktop)*.cs" Exclude="$(Desktop)Program.cs;$(Desktop)App.axaml.cs;$(Desktop)MainWindow.axaml.cs;$(Desktop)ConfirmWindow.axaml.cs;$(Desktop)Tray.cs;$(Desktop)Notifier.cs" Link="Shared\%(Filename)%(Extension)" />
+    <Compile Include="$(Desktop)Views\*.cs" Link="Shared\Views\%(Filename)%(Extension)" />
+    <AvaloniaXaml Include="$(Desktop)*.axaml" Exclude="$(Desktop)MainWindow.axaml;$(Desktop)ConfirmWindow.axaml" Link="%(Filename)%(Extension)" />
+    <AvaloniaXaml Include="$(Desktop)Views\*.axaml" Link="Views\%(Filename)%(Extension)" />
+    <AvaloniaResource Include="$(Desktop)Assets\**" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
