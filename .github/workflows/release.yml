@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -63,6 +63,7 @@ jobs:
       - name: Build APK
         run: |
           dotnet workload install android
+          dotnet build src/MinterWallet.Android/MinterWallet.Android.csproj -t:InstallAndroidDependencies -c Release -p:AcceptAndroidSDKLicenses=true -nologo
           dotnet build src/MinterWallet.Android/MinterWallet.Android.csproj -c Release -nologo
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
