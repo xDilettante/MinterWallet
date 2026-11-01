@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:mobile="using:MinterWallet.Mobile" xmlns:views="using:MinterWallet.Views"
+             xmlns:input="using:Avalonia.Input.TextInput" x:Class="MinterWallet.Mobile.MobileCreateView" x:DataType="local:CreateWalletViewModel" Classes="mobileOnboarding">
+  <Grid RowDefinitions="Auto,*,Auto" MaxWidth="560">
+    <StackPanel Margin="16,8,16,12" Spacing="12">
+      <DockPanel><Button Command="{Binding Back}" Classes="link" HorizontalAlignment="Left"><StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="back" /><TextBlock Text="Назад" /></StackPanel></Button><TextBlock Text="Создать кошелёк" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" /></DockPanel>
+      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+        <Border Classes="step" Classes.active="{Binding IsStep1}" Classes.done="{Binding Past1}"><TextBlock Text="1. Фраза" /></Border>
+        <Border Grid.Column="1" Classes="step" Classes.active="{Binding IsStep2}" Classes.done="{Binding Past2}"><TextBlock Text="2. Проверка" /></Border>
+        <Border Grid.Column="2" Classes="step" Classes.active="{Binding IsStep3}"><TextBlock Text="3. Защита" /></Border>
+      </Grid>
+    </StackPanel>
+    <ScrollViewer Grid.Row="1">
+      <StackPanel Margin="16,8,16,20" Spacing="20" IsEnabled="{Binding !Busy}">
+        <StackPanel Spacing="16" IsVisible="{Binding IsStep1}">
+          <TextBlock Text="Сохраните фразу" Classes="h1" />
+          <TextBlock Text="Эти слова дают доступ ко всем средствам. Запишите их по порядку и храните в надёжном месте." Classes="prose muted" />
+          <ListBox Classes="segmented" SelectedIndex="{Binding WordCountIndex}" AutomationProperties.Name="Длина фразы"><ListBoxItem Content="12 слов" /><ListBoxItem Content="24 слова" /></ListBox>
+          <Border Classes="card"><ItemsControl ItemsSource="{Binding Words}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate x:DataType="local:PhraseWord"><Border Classes="word"><Grid ColumnDefinitions="24,*" ColumnSpacing="8"><TextBlock Text="{Binding Number}" Classes="caption mono" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding Word}" Classes="mono" FontSize="15" /></Grid></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Border>
+          <Button Content="Копировать фразу" Command="{Binding Copy}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <TextBlock Text="Никому не сообщайте фразу — даже службе поддержки." Classes="caption prose" Foreground="{DynamicResource Warning}" />
+        </StackPanel>
+        <StackPanel Spacing="16" IsVisible="{Binding IsStep2}">
+          <TextBlock Text="Проверьте запись" Classes="h1" />
+          <TextBlock Text="{Binding CheckHint}" Classes="prose muted" />
+          <Border Classes="card"><StackPanel Spacing="16"><StackPanel><TextBlock Text="{Binding Ask1}" Classes="label" /><TextBox Text="{Binding Answer1}" Classes="mono" /></StackPanel><StackPanel><TextBlock Text="{Binding Ask2}" Classes="label" /><TextBox Text="{Binding Answer2}" Classes="mono" /></StackPanel><StackPanel><TextBlock Text="{Binding Ask3}" Classes="label" /><TextBox Text="{Binding Answer3}" Classes="mono" /></StackPanel></StackPanel></Border>
+          <TextBlock Text="Проверку можно пропустить, если вы уже сохранили фразу." Classes="caption prose" />
+        </StackPanel>
+        <StackPanel Spacing="20" IsVisible="{Binding IsStep3}">
+          <TextBlock Text="Защитите кошелёк" Classes="h1" />
+          <mobile:CredentialPicker DataContext="{Binding Credentials}" />
+          <Border Classes="card"><StackPanel Spacing="16"><StackPanel><TextBlock Text="{Binding Credentials.Label}" Classes="label" /><TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" AutomationProperties.Name="{Binding Credentials.Label}" /></StackPanel><StackPanel><TextBlock Text="{Binding Credentials.RepeatLabel}" Classes="label" /><TextBox Text="{Binding Repeat}" PasswordChar="•" Classes="revealPasswordButton" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" AutomationProperties.Name="{Binding Credentials.RepeatLabel}" /></StackPanel><TextBlock Text="{Binding PasswordHint}" Classes="caption prose" /></StackPanel></Border>
+          <TextBlock Text="Биометрию можно будет включить на следующем шаге." Classes="caption prose" />
+        </StackPanel>
+        <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      </StackPanel>
+    </ScrollViewer>
+    <Border Grid.Row="2" Classes="mobileFooter">
+      <StackPanel Spacing="8"><ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" Height="3" /><Button Content="Фраза сохранена — далее" Command="{Binding Next}" Classes="accent" IsVisible="{Binding IsStep1}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" /><Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding IsStep2}"><Button Content="Пропустить" Command="{Binding Skip}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" /><Button Grid.Column="1" Content="Проверить" Command="{Binding Check}" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" /></Grid><Button Content="Создать кошелёк" Command="{Binding Finish}" Classes="accent" IsVisible="{Binding IsStep3}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" /></StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

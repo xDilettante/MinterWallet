@@ -146,6 +146,11 @@ public sealed class DerivationViewModel : ScreenModel
         SelectedWallet = Wallets.FirstOrDefault(w => (w.Account.SecretId ?? w.Account.Id) == (item?.Account.SecretId ?? item?.Account.Id ?? Shell.Settings.LastWalletId)) ?? Wallets.FirstOrDefault();
         if (item != null && Current?.Id != item.Account.Id) Select(item.Account);
         Changed(nameof(SelectedWallet));
+        if (Wallets.Count == 0)
+        {
+            Cancel(); main.Selected = null; Cards.Clear(); Parameters = false; Renaming = false;
+            foreach (var name in new[] { nameof(IsHd), nameof(CurrentName), nameof(CurrentPath), nameof(KindExplanation) }) Changed(name);
+        }
     }
 
     private void Select(WalletAccount account)

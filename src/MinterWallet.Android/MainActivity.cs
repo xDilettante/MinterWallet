@@ -1,12 +1,19 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using Android;
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
+using Android.Hardware.Biometrics;
 using Android.OS;
 using Android.Runtime;
+using Android.Security.Keystore;
 using Android.Views;
 using Avalonia;
 using Avalonia.Android;
+using Java.Security;
+using Javax.Crypto;
+using Javax.Crypto.Spec;
 
 namespace MinterWallet.Android;
 
@@ -17,10 +24,23 @@ public sealed class WalletAndroidApplication : AvaloniaAndroidApplication<App>
 
     public override void OnCreate()
     {
+        PreloadAndroidNative();
         MobileHost.DataDirectory = FilesDir?.AbsolutePath;
         if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("LANG")))
             System.Environment.SetEnvironmentVariable("LANG", Java.Util.Locale.Default?.Language ?? "en");
         base.OnCreate();
+    }
+
+    [DllImport("android")]
+    private static extern IntPtr AChoreographer_getInstance();
+
+    private static void PreloadAndroidNative()
+    {
+        try
+        {
+            _ = AChoreographer_getInstance();
+        }
+        catch { }
     }
 
     protected override AppBuilder CustomizeAppBuilder(AppBuilder builder) =>
@@ -39,20 +59,42 @@ public sealed class WalletAndroidApplication : AvaloniaAndroidApplication<App>
 public sealed class MainActivity : AvaloniaMainActivity, IMobilePlatform
 {
     private const string ChannelId = "minter_arrivals";
+    private AndroidCredentials? credentials;
+    private AndroidCredentials Credentials => credentials ??= new AndroidCredentials(this);
     private int notificationId;
+
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         MobileHost.DataDirectory ??= FilesDir?.AbsolutePath;
         MobileHost.Platform = this;
+        try { Credentials.DiscardLegacySecret(); }
+        catch { global::Android.Util.Log.Warn("MinterWallet", "Legacy biometric cache cleanup will be retried at the next launch."); }
         base.OnCreate(savedInstanceState);
         EnsureChannel();
+    }
+
+    public bool CanUseBiometrics => Credentials.Available;
+    public bool HasBiometricSecret => Credentials.HasSecret;
+    public bool CanUsePin => true;
+    public bool ShowsClipboardConfirmation => OperatingSystem.IsAndroidVersionAtLeast(33);
+    public string BiometricError => Credentials.Error;
+    public string DerivePinCredential(string pin) => Credentials.DerivePin(pin);
+    public Task<bool> EnableBiometricsAsync(string verifiedSecret) => Credentials.EnableAsync(verifiedSecret);
+    public Task<string?> ReadBiometricSecretAsync(string title, string subtitle) => Credentials.ReadAsync(title, subtitle);
+    public void ClearBiometricSecret() => Credentials.Clear();
+    public void CancelBiometrics() => Credentials.Cancel();
+
+    protected override void OnStop()
+    {
+        Credentials.Cancel();
+        base.OnStop();
     }
 
     public void Notify(string title, string text)
     {
         if (GetSystemService(NotificationService) is not NotificationManager manager) return;
-        if (OperatingSystem.IsAndroidVersionAtLeast(33) && CheckSelfPermission(Manifest.Permission.PostNotifications) != Permission.Granted)
+        if (OperatingSystem.IsAndroidVersionAtLeast(33) && CheckSelfPermission(Manifest.Permission.PostNotifications) != global::Android.Content.PM.Permission.Granted)
         {
             RequestPermissions([Manifest.Permission.PostNotifications], 1);
             return;

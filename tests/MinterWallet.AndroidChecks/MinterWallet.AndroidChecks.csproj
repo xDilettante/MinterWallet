@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>28.0</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <ApplicationId>network.minter.wallet.biometriccheck</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1</ApplicationDisplayVersion>
+    <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <LatestSupportedJavaVersion>25.99.0</LatestSupportedJavaVersion>
+    <NoWarn>$(NoWarn);ANDAS0000</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/MinterWallet.Android/AndroidCredentials.cs" Link="AndroidCredentials.cs" />
+    <Compile Include="../../src/MinterWallet.Core/WalletPaths.cs" Link="WalletPaths.cs" />
+  </ItemGroup>
+</Project>

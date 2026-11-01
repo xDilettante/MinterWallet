@@ -8,7 +8,7 @@
     <StackPanel Margin="32,28,32,32" Spacing="24" MaxWidth="720">
       <StackPanel Spacing="4">
         <TextBlock Text="Кошельки" Classes="h1" />
-        <TextBlock Classes="muted prose" Text="Один кошелёк — одна фраза восстановления, приватный ключ или адрес для просмотра. Адреса фразы и параметры деривации переключаются в обзоре кошелька." />
+        <TextBlock Classes="muted prose mobileIntro" Text="Один кошелёк — одна фраза восстановления, приватный ключ или адрес для просмотра. Адреса фразы и параметры деривации переключаются в обзоре кошелька." />
       </StackPanel>
       <views:NoticeBar Text="{Binding AccountsPage.Status}" Tone="{Binding AccountsPage.Tone}" />
 
@@ -106,7 +106,7 @@
       <!-- Address book -->
       <StackPanel Spacing="10">
         <TextBlock Text="Адресная книга" Classes="h2" />
-        <TextBlock Classes="caption prose" Text="Получатели, которым вы уже отправляли, и адреса, которым вы дали имя. При переводе их можно выбрать в «Контактах», а кошелёк не будет предупреждать о новом получателе." />
+        <TextBlock Classes="caption prose mobileHint" Text="Получатели, которым вы уже отправляли, и адреса, которым вы дали имя. При переводе их можно выбрать в «Контактах», а кошелёк не будет предупреждать о новом получателе." />
         <Border Classes="card" Padding="0" IsVisible="{Binding HasContacts}">
           <ItemsControl Classes="rows" ItemsSource="{Binding Contacts}">
             <ItemsControl.ItemTemplate>
@@ -141,7 +141,7 @@
       <!-- Adding -->
       <StackPanel Spacing="10" DataContext="{Binding AccountsPage}" x:DataType="local:AccountsViewModel">
         <TextBlock Text="Добавить кошелёк" Classes="h2" />
-        <TextBlock Classes="caption prose" Text="Здесь добавляется отдельный кошелёк: новая или существующая фраза, приватный ключ либо адрес для просмотра. Дочерние адреса вашей фразы переключаются в обзоре; добавлять их по одному не нужно." />
+        <TextBlock Classes="caption prose mobileHint" Text="Здесь добавляется отдельный кошелёк: новая или существующая фраза, приватный ключ либо адрес для просмотра. Дочерние адреса вашей фразы переключаются в обзоре; добавлять их по одному не нужно." />
         <ListBox Classes="segmented" SelectedIndex="{Binding AddIndex}" AutomationProperties.Name="Как добавить">
           <ListBoxItem Content="Новая фраза" />
           <ListBoxItem Content="Импорт фразы" />
@@ -191,7 +191,7 @@
             <!-- A vanity address -->
             <Panel IsVisible="{Binding IsVanity}">
               <StackPanel Spacing="12" DataContext="{Binding Vanity}" x:DataType="local:VanityViewModel">
-                <TextBlock Classes="muted prose" Text="Адрес, в котором есть нужные вам символы. Кошелёк перебирает случайные ключи или фразы на этом компьютере, пока не найдёт подходящий; ничего никуда не отправляется. Ограничений нет — кошелёк честно покажет шансы и время." />
+                <TextBlock Classes="muted prose mobileHint" Text="Адрес, в котором есть нужные вам символы. Кошелёк перебирает случайные ключи или фразы на этом компьютере, пока не найдёт подходящий; ничего никуда не отправляется. Ограничений нет — кошелёк честно покажет шансы и время." />
                 <StackPanel>
                   <TextBlock Text="Шаблон" Classes="label" />
                   <ComboBox SelectedIndex="{Binding TemplateIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Шаблон">
@@ -205,7 +205,7 @@
                     <ComboBoxItem Content="Зеркальные края — Mx1234…4321" />
                   </ComboBox>
                 </StackPanel>
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Grid Classes="phoneFields" ColumnDefinitions="*,*" ColumnSpacing="12">
                   <StackPanel IsVisible="{Binding UsesStart}"><TextBlock Text="Начало — сразу после Mx" Classes="label" /><TextBox Text="{Binding StartText}" Classes="mono" PlaceholderText="cafe" AutomationProperties.Name="Начало адреса" /></StackPanel>
                   <StackPanel Grid.Column="1" IsVisible="{Binding UsesEnd}"><TextBlock Text="Конец" Classes="label" /><TextBox Text="{Binding EndText}" Classes="mono" PlaceholderText="beef" AutomationProperties.Name="Конец адреса" /></StackPanel>
                   <StackPanel IsVisible="{Binding UsesAnywhere}"><TextBlock Text="Где угодно в адресе" Classes="label" /><TextBox Text="{Binding AnywhereText}" Classes="mono" PlaceholderText="c0ffee" AutomationProperties.Name="Где угодно в адресе" /></StackPanel>
@@ -213,7 +213,7 @@
                 <StackPanel IsVisible="{Binding UsesMask}" Spacing="6">
                   <TextBlock Text="Маска — все 40 символов после Mx" Classes="label" />
                   <TextBox Text="{Binding MaskText}" Classes="mono" PlaceholderText="dead*beef" AutomationProperties.Name="Маска адреса" />
-                  <TextBlock Classes="caption prose" Text="? — любой один символ, * — любые символы. Маска сравнивается со всем адресом: cafe* — начало, *beef — конец, cafe*beef — оба края, *c0ffee* — где угодно, ??77??* — 77 на третьем и четвёртом месте." />
+                  <TextBlock Classes="caption prose mobileHint" Text="? — любой один символ, * — любые символы. Маска сравнивается со всем адресом: cafe* — начало, *beef — конец, cafe*beef — оба края, *c0ffee* — где угодно, ??77??* — 77 на третьем и четвёртом месте." />
                 </StackPanel>
                 <StackPanel IsVisible="{Binding UsesRepeat}">
                   <TextBlock Text="Где" Classes="label" />
@@ -227,7 +227,7 @@
                   <TextBlock Text="{Binding CountLabel}" Classes="label" />
                   <NumericUpDown Value="{Binding Count}" Minimum="2" Maximum="20" Increment="1" FormatString="0" Width="130" HorizontalAlignment="Left" AutomationProperties.Name="Сколько символов" />
                 </StackPanel>
-                <TextBlock Classes="caption prose" Text="В адресе только цифры 0–9 и буквы a–f. Из них складываются слова: cafe, face, beef, babe, dead, fade, decade, deadbeef; цифры заменяют похожие буквы: c0ffee (0 вместо o), 1dea (1 вместо i), 5afe (5 вместо s)." />
+                <TextBlock Classes="caption prose mobileHint" Text="В адресе только цифры 0–9 и буквы a–f. Из них складываются слова: cafe, face, beef, babe, dead, fade, decade, deadbeef; цифры заменяют похожие буквы: c0ffee (0 вместо o), 1dea (1 вместо i), 5afe (5 вместо s)." />
                 <TextBlock Text="{Binding Preview}" Classes="mono" FontWeight="SemiBold" />
                 <views:NoticeBar Classes="inline" Text="{Binding Problem}" Tone="Error" />
                 <TextBlock Text="Что сделать" Classes="label" />
@@ -252,7 +252,7 @@
                 </Border>
                 <StackPanel Spacing="8" IsVisible="{Binding HasNotables}">
                   <TextBlock Text="Попутно найдено" Classes="h2" />
-                  <TextBlock Classes="caption prose" Text="Красивые адреса, которые попались по дороге, хотя шаблону не подходят: повторы, слова, последовательности, одинаковые края. Самые редкие — сверху." />
+                  <TextBlock Classes="caption prose mobileHint" Text="Красивые адреса, которые попались по дороге, хотя шаблону не подходят: повторы, слова, последовательности, одинаковые края. Самые редкие — сверху." />
                   <ItemsControl ItemsSource="{Binding Notables}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="local:NotableItem">

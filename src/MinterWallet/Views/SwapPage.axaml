@@ -16,7 +16,7 @@
       <!-- A limit order -->
       <Panel IsVisible="{Binding IsOrders}">
       <StackPanel Spacing="18" DataContext="{Binding Orders}" x:DataType="local:OrdersViewModel">
-        <TextBlock Classes="muted prose" Text="Ордер продаёт монету по вашей цене, когда пул до неё дойдёт. Монеты на продажу уходят в ордер сразу; отменить его можно в любой момент — они вернутся." />
+        <TextBlock Classes="muted prose mobileIntro" Text="Ордер продаёт монету по вашей цене, когда пул до неё дойдёт. Монеты на продажу уходят в ордер сразу; отменить его можно в любой момент — они вернутся." />
         <Border Classes="card">
           <StackPanel Spacing="16">
             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
@@ -81,7 +81,7 @@
       <!-- Liquidity -->
       <Panel IsVisible="{Binding IsLiquidity}">
       <StackPanel Spacing="18" DataContext="{Binding Liquidity}" x:DataType="local:LiquidityViewModel">
-        <TextBlock Classes="muted prose" Text="Добавьте две монеты в пул — и получайте долю комиссий с каждого обмена через него. Выйти можно в любой момент: вернётся ваша доля обеих монет." />
+        <TextBlock Classes="muted prose mobileIntro" Text="Добавьте две монеты в пул — и получайте долю комиссий с каждого обмена через него. Выйти можно в любой момент: вернётся ваша доля обеих монет." />
         <StackPanel Spacing="10">
           <DockPanel>
             <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding Load}" ToolTip.Tip="Обновить" AutomationProperties.Name="Обновить позиции"><local:Icon Kind="refresh" Width="16" Height="16" /></Button>
@@ -139,7 +139,7 @@
       <!-- Swap now -->
       <Panel IsVisible="{Binding IsSwapNow}">
       <StackPanel Spacing="18" DataContext="{Binding Swap}" x:DataType="local:SwapViewModel">
-      <TextBlock Classes="muted prose" Text="Выберите монеты и сумму — цену и маршрут кошелёк найдёт сам. Допустимое проскальзывание задаёт границу цены: дальше неё сеть сделку не проведёт." />
+      <TextBlock Classes="muted prose mobileIntro" Text="Выберите монеты и сумму — цену и маршрут кошелёк найдёт сам. Допустимое проскальзывание задаёт границу цены: дальше неё сеть сделку не проведёт." />
       <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Режим обмена">
         <ListBoxItem Content="Продать точную сумму" />
         <ListBoxItem Content="Купить точную сумму" />
@@ -234,7 +234,7 @@
           </StackPanel>
           <TextBlock Grid.Row="2" Text="Гарантия сети" Classes="muted" />
           <SelectableTextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding QuoteLimit}" Classes="mono" TextWrapping="Wrap" />
-          <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Classes="caption prose"
+          <TextBlock Grid.Row="3" Grid.ColumnSpan="3" Classes="caption prose mobileIntro"
                      Text="Оценка — от источника, обновляется каждые 5 секунд. Если цена уйдёт дальше гарантии, транзакция не выполнится и спишется только комиссия." />
         </Grid>
       </Border>

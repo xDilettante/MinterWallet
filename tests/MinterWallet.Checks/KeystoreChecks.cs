@@ -34,6 +34,21 @@ internal static class KeystoreChecks
         using var temp = new TempDirectory();
         var path = Path.Combine(temp.Path, Keystore.FileName);
         var (store, session) = Keystore.Create(path, "пароль-кошелька", Fast());
+        Assert.Equal("password", store.CredentialKind, "existing stores use passwords");
+        var pinPath = Path.Combine(temp.Path, "pin.json");
+        var (pinStore, pinSession) = Keystore.Create(pinPath, new string('a', 64), Fast(), credentialKind: "android-pin-v1");
+        using (pinSession)
+        {
+            Assert.Equal("android-pin-v1", Keystore.Load(pinPath).CredentialKind, "PIN kind saved with encrypted store");
+            pinSession.ChangePassword(new string('a', 64), "ordinary-password", "password");
+            Assert.Equal("password", Keystore.Load(pinPath).CredentialKind, "credential kind changes with encryption");
+            Directory.CreateDirectory(pinPath + ".tmp");
+            Assert.Throws<UnauthorizedAccessException>(() => pinSession.ChangePassword("ordinary-password", new string('b', 64), "android-pin-v1"), "failed credential save");
+            Directory.Delete(pinPath + ".tmp");
+            Assert.Equal("password", pinStore.CredentialKind, "failed save rolls back in-memory credential kind");
+            using (pinStore.Unlock("ordinary-password")) { }
+            using (Keystore.Load(pinPath).Unlock("ordinary-password")) { }
+        }
         var js = Fixtures.Js.GetProperty("mnemonics")[0];
         var first = session.AddMnemonic("  Abandon " + string.Join(' ', Abandon.Split(' ').Skip(1)) + " ", "Основной");
         Assert.Equal(js.GetProperty("accounts")[0].GetProperty("address").GetString(), first.Address.ToString(), "mnemonic account 0");
@@ -43,6 +58,13 @@ internal static class KeystoreChecks
         var imported = session.AddPrivateKey(TestKeys.Bytes(1), "Ключ");
         Assert.Equal(TestKeys.Address(1), imported.Address, "private key account");
         var watch = session.AddWatchOnly(TestKeys.Address(2), "Наблюдение");
+        Directory.CreateDirectory(path + ".tmp");
+        Assert.Throws<UnauthorizedAccessException>(() => session.RemoveSecret(first.SecretId!), "failed wallet deletion save");
+        Assert.Equal(4, store.Accounts.Count, "failed deletion preserves the in-memory wallet and all children");
+        Assert.Throws<UnauthorizedAccessException>(() => session.Remove(watch.Id), "failed watched-address deletion save");
+        Assert.Equal(4, store.Accounts.Count, "failed address deletion preserves the in-memory list");
+        Directory.Delete(path + ".tmp");
+        using (var stillAvailable = session.OpenKey(first)) Assert.Equal(first.Address, stillAvailable.Address, "failed deletion preserves the secret");
         Assert.Throws<InvalidOperationException>(() => session.AddWatchOnly(TestKeys.Address(2), "Ещё раз"), "duplicate address");
         Assert.Throws<ArgumentException>(() => session.AddMnemonic("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon", "Плохая"), "checksum");
         Assert.Throws<ArgumentException>(() => Keystore.Create(Path.Combine(temp.Path, "short.json"), "1234567", Fast()), "short password");

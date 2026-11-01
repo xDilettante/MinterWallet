@@ -51,6 +51,6 @@ public static class AutoFocus
 
     private static void Later(Control control) => Dispatcher.UIThread.Post(() =>
     {
-        if (control.IsEffectivelyVisible && control.IsEffectivelyEnabled) control.Focus(NavigationMethod.Tab);
+        if (GetIsEnabled(control) && control.IsEffectivelyVisible && control.IsEffectivelyEnabled) control.Focus(NavigationMethod.Tab);
     }, DispatcherPriority.Input);
 }

@@ -19,10 +19,10 @@
           <StackPanel Spacing="16">
             <StackPanel>
               <DockPanel Margin="0,0,0,6">
-                <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}">
+                <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}" AutomationProperties.Name="Вставить">
                   <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="paste" Width="16" Height="16" /><TextBlock Text="Вставить" /></StackPanel>
                 </Button>
-                <Button DockPanel.Dock="Right" Classes="link" Margin="0,0,16,0" x:Name="ContactsButton">
+                <Button DockPanel.Dock="Right" Classes="link" Margin="0,0,16,0" x:Name="ContactsButton" AutomationProperties.Name="Контакты">
                   <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="users" Width="16" Height="16" /><TextBlock Text="Контакты" /></StackPanel>
                   <Button.Flyout>
                     <Flyout Placement="BottomEdgeAlignedRight">
@@ -52,7 +52,7 @@
                 <TextBox Text="{Binding RecipientName}" PlaceholderText="Например, Иван" AutomationProperties.Name="Имя получателя" />
               </StackPanel>
             </StackPanel>
-            <StackPanel>
+            <StackPanel x:Name="SendCoinField">
               <TextBlock Text="Монета" Classes="label" />
               <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета">
                 <ComboBox.ItemTemplate>
@@ -68,7 +68,7 @@
                 </ComboBox.ItemTemplate>
               </ComboBox>
             </StackPanel>
-            <StackPanel>
+            <StackPanel x:Name="SendAmountField">
               <TextBlock Text="Сумма" Classes="label" />
               <TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Сумма" />
               <DockPanel Margin="0,6,0,0">
@@ -108,8 +108,8 @@
           </StackPanel>
         </Border>
         <DockPanel>
-          <Button DockPanel.Dock="Right" Content="Продолжить" Command="{Binding SendNow}" Classes="accent" MinWidth="150" />
-          <TextBlock Text="Перед подписью покажем все данные и спросим пароль." Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" />
+          <Button x:Name="SendPrimary" DockPanel.Dock="Right" Content="Продолжить" Command="{Binding SendNow}" Classes="accent" MinWidth="150" />
+          <TextBlock Text="Перед отправкой покажем адрес, сумму и комиссию." Classes="caption mobileIntro" VerticalAlignment="Center" TextWrapping="Wrap" />
         </DockPanel>
         <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
       </StackPanel>
@@ -121,7 +121,7 @@
         <TextBlock Classes="muted prose" Text="Чек — это обещание выплаты: вы подписываете его здесь, а получатель гасит по паролю, когда удобно. Монеты спишутся со счёта только при погашении, поэтому держите их на счёте до тех пор." />
         <Border Classes="card" IsVisible="{Binding !HasIssued}">
           <StackPanel Spacing="16">
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <Grid Classes="phoneFields" ColumnDefinitions="*,*" ColumnSpacing="12">
               <StackPanel>
                 <TextBlock Text="Монета" Classes="label" />
                 <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета чека">

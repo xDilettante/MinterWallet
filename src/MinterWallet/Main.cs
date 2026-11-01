@@ -36,6 +36,8 @@ public sealed record AccountItem(WalletAccount Account, string Kind, string Glyp
 
 public sealed record BalanceItem(CoinRef Coin, BigInteger Value, BigInteger BipValue, string BaseSymbol, string Usd = "", string Rub = "")
 {
+    public bool HasUsd => Usd.Length > 0;
+    public bool HasRub => Rub.Length > 0;
     public uint CoinId => Coin.Id;
     public string Symbol => Coin.Symbol;
     public string Id => Coin.Id.ToString(CultureInfo.InvariantCulture);
@@ -180,17 +182,23 @@ public sealed partial class MainViewModel : ScreenModel
     private readonly DispatcherTimer pulse;
     private DateTime pulseFrom = DateTime.UtcNow;
     private DateTime usageAt;
+    private int usageGeneration;
     private long pulseHeight = -1;
     private ChainStatus? pulseStatus;
     private bool reading;
     private double countdownAngle;
     private string usageLine = "", usageTip = "";
     public double CountdownAngle { get => countdownAngle; private set => Set(ref countdownAngle, value); }
-    public bool Reading { get => reading; private set { if (Set(ref reading, value)) Changed(nameof(Counting)); } }
+    public bool Reading { get => reading; private set { if (Set(ref reading, value)) { Changed(nameof(Counting)); Changed(nameof(ConnectionLabel)); } } }
     public bool Counting => !reading;
     public string UsageLine { get => usageLine; private set { Set(ref usageLine, value); Changed(nameof(HasUsageLine)); } }
     public string UsageTip { get => usageTip; private set => Set(ref usageTip, value); }
     public bool HasUsageLine => UsageLine.Length > 0;
+    private string usageOnline = "—", usageDay = "—", usageTotal = "—";
+    public string UsageOnline { get => usageOnline; set { if (Set(ref usageOnline, value)) Changed(nameof(UsageCompact)); } }
+    public string UsageDay { get => usageDay; set { if (Set(ref usageDay, value)) Changed(nameof(UsageCompact)); } }
+    public string UsageTotal { get => usageTotal; set { if (Set(ref usageTotal, value)) Changed(nameof(UsageCompact)); } }
+    public string UsageCompact => $"Онлайн {UsageOnline} · 24ч {UsageDay} · Всего {UsageTotal}";
 
     private void PulseTick()
     {
@@ -224,20 +232,24 @@ public sealed partial class MainViewModel : ScreenModel
     }
 
     // How many use the wallet, under the source: now, the day, all installs; versions and systems in the tip.
-    private async Task UsageAsync()
+    internal async Task UsageAsync()
     {
+        var generation = ++usageGeneration;
         usageAt = DateTime.UtcNow;
-        if (shell.UsageEndpoint is not { } endpoint) { UsageLine = ""; return; }
+        if (shell.UsageEndpoint is not { } endpoint) { UsageLine = ""; UsageOnline = UsageDay = UsageTotal = "—"; return; }
         try
         {
             using var usage = shell.CreateUsageClient(endpoint);
             var s = await usage.StatsAsync();
+            if (generation != usageGeneration) return;
+            UsageOnline = Display.Integer(s.Online); UsageDay = Display.Integer(s.Day); UsageTotal = Display.Integer(s.Total);
             UsageLine = $"Кошельков сейчас {Display.Integer(s.Online)} · за сутки {Display.Integer(s.Day)} · всего {Display.Integer(s.Total)}";
             UsageTip = $"Анонимная статистика гейта: сейчас {Display.Integer(s.Online)}, за сутки {Display.Integer(s.Day)}, за 30 дней {Display.Integer(s.Month)}, всего установок {Display.Integer(s.Total)}."
                 + (s.Versions.Count > 0 ? "\nВерсии: " + string.Join(", ", s.Versions.Select(v => $"{v.Name} — {Display.Integer(v.Count)}")) : "")
                 + (s.Systems.Count > 0 ? "\nСистемы: " + string.Join(", ", s.Systems.Select(v => $"{v.Name} — {Display.Integer(v.Count)}")) : "");
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { UsageLine = "Статистика временно недоступна"; UsageTip = Describe(e); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        { if (generation == usageGeneration) { UsageOnline = UsageDay = UsageTotal = "—"; UsageLine = "Статистика временно недоступна"; UsageTip = Describe(e); } }
     }
 
     public ObservableCollection<ContactItem> Contacts { get; } = [];
@@ -521,7 +533,7 @@ internal partial class StateCacheJson : JsonSerializerContext;
             var previous = section;
             if (!Set(ref section, value)) return;
             if (previous == Section.Accounts) AccountsPage.HidePhrase.Execute(null);
-            foreach (var name in new[] { nameof(SectionIndex), nameof(IsOverview), nameof(IsSend), nameof(IsSwap), nameof(IsBridge), nameof(IsStaking), nameof(IsTokens), nameof(IsMultisig), nameof(IsHistory), nameof(IsAccounts), nameof(IsSettings) }) Changed(name);
+            foreach (var name in new[] { nameof(SectionIndex), nameof(SectionTitle), nameof(IsOverview), nameof(IsSend), nameof(IsSwap), nameof(IsBridge), nameof(IsStaking), nameof(IsTokens), nameof(IsMultisig), nameof(IsHistory), nameof(IsAccounts), nameof(IsSettings) }) Changed(name);
             if (value == Section.Accounts) AccountsPage.EnsureReady();
             if (value == Section.History && History.Items.Count == 0) History.Load.Execute(null);
             if (value == Section.Tokens && !Tokens.HasMine) Tokens.Load.Execute(null);
@@ -531,6 +543,12 @@ internal partial class StateCacheJson : JsonSerializerContext;
         }
     }
     public int SectionIndex { get => (int)section; set { if (value >= 0) Section = (Section)value; } }
+    public string SectionTitle => section switch
+    {
+        Section.Overview => "Обзор", Section.Send => "Отправка", Section.Swap => "Обмен", Section.Bridge => "Мост",
+        Section.Staking => "Стейкинг", Section.Tokens => "Токены", Section.Multisig => "Общий счёт", Section.History => "История",
+        Section.Accounts => "Кошельки", Section.Settings => "Настройки", _ => "Minter Wallet",
+    };
     public bool IsOverview => section == Section.Overview;
     public bool IsSend => section == Section.Send;
     public bool IsSwap => section == Section.Swap;
@@ -550,7 +568,12 @@ internal partial class StateCacheJson : JsonSerializerContext;
             var addressChanged = selected?.Account.Address != value?.Account.Address;
             if (!Set(ref selected, value)) return;
             if (addressChanged) ClearAccountState();
-            if (value == null) { ReceiveSafetyChanged(); return; }
+            if (value == null)
+            {
+                History?.Reset(); Tokens?.Reset(); Validator?.Reset();
+                Changed(nameof(Address)); Changed(nameof(AccountName)); Changed(nameof(IsWatchOnly));
+                ReceiveSafetyChanged(); return;
+            }
             Derivation.SelectedChanged();
             foreach (var name in new[] { nameof(Address), nameof(AddressText), nameof(CanSign), nameof(IsWatchOnly), nameof(AccountName) }) Changed(name);
             Request?.Update();
@@ -579,11 +602,12 @@ internal partial class StateCacheJson : JsonSerializerContext;
     public bool CanSign => Selected is { Account.WatchOnly: false } && !Derivation.Parameters;
     public bool IsWatchOnly => Selected is { Account.WatchOnly: true };
     public string BaseSymbol => Symbol(0);
-    public string SourceName { get => sourceName; set => Set(ref sourceName, value); }
+    public string SourceName { get => sourceName; set { if (Set(ref sourceName, value)) Changed(nameof(ConnectionLabel)); } }
+    public string ConnectionLabel => Connected ? SourceName : Reading ? "Подключение…" : "Нет соединения";
     public string NetworkText { get => networkText; set => Set(ref networkText, value); }
     public string BlockText { get => blockText; set => Set(ref blockText, value); }
     public string SourceTip => $"{shell.ActiveSource.Url}\nОтветы источника кошелёк не проверяет: выбирайте тот, которому доверяете.{(updated.Length > 0 ? $"\nОбновлено {updated}." : "")}";
-    public bool Connected { get => connected; set { Set(ref connected, value); Changed(nameof(CertificateUnchecked)); } }
+    public bool Connected { get => connected; set { Set(ref connected, value); Changed(nameof(CertificateUnchecked)); Changed(nameof(ConnectionLabel)); } }
     public bool CertificateUnchecked => shell.ActiveSource.SkipCertificateCheck && shell.ActiveSource.Url.StartsWith("https", StringComparison.OrdinalIgnoreCase);
     public string TotalText { get => totalText; set => Set(ref totalText, value); }
     public string TotalCaption { get => totalCaption; set => Set(ref totalCaption, value); }
@@ -1759,6 +1783,7 @@ public sealed class HistoryItem : Observable
     public bool FromExplorer { get; }
     public string Summary => Entry.Summary;
     public string Title => Details.Title;
+    public bool HasDistinctTitle => !string.Equals(Title, BadgeText, StringComparison.Ordinal);
     public string Subtitle { get; }
     public bool HasSubtitle => Subtitle.Length > 0;
     public string PartiesLine { get; }
@@ -2232,6 +2257,8 @@ public sealed class SettingsViewModel : ScreenModel
     public SettingsViewModel(MainViewModel main)
     {
         this.main = main;
+        Credentials = new CredentialChoice(main.Shell.Credentials, main.Shell.Credentials.UsesPin);
+        Credentials.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(CredentialChoice.UsePin)) { NewPassword = ""; RepeatPassword = ""; Changed(nameof(PasswordHint)); } };
         var s = main.Shell.Settings;
         gasCap = s.GasPriceCap.ToString(CultureInfo.InvariantCulture);
         autoLock = (s.AutoLockMinutes > 0 ? s.AutoLockMinutes : 10).ToString(CultureInfo.InvariantCulture);
@@ -2285,7 +2312,9 @@ public sealed class SettingsViewModel : ScreenModel
     public string CurrentPassword { get => currentPassword; set => Set(ref currentPassword, value); }
     public string NewPassword { get => newPassword; set { Set(ref newPassword, value); Changed(nameof(PasswordHint)); } }
     public string RepeatPassword { get => repeatPassword; set { Set(ref repeatPassword, value); Changed(nameof(PasswordHint)); } }
-    public string PasswordHint => NewPassword.Length == 0 ? "" : Passwords.Hint(NewPassword, RepeatPassword);
+    public CredentialChoice Credentials { get; }
+    public WalletCredentials CurrentCredentials => main.Shell.Credentials;
+    public string PasswordHint => NewPassword.Length == 0 ? "" : Credentials.Hint(NewPassword, RepeatPassword);
     public AsyncCommand ChangePassword { get; }
     public bool MinimizeToTray
     {
@@ -2464,12 +2493,24 @@ public sealed class SettingsViewModel : ScreenModel
     // The key store re-encrypted under the new password (Argon2id with a fresh salt); the current one proves the owner.
     private async Task ChangePasswordAsync()
     {
-        if (Passwords.Problem(NewPassword, RepeatPassword) is { } problem) { Say(problem, Tone.Error); return; }
+        if (Credentials.Problem(NewPassword, RepeatPassword) is { } problem) { Say(problem, Tone.Error); return; }
         Say("Шифрование ключей новым паролем…", Tone.Progress);
-        try { await Task.Run(() => main.Shell.Session!.ChangePassword(CurrentPassword, NewPassword)); }
-        catch (WrongPasswordException) { Say("Текущий пароль неверен — пароль не изменён.", Tone.Error); return; }
+        string replacement;
+        using var hold = main.HoldAutoLock();
+        try
+        {
+            var session = main.Shell.Session!;
+            var kind = Credentials.Kind;
+            replacement = Credentials.Resolve(NewPassword);
+            var current = await CurrentCredentials.VerifyAsync(CurrentPassword);
+            if (main.Shell.Page != main || !ReferenceEquals(main.Shell.Session, session)) return;
+            await Task.Run(() => session.ChangePassword(current, replacement, kind));
+        }
+        catch (WrongPasswordException) { Say(CurrentCredentials.Incorrect, Tone.Error); return; }
         CurrentPassword = ""; NewPassword = ""; RepeatPassword = "";
-        Say("Пароль изменён. Он нужен при входе и перед каждой подписью.", Tone.Success);
+        Changed(nameof(CurrentCredentials));
+        CurrentCredentials.Accepted(replacement, changed: true);
+        Say("Способ защиты изменён.", Tone.Success);
     }
 
     private void SaveSecurityNow()

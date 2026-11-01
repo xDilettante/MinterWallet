@@ -30,6 +30,8 @@ public sealed class CreateWalletViewModel : ScreenModel
     public CreateWalletViewModel(Shell shell)
     {
         this.shell = shell;
+        Credentials = new CredentialChoice(shell.Credentials);
+        Credentials.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(CredentialChoice.UsePin)) { Password = ""; Repeat = ""; Changed(nameof(PasswordHint)); } };
         Words = []; Ask = [];
         UsePhrase();
         Next = new Command(() => { Say(""); Step = 2; });
@@ -41,6 +43,7 @@ public sealed class CreateWalletViewModel : ScreenModel
     }
 
     public IReadOnlyList<PhraseWord> Words { get; private set; }
+    public CredentialChoice Credentials { get; }
     public int[] Ask { get; private set; }
 
     // 12 words (128 bits, as most wallets make) or 24 (256 bits); a new phrase on each change, before anything is saved.
@@ -87,7 +90,7 @@ public sealed class CreateWalletViewModel : ScreenModel
     public string Answer3 { get => answer3; set => Answer(ref answer3, value); }
     public string Password { get => password; set { Set(ref password, value); Edited(); } }
     public string Repeat { get => repeat; set { Set(ref repeat, value); Edited(); } }
-    public string PasswordHint => Passwords.Hint(Password, Repeat);
+    public string PasswordHint => Credentials.Hint(Password, Repeat);
     public bool Busy { get => busy; set { Set(ref busy, value); Finish.Refresh(); } }
     public Command Next { get; }
     public Command Back { get; }
@@ -138,17 +141,19 @@ public sealed class CreateWalletViewModel : ScreenModel
 
     private async Task FinishAsync()
     {
-        if (Passwords.Problem(Password, Repeat) is { } problem) { Say(problem, Tone.Error); return; }
+        if (Credentials.Problem(Password, Repeat) is { } problem) { Say(problem, Tone.Error); return; }
         Busy = true;
         Say("Шифрование ключей…", Tone.Progress);
         try
         {
-            var pass = Password;
+            var pass = Credentials.Resolve(Password);
+            var kind = Credentials.Kind;
             var phrase = mnemonic;
-            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, pass));
+            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, pass, credentialKind: kind));
             session.AddMnemonic(phrase, "Основной");
             mnemonic = ""; Words = []; answer1 = answer2 = answer3 = ""; Password = ""; Repeat = "";
             shell.Opened(store, session);
+            shell.Credentials.Accepted(pass);
         }
         finally { Busy = false; }
     }
@@ -235,12 +240,16 @@ public sealed class ImportViewModel : ScreenModel
     public ImportViewModel(Shell shell, ImportKind kind)
     {
         this.shell = shell; Kind = kind;
+        Credentials = new CredentialChoice(shell.Credentials);
+        Credentials.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(CredentialChoice.UsePin)) { Password = ""; Repeat = ""; Changed(nameof(PasswordHint)); } };
         Back = new Command(shell.ShowWelcome);
         Paste = new AsyncCommand(PasteAsync, Fail);
         Finish = new AsyncCommand(FinishAsync, Fail, () => !Busy);
     }
 
     public ImportKind Kind { get; }
+    public string StorageHint => Kind == ImportKind.WatchOnly ? "Баланс и история без доступа к ключам" : "Ключи останутся на этом устройстве.";
+    public CredentialChoice Credentials { get; }
     public string Title => Kind switch { ImportKind.Mnemonic => "Восстановить по фразе", ImportKind.PrivateKey => "Импорт приватного ключа", _ => "Только просмотр" };
     public string Hint => Kind switch
     {
@@ -254,7 +263,7 @@ public sealed class ImportViewModel : ScreenModel
     public string Name { get => name; set => Set(ref name, value); }
     public string Password { get => password; set { Set(ref password, value); Changed(nameof(PasswordHint)); Edited(); } }
     public string Repeat { get => repeat; set { Set(ref repeat, value); Changed(nameof(PasswordHint)); Edited(); } }
-    public string PasswordHint => Passwords.Hint(Password, Repeat);
+    public string PasswordHint => Credentials.Hint(Password, Repeat);
     public bool Busy { get => busy; set { Set(ref busy, value); Finish.Refresh(); } }
     public bool IsPhrase => Kind == ImportKind.Mnemonic;
     public bool HidesSecret => Kind == ImportKind.PrivateKey;
@@ -283,17 +292,19 @@ public sealed class ImportViewModel : ScreenModel
         var text = Secret.Trim();
         // Validate before creating anything on disk.
         if (Secrets.Problem(Kind, text) is { } problem) { Say(problem.Length == 0 ? $"Укажите: {SecretLabel.ToLowerInvariant()}." : problem, Tone.Error); return; }
-        if (Passwords.Problem(Password, Repeat) is { } bad) { Say(bad, Tone.Error); return; }
+        if (Credentials.Problem(Password, Repeat) is { } bad) { Say(bad, Tone.Error); return; }
         Busy = true;
         Say("Шифрование ключей…", Tone.Progress);
         try
         {
-            var pass = Password;
-            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, pass));
+            var pass = Credentials.Resolve(Password);
+            var kind = Credentials.Kind;
+            var (store, session) = await Task.Run(() => Keystore.Create(shell.KeystorePath, pass, credentialKind: kind));
             try { Secrets.Add(session, Kind, text, Name); }
             catch { session.Dispose(); File.Delete(shell.KeystorePath); File.Delete(shell.KeystorePath + ".bak"); throw; }
             Secret = ""; Password = ""; Repeat = "";
             shell.Opened(store, session);
+            shell.Credentials.Accepted(pass);
         }
         finally { Busy = false; }
     }
@@ -314,27 +325,49 @@ public sealed class UnlockViewModel : ScreenModel
     }
 
     public string Version => $"v{Program.Version}";
+    public WalletCredentials Credentials => shell.Credentials;
     public string Password { get => password; set { Set(ref password, value); if (Tone == Tone.Error) Say(""); } }
     public bool Busy { get => busy; set { Set(ref busy, value); Unlock.Refresh(); } }
     public bool Forgetting { get => forgot; set => Set(ref forgot, value); }
-    public string StartOverText => $"Пароль нигде не хранится и не восстанавливается. Если у вас сохранена фраза или ключ, восстановите кошелёк заново: " +
+    public string ForgotText => Credentials.UsesPin ? "Забыли PIN-код?" : "Забыли пароль?";
+    public string StartOverText => $"Если вы забыли PIN-код или пароль, восстановите кошелёк по сохранённой фразе или ключу: " +
         $"нынешний файл ключей не удалится, а будет переименован в {Keystore.FileName}.old-…";
     public AsyncCommand Unlock { get; }
     public Command Forgot { get; }
     public Command StartOver { get; }
 
+    // Receives only the secret decrypted by the OS, not user-entered PIN digits.
+    public async Task<bool> UnlockBiometricAsync(string secret)
+    {
+        if (Busy || shell.Page != this) return false;
+        Busy = true;
+        var store = shell.Store!;
+        try
+        {
+            var session = await Task.Run(() => store.Unlock(secret));
+            if (shell.Page != this || !ReferenceEquals(shell.Store, store)) { session.Dispose(); return false; }
+            try { Credentials.ResetAttempts(); }
+            catch { session.Dispose(); throw; }
+            Password = "";
+            shell.Opened(store, session);
+            return true;
+        }
+        catch (WrongPasswordException) { Say("Введите PIN-код или пароль и включите биометрию заново в настройках.", Tone.Warning); return false; }
+        finally { Busy = false; }
+    }
+
     private async Task UnlockAsync()
     {
-        if (Password.Length == 0) { Say("Введите пароль.", Tone.Warning); return; }
+        if (Password.Length == 0) { Say(Credentials.Required, Tone.Warning); return; }
         Say(""); Busy = true;
         try
         {
-            var pass = Password;
-            var session = await Task.Run(() => shell.Store!.Unlock(pass));
+            var (session, pass) = await Credentials.UnlockAsync(Password);
             Password = "";
             shell.Opened(shell.Store!, session);
+            Credentials.Accepted(pass);
         }
-        catch (WrongPasswordException) { Say("Неверный пароль.", Tone.Error); }
+        catch (WrongPasswordException) { Say(Credentials.Incorrect, Tone.Error); }
         finally { Busy = false; }
     }
 }

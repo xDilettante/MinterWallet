@@ -14,12 +14,14 @@ public static partial class Localization
 {
     private static readonly Dictionary<string, string> Exact = new(StringComparer.Ordinal);
     private static readonly List<(Regex Pattern, string English, int Count)> Templates = [];
-    private static bool attached;
+    private static bool attached, loaded;
 
     public static bool English { get; private set; }
 
-    static Localization()
+    private static void EnsureLoaded()
     {
+        if (loaded) return;
+        loaded = true;
         foreach (var (ru, en) in Translations.Pairs)
         {
             var slots = PlaceholderRegex().Matches(ru);
@@ -62,6 +64,7 @@ public static partial class Localization
     public static string Translate(string text)
     {
         if (!HasCyrillic(text)) return text;
+        EnsureLoaded();
         if (Exact.TryGetValue(text, out var english)) return english;
         foreach (var (pattern, en, count) in Templates)
         {
@@ -90,9 +93,10 @@ public static partial class Localization
         }
         var locale = Environment.GetEnvironmentVariable("LC_ALL") is { Length: > 0 } all ? all
             : Environment.GetEnvironmentVariable("LC_MESSAGES") is { Length: > 0 } messages ? messages
-            : Environment.GetEnvironmentVariable("LANG") ?? "";
-        return locale.StartsWith("ru", StringComparison.Ordinal) || locale.StartsWith("uk", StringComparison.Ordinal)
-            || locale.StartsWith("be", StringComparison.Ordinal) || locale.StartsWith("kk", StringComparison.Ordinal);
+            : Environment.GetEnvironmentVariable("LANG") is { Length: > 0 } lang ? lang
+            : CultureInfo.CurrentUICulture.Name;
+        return locale.StartsWith("ru", StringComparison.OrdinalIgnoreCase) || locale.StartsWith("uk", StringComparison.OrdinalIgnoreCase)
+            || locale.StartsWith("be", StringComparison.OrdinalIgnoreCase) || locale.StartsWith("kk", StringComparison.OrdinalIgnoreCase);
     }
 
     [DllImport("kernel32.dll")]

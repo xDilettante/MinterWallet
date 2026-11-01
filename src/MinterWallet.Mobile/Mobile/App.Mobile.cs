@@ -15,6 +15,7 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         Styles.Add(new MobileStyles());
+        AddressMarks.CompactOnMobile = true;
         MobileLayout.Attach();
         Localization.Attach();
         AddressMarks.Attach();

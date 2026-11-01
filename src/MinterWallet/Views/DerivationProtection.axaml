@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.DerivationProtection" x:DataType="local:MainViewModel">
+      <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="16" IsVisible="{Binding Derivation.NeedsProtection}">
+        <StackPanel Spacing="12" DataContext="{Binding Derivation}" x:DataType="local:DerivationViewModel">
+          <TextBlock Text="Сначала сохраните путь этого адреса" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding RiskText}" Classes="prose" />
+          <Button Content="Сохранить профиль путей…" Command="{Binding Export}" HorizontalAlignment="Left" />
+          <CheckBox IsChecked="{Binding Acknowledged}" IsEnabled="{Binding BackedUp}">
+            <TextBlock Text="Профиль сохранён отдельно; я понимаю, как восстановить этот путь" TextWrapping="Wrap" />
+          </CheckBox>
+          <Button Content="Разрешить получение на этот адрес" Command="{Binding ConfirmRisk}" IsEnabled="{Binding Acknowledged}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+</UserControl>

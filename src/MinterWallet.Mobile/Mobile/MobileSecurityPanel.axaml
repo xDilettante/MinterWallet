@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:mobile="using:MinterWallet.Mobile"
+             x:Class="MinterWallet.Mobile.MobileSecurityPanel" x:DataType="mobile:MobileSecurity">
+  <StackPanel Spacing="8">
+    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Биометрия" Classes="label" VerticalAlignment="Center" /><mobile:MobileHelpButton Grid.Column="1" Text="Отпечаток пальца или распознавание лица — основной способ входа и подтверждения. PIN-код или пароль остаётся запасным способом." /></Grid>
+    <TextBlock Text="{Binding StateText}" Classes="caption prose" />
+    <Button Content="Включить биометрию" Command="{Binding Enable}" IsVisible="{Binding !Enabled}" />
+    <Button Content="Выключить биометрию" Command="{Binding Disable}" IsVisible="{Binding Enabled}" />
+    <TextBlock Text="{Binding Status}" Classes="caption prose" />
+  </StackPanel>
+</UserControl>

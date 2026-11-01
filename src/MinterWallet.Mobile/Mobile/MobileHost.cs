@@ -15,10 +15,27 @@ public interface IMobilePlatform
     void Notify(string title, string text);
     // Keeps the OS from capturing the screen (recents thumbnails, screenshots) while secrets may be shown.
     void SetSecure(bool secure);
+    bool ShowsClipboardConfirmation => false;
+    // Hardware-backed biometric unlock & signing (Android KeyStore + BiometricPrompt).
+    bool CanUseBiometrics => false;
+    bool HasBiometricSecret => false;
+    bool CanUsePin => false;
+    string DerivePinCredential(string pin) => throw new NotSupportedException();
+    Task<bool> EnableBiometricsAsync(string verifiedSecret) => Task.FromResult(false);
+    void ClearBiometricSecret() { }
+    void CancelBiometrics() { }
+    string BiometricError => "Биометрия недоступна. Введите PIN-код или пароль.";
+    Task<string?> ReadBiometricSecretAsync(string title, string subtitle) => Task.FromResult<string?>(null);
 }
 
 public static class MobileHost
 {
     public static string? DataDirectory { get => Program.DataDirectory; set => Program.DataDirectory = value; }
-    public static IMobilePlatform? Platform { get; set; }
+    private static IMobilePlatform? platform;
+    public static event Action? PlatformChanged;
+    public static IMobilePlatform? Platform
+    {
+        get => platform;
+        set { if (ReferenceEquals(platform, value)) return; platform = value; PlatformChanged?.Invoke(); }
+    }
 }

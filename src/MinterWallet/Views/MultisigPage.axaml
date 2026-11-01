@@ -8,7 +8,7 @@
     <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640" DataContext="{Binding Multisig}" x:DataType="local:MultisigViewModel">
       <StackPanel Spacing="4">
         <TextBlock Text="Общий счёт" Classes="h1" />
-        <TextBlock Classes="muted prose" Text="Адрес на несколько участников (мультиподпись): тратить с него можно, только когда подпишут участники с нужным суммарным весом. Для команды, семьи или надёжного хранения." />
+        <TextBlock Classes="muted prose mobileIntro" Text="Адрес на несколько участников (мультиподпись): тратить с него можно, только когда подпишут участники с нужным суммарным весом. Для команды, семьи или надёжного хранения." />
       </StackPanel>
       <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Создать общий счёт или перевод с него">
         <ListBoxItem Content="Создать общий счёт" />
@@ -23,7 +23,7 @@
               <TextBlock DockPanel.Dock="Right" Text="{Binding TotalText}" Classes="caption" VerticalAlignment="Center" />
               <TextBlock Text="Участники и их вес" Classes="h2" />
             </DockPanel>
-            <TextBlock Classes="caption prose" Text="Вес — сколько «голосов» у участника. Обычно у всех по 1; больше — у того, чья подпись важнее." />
+            <TextBlock Classes="caption prose mobileHint" Text="Вес — сколько «голосов» у участника. Обычно у всех по 1; больше — у того, чья подпись важнее." />
             <ItemsControl ItemsSource="{Binding MemberRows}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="local:MemberRow">
@@ -82,7 +82,7 @@
               <TextBlock Text="{Binding AccountInfo}" Classes="caption prose" Margin="0,6,0,0" />
             </StackPanel>
             <StackPanel><TextBlock Text="Получатель" Classes="label" /><TextBox Text="{Binding Recipient}" Classes="mono" PlaceholderText="Mx…" AutomationProperties.Name="Получатель" /></StackPanel>
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Grid Classes="phoneFields" ColumnDefinitions="*,Auto" ColumnSpacing="8">
               <StackPanel><TextBlock Text="Сумма" Classes="label" /><TextBox Text="{Binding Amount}" Classes="mono" PlaceholderText="0.0" AutomationProperties.Name="Сумма" /></StackPanel>
               <StackPanel Grid.Column="1"><TextBlock Text="Монета" Classes="label" /><ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" MinWidth="120" AutomationProperties.Name="Монета" /></StackPanel>
             </Grid>

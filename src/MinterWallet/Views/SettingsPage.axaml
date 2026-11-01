@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:MinterWallet"
+             xmlns:input="using:Avalonia.Input.TextInput"
              xmlns:views="using:MinterWallet.Views"
              x:Class="MinterWallet.Views.SettingsPage"
              x:DataType="local:MainViewModel">
@@ -9,7 +10,7 @@
       <TextBlock Text="Настройки" Classes="h1" />
       <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
 
-      <StackPanel Spacing="10">
+      <StackPanel x:Name="ConnectionSettings" Spacing="10">
         <TextBlock Text="Куда подключаться" Classes="h2" />
         <TextBlock Classes="caption prose" Text="Кошелёк читает балансы и отправляет транзакции через MinterGate или API ноды Minter. Ответы источника он не проверяет — выбирайте тот, которому доверяете. Ключи никуда не передаются: подпись делается на этом устройстве." />
         <ListBox Classes="rows" ItemsSource="{Binding Sources}" SelectedIndex="{Binding SourceIndex}" AutomationProperties.Name="Источники">
@@ -58,37 +59,44 @@
         </Button>
       </StackPanel>
 
-      <StackPanel Spacing="10">
+      <StackPanel x:Name="SecuritySettings" Spacing="10">
         <TextBlock Text="Безопасность" Classes="h2" />
         <Border Classes="card">
           <StackPanel Spacing="14">
             <CheckBox IsChecked="{Binding AutoLockEnabled}">
               <TextBlock Classes="prose" Text="Автоматически блокировать при неактивности" />
             </CheckBox>
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <Grid Classes="phoneFields" ColumnDefinitions="*,*" ColumnSpacing="12">
               <StackPanel IsEnabled="{Binding AutoLockEnabled}"><TextBlock Text="Автоблокировка, минут" Classes="label" /><TextBox Text="{Binding AutoLock}" /></StackPanel>
               <StackPanel Grid.Column="1"><TextBlock Text="Потолок gas price" Classes="label" ToolTip.Tip="Выше этого кошелёк не подпишет" /><TextBox Text="{Binding GasCap}" /></StackPanel>
             </Grid>
             <DockPanel>
               <Button DockPanel.Dock="Right" Content="Сохранить" Command="{Binding SaveSecurity}" />
-              <TextBlock Text="Фразу восстановления можно посмотреть в разделе «Счета»." Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" />
+              <TextBlock Text="Фразу восстановления можно посмотреть в разделе «Кошельки»." Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" />
             </DockPanel>
             <Border Classes="divider" />
-            <TextBlock Text="Сменить пароль" Classes="label" Margin="0" />
-            <TextBox Text="{Binding CurrentPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Текущий пароль" AutomationProperties.Name="Текущий пароль" />
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-              <TextBox Text="{Binding NewPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Новый пароль" AutomationProperties.Name="Новый пароль" />
-              <TextBox Grid.Column="1" Text="{Binding RepeatPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Новый пароль ещё раз" AutomationProperties.Name="Новый пароль ещё раз" />
+            <ContentControl x:Name="MobileSecurity" />
+            <Expander x:Name="CredentialChangePanel" Header="Изменить защиту кошелька" HorizontalAlignment="Stretch">
+              <StackPanel Spacing="16">
+            <TextBlock Text="Способ защиты" Classes="label" Margin="0" />
+            <ListBox x:Name="SettingsCredentialMode" Classes="segmented" IsVisible="{Binding Credentials.CanChoose}" SelectedIndex="{Binding Credentials.ModeIndex}" AutomationProperties.Name="Способ защиты"><ListBoxItem Content="PIN-код" /><ListBoxItem Content="Пароль" /></ListBox>
+            <TextBlock x:Name="CredentialDescription" Text="{Binding Credentials.Description}" Classes="caption prose" />
+            <TextBox x:Name="CurrentCredentialInput" Text="{Binding CurrentPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="{Binding CurrentCredentials.Required}" input:TextInputOptions.ContentType="{Binding CurrentCredentials.InputType}" AutomationProperties.Name="{Binding CurrentCredentials.Required}" />
+            <Grid Classes="phoneFields" ColumnDefinitions="*,*" ColumnSpacing="12">
+              <TextBox Text="{Binding NewPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="{Binding Credentials.Label}" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" AutomationProperties.Name="Новый пароль" />
+              <TextBox Grid.Column="1" Text="{Binding RepeatPassword}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="{Binding Credentials.RepeatLabel}" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" AutomationProperties.Name="Новый пароль ещё раз" />
             </Grid>
             <DockPanel>
-              <Button DockPanel.Dock="Right" Content="Сменить пароль" Command="{Binding ChangePassword}" />
+              <Button DockPanel.Dock="Right" Content="Сохранить способ защиты" Command="{Binding ChangePassword}" />
               <TextBlock Text="{Binding PasswordHint}" Classes="caption" VerticalAlignment="Center" />
             </DockPanel>
+              </StackPanel>
+            </Expander>
           </StackPanel>
         </Border>
       </StackPanel>
 
-      <StackPanel Spacing="10">
+      <StackPanel x:Name="LanguageSettings" Spacing="10">
         <TextBlock Text="Язык" Classes="h2" />
         <ListBox Classes="segmented" SelectedIndex="{Binding LanguageIndex}" AutomationProperties.Name="Язык">
           <ListBoxItem Content="Как в системе" />
@@ -97,7 +105,7 @@
         </ListBox>
       </StackPanel>
 
-      <StackPanel Spacing="10">
+      <StackPanel x:Name="AppearanceSettings" Spacing="10">
         <TextBlock Text="Вид" Classes="h2" />
         <StackPanel>
           <TextBlock Text="Тема" Classes="label" />
@@ -124,7 +132,7 @@
         <TextBlock Classes="caption prose" Text="Авто — четыре знака, у сумм меньше единицы — до первых значащих цифр. Точная сумма — в подсказке при наведении." />
       </StackPanel>
 
-      <StackPanel Spacing="6">
+      <StackPanel x:Name="DesktopSettings" Spacing="6">
         <TextBlock Text="Окно и трей" Classes="h2" />
         <CheckBox IsChecked="{Binding MinimizeToTray}">
           <TextBlock Classes="prose" Text="Сворачивать в трей: свёрнутое окно прячется в значок у часов" />
@@ -135,7 +143,7 @@
         <TextBlock Classes="caption prose" Margin="28,0,0,0" IsVisible="{Binding OnLinux}"
                    Text="В некоторых средах Linux (например, GNOME без расширения AppIndicator) трея нет — тогда спрятанное окно не вернуть, и эти настройки лучше не включать." />
       </StackPanel>
-      <StackPanel Spacing="6">
+      <StackPanel x:Name="NotificationSettings" Spacing="6">
         <TextBlock Text="Уведомления" Classes="h2" />
         <CheckBox IsChecked="{Binding NotifyIncoming}">
           <TextBlock Classes="prose" Text="Сообщать о поступлениях: когда на любой счёт кошелька приходят монеты, система показывает уведомление — сколько, чего и от кого. Работает, пока кошелёк открыт или в трее, даже заблокированный." />

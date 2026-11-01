@@ -64,6 +64,7 @@ public sealed class AccountsViewModel : ScreenModel
         Remove = new AsyncCommand(RemoveAsync, Fail);
         CancelRemove = new Command(() => { ConfirmingRemove = false; ConfirmingGroupRemove = false; });
         RemoveGroup = new AsyncCommand(RemoveGroupAsync, Fail);
+        DeleteWallet = new AsyncCommand(DeleteWalletAsync, Fail);
         AddContact = new Command(AddContactNow);
     }
 
@@ -174,6 +175,7 @@ public sealed class AccountsViewModel : ScreenModel
     public AsyncCommand Remove { get; }
     public Command CancelRemove { get; }
     public AsyncCommand RemoveGroup { get; }
+    public AsyncCommand DeleteWallet { get; }
 
     // Called when the list of addresses or the current one changes.
     public void Reload()
@@ -359,14 +361,24 @@ public sealed class AccountsViewModel : ScreenModel
         if (Active is not { } g) return;
         if (main.Shell.Store!.Accounts.Count == g.Addresses.Count) { Say("Это единственный счёт кошелька — его нельзя удалить. Можно сначала добавить другой.", Tone.Warning); return; }
         if (!ConfirmingGroupRemove) { ConfirmingGroupRemove = true; ConfirmingRemove = false; return; }
-        var password = main.Shell.Confirm == null ? null : await main.Shell.Confirm(new ConfirmRequest("Удалить счёт",
-            [("Счёт", $"{g.Name}\nадресов: {g.Addresses.Count}")], [GroupRemoveWarning], "Удалить счёт"));
+        await DeleteWalletAsync();
+    }
+
+    private async Task DeleteWalletAsync()
+    {
+        if (Active is not { } g || main.Shell.Store is not { } store || main.Shell.Session is not { IsLocked: false } session) return;
+        var warning = GroupRemoveWarning;
+        var password = main.Shell.Confirm == null ? null : await main.Shell.Confirm(new ConfirmRequest("Удалить кошелёк",
+            [("Кошелёк", g.Name), ("Адресов", g.Addresses.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))], [warning], "Удалить кошелёк"));
         if (password == null) { ConfirmingGroupRemove = false; return; }
+        bool Current() => ReferenceEquals(main.Shell.Store, store) && ReferenceEquals(main.Shell.Session, session) && !session.IsLocked;
+        if (!Current()) return;
         if (!await main.Shell.CheckPasswordAsync(password)) { Say("Неверный пароль — счёт не удалён.", Tone.Error); return; }
-        if (main.Shell.Session?.IsLocked != false) return;
-        if (g.SecretId is { } secretId) main.Shell.Session.RemoveSecret(secretId);
-        else foreach (var a in g.Addresses) main.Shell.Session.Remove(a.Item.Account.Id);
+        if (!Current()) return;
+        if (g.SecretId is { } secretId) session.RemoveSecret(secretId);
+        else foreach (var a in g.Addresses) session.Remove(a.Item.Account.Id);
         main.LoadAccounts();
+        ConfirmingGroupRemove = false;
         Say($"Счёт «{g.Name}» удалён из кошелька.", Tone.Success);
     }
 }

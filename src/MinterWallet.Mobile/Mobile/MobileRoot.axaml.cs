@@ -6,29 +6,40 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
+using MinterWallet.Views;
 
 namespace MinterWallet.Mobile;
 
 // What MainWindow does on the desktop, for a phone: the shell's services (confirmation, clipboard, links, files) over
 // the view's TopLevel, the system's back gesture, the app going to the background and coming back, the safe area
-// (status bar, gesture bar, cutouts) and the on-screen keyboard.
+// (status bar, gesture bar, cutouts), the on-screen keyboard and hardware biometric unlock.
 public partial class MobileRoot : UserControl
 {
     public Shell Shell { get; }
     private TopLevel? top;
-    private Thickness safe;
-    private double keyboard;
+    private Rect keyboard;
+    public MobileSecurity Security { get; }
+    private bool promptingBio;
+    private int copyNoticeGeneration;
 
     public MobileRoot() : this(new Shell(Program.DataDirectory)) { }
 
     public MobileRoot(Shell shell)
     {
         Shell = shell;
+        shell.Credentials.Mobile = true;
+        ConfigurePlatform();
+        MobileHost.PlatformChanged += ConfigurePlatform;
+        Security = new MobileSecurity(shell);
         Localization.Use(shell.Settings.Language);
         Display.Use(shell.Settings);
         InitializeComponent();
         App.ApplyTheme(shell.Settings.Theme);
+        Sheet.Shell = shell;
+        BiometricSetup.DataContext = Security;
+        Security.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MobileSecurity.SetupVisible)) BiometricSetup.IsVisible = Security.SetupVisible; };
         shell.Confirm ??= request => Sheet.AskAsync(request);
         shell.CopyText ??= async text => { if (top?.Clipboard is { } clipboard) await clipboard.SetTextAsync(text); };
         shell.PasteText ??= async () => top?.Clipboard is { } clipboard ? await clipboard.TryGetTextAsync() : null;
@@ -48,6 +59,7 @@ public partial class MobileRoot : UserControl
         // Any touch or key counts as activity for the auto-lock.
         AddHandler(PointerPressedEvent, (_, _) => Touch(), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyDownEvent, (_, _) => Touch(), RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(InputElement.TappedEvent, OnAddressTapped, RoutingStrategies.Bubble, handledEventsToo: true);
         if (Application.Current?.TryGetFeature<IActivatableLifetime>() is { } lifetime)
         {
             lifetime.Deactivated += (_, e) => { if (e.Kind == ActivationKind.Background) shell.WindowShown = false; };
@@ -55,42 +67,128 @@ public partial class MobileRoot : UserControl
         }
     }
 
+    private async void OnAddressTapped(object? sender, TappedEventArgs e)
+    {
+        if (Shell.Page is not MainViewModel main || Sheet.IsVisible || Security.SetupVisible || Shell.CopyText == null) return;
+        var text = e.Source as TextBlock ?? (e.Source as Visual)?.GetVisualAncestors().OfType<TextBlock>().FirstOrDefault();
+        if (text == null || text.Classes.Contains("prose") || text.GetVisualAncestors().OfType<Button>().Any()
+            || MobileAddressCopy.AddressOf(text) is not { } address) return;
+        if (text.DataContext is DerivedItem or DerivationCard) return;
+        e.Handled = true;
+        try
+        {
+            if (text.DataContext is BridgeDepositViewModel && !main.Derivation.PrepareReceive()) return;
+            // The carousel remains a selector. Own addresses retain the existing receive/path protection.
+            if (Minter.Protocol.Address.TryParse(address, out var own) && (main.Accounts.Any(a => a.Account.Address == own) || main.Selected?.Account.Address == own))
+                if (main.Selected?.Account.Address != own || !main.Derivation.PrepareReceive()) return;
+            await Shell.CopyText(address);
+            if (!ReferenceEquals(Shell.Page, main)) return;
+            var generation = ++copyNoticeGeneration;
+            CopyNotice.IsVisible = MobileHost.Platform?.ShowsClipboardConfirmation != true;
+            if (CopyNotice.IsVisible)
+                DispatcherTimer.RunOnce(() => { if (generation == copyNoticeGeneration) CopyNotice.IsVisible = false; }, TimeSpan.FromSeconds(2));
+        }
+        catch (Exception error) { main.Fail(error); }
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        MobileHost.PlatformChanged -= ConfigurePlatform;
+        MobileHost.PlatformChanged += ConfigurePlatform;
+        ConfigurePlatform();
         top = TopLevel.GetTopLevel(this);
         if (top == null) return;
         top.BackRequested += OnBack;
+        top.SizeChanged += OnTopSizeChanged;
+        top.ScalingChanged += OnScalingChanged;
         if (top.InsetsManager is { } insets)
-        {
-            safe = insets.SafeAreaPadding;
-            insets.SafeAreaChanged += (_, args) => { safe = args.SafeAreaPadding; Pad(); };
-        }
+            insets.SafeAreaChanged += OnSafeAreaChanged;
         if (top.InputPane is { } pane)
-            pane.StateChanged += (_, args) => { keyboard = args.NewState == InputPaneState.Open ? args.EndRect.Height : 0; Pad(); };
+            pane.StateChanged += OnInputPaneChanged;
         Pad();
+        if (Shell.Page is UnlockViewModel unlock && Shell.Settings.MobileBiometricsEnabled)
+            Dispatcher.UIThread.Post(() => _ = PromptBiometricUnlockAsync(unlock), DispatcherPriority.Background);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        if (top != null) top.BackRequested -= OnBack;
+        if (top != null)
+        {
+            top.BackRequested -= OnBack;
+            top.SizeChanged -= OnTopSizeChanged;
+            top.ScalingChanged -= OnScalingChanged;
+            if (top.InsetsManager is { } insets) insets.SafeAreaChanged -= OnSafeAreaChanged;
+            if (top.InputPane is { } pane) pane.StateChanged -= OnInputPaneChanged;
+        }
+        MobileHost.PlatformChanged -= ConfigurePlatform;
+        Sheet.Cancel();
+        Security.Dismiss();
+        MobileHost.Platform?.CancelBiometrics();
         top = null;
         base.OnDetachedFromVisualTree(e);
     }
 
     // The content stays clear of the system bars and of the keyboard while it is open.
-    private void Pad() => SafeArea.Margin = new Thickness(safe.Left, safe.Top, safe.Right, Math.Max(safe.Bottom, keyboard));
+    public static double KeyboardOverlap(Size clientSize, Rect keyboardBounds) => new Rect(clientSize).Intersect(keyboardBounds).Height;
+
+    private void Pad()
+    {
+        // Android can publish its first insets before the screen density is available. Read them again at the
+        // current scale instead of retaining the initial values (physical pixels mistaken for layout units).
+        var safe = top?.InsetsManager?.SafeAreaPadding ?? default;
+        SafeArea.Margin = new Thickness(safe.Left, safe.Top, safe.Right, Math.Max(safe.Bottom, top == null ? 0 : KeyboardOverlap(top.ClientSize, keyboard)));
+    }
+    private void OnSafeAreaChanged(object? sender, SafeAreaChangedArgs e) => Pad();
+    private void OnScalingChanged(object? sender, EventArgs e) => Pad();
+    private void OnTopSizeChanged(object? sender, SizeChangedEventArgs e) => Pad();
+    private void OnInputPaneChanged(object? sender, InputPaneStateEventArgs e)
+    {
+        keyboard = e.NewState == InputPaneState.Open ? e.EndRect : default;
+        Pad();
+        Dispatcher.UIThread.Post(() => (top?.FocusManager?.GetFocusedElement() as Control)?.BringIntoView(), DispatcherPriority.Background);
+    }
 
     private void Touch() { if (Shell.Page is MainViewModel main) main.LastActivity = DateTime.UtcNow; }
 
+    // Avalonia can create its root during Application.OnCreate, before MainActivity publishes Android services.
+    private void ConfigurePlatform() => Shell.Credentials.DerivePin = MobileHost.Platform is { CanUsePin: true } platform ? platform.DerivePinCredential : null;
+
     private void WatchPage()
     {
+        CopyNotice.IsVisible = false; copyNoticeGeneration++;
+        if (Shell.Page is UnlockViewModel unlock && Shell.Settings.MobileBiometricsEnabled)
+        {
+            if (MobileHost.Platform is { CanUseBiometrics: true, HasBiometricSecret: true })
+                Dispatcher.UIThread.Post(() => _ = PromptBiometricUnlockAsync(unlock), DispatcherPriority.Background);
+            else unlock.Say("Биометрия недоступна. Введите PIN-код или пароль.", Tone.Warning);
+        }
+        if (Shell.Page is not MainViewModel) { Sheet.Cancel(); Security.Dismiss(); MobileHost.Platform?.CancelBiometrics(); }
         if (Shell.Page is MainViewModel main)
         {
             main.PropertyChanged += (_, _) => UpdateSecure();
             main.AccountsPage.PropertyChanged += (_, _) => UpdateSecure();
         }
         UpdateSecure();
+    }
+
+    public async Task PromptBiometricUnlockAsync(UnlockViewModel unlock)
+    {
+        if (top == null || promptingBio || Shell.Page != unlock || !Shell.Settings.MobileBiometricsEnabled || MobileHost.Platform is not { CanUseBiometrics: true, HasBiometricSecret: true } platform) return;
+        promptingBio = true;
+        try
+        {
+            var secret = await platform.ReadBiometricSecretAsync("Minter Wallet", Localization.Text("Подтвердите вход в кошелёк"));
+            if (Shell.Page != unlock) return;
+            if (!string.IsNullOrEmpty(secret))
+            {
+                if (await unlock.UnlockBiometricAsync(secret)) return;
+                platform.ClearBiometricSecret();
+            }
+            unlock.Say(platform.BiometricError, Tone.Warning);
+            this.FindDescendantOfType<MobileUnlockView>()?.FindControl<TextBox>("PasswordBox")?.Focus();
+        }
+        finally { promptingBio = false; }
     }
 
     private void UpdateSecure() => MobileHost.Platform?.SetSecure(Shell.Page is CreateWalletViewModel or ImportViewModel
@@ -100,13 +198,17 @@ public partial class MobileRoot : UserControl
     private void Resumed()
     {
         Shell.WindowShown = true;
+        _ = Shell.PingUsageAsync();
         if (Shell.Page is MainViewModel main && Shell.Settings.AutoLockMinutes > 0 && DateTime.UtcNow - main.LastActivity > TimeSpan.FromMinutes(Shell.Settings.AutoLockMinutes))
             Shell.Lock();
+        else if (Shell.Page is UnlockViewModel unlock && Shell.Settings.MobileBiometricsEnabled)
+            Dispatcher.UIThread.Post(() => _ = PromptBiometricUnlockAsync(unlock), DispatcherPriority.Background);
     }
 
     // The system's back: closes what is open over the page, then steps back; on the wallet's first screen the OS takes it.
     private void OnBack(object? sender, RoutedEventArgs e)
     {
+        if (Security.SetupVisible) { Security.Later.Execute(null); e.Handled = true; return; }
         if (Sheet.IsVisible) { Sheet.Cancel(); e.Handled = true; return; }
         switch (Shell.Page)
         {

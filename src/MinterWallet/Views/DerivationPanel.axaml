@@ -4,11 +4,11 @@
   <Border Classes="card" Padding="16,12" IsVisible="{Binding IsHd}">
     <StackPanel Spacing="12">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Content="{Binding ToggleLabel}" Command="{Binding Toggle}" Classes="link" />
+        <Button x:Name="ToggleAddresses" DockPanel.Dock="Right" Content="{Binding ToggleLabel}" Command="{Binding Toggle}" Classes="link" VerticalAlignment="Center" AutomationProperties.Name="{Binding ToggleLabel}" />
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <local:Icon Kind="phrase" Width="16" Height="16" Foreground="{DynamicResource Muted}" />
-          <TextBlock Text="Адреса кошелька" FontWeight="SemiBold" />
-          <Button Classes="help" ToolTip.Tip="Одна фраза создаёт много адресов. Карточки переключают индекс внутри выбранного пути. Средства каждого адреса отдельны; фраза открывает доступ ко всем. Названия задаются кнопкой «Переименовать» у выбранного адреса ниже." AutomationProperties.Name="Как устроены адреса кошелька">
+          <local:Icon Kind="phrase" Width="16" Height="16" VerticalAlignment="Center" Foreground="{DynamicResource Muted}" />
+          <TextBlock Text="Адреса кошелька" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Classes="help" VerticalAlignment="Center" ToolTip.Tip="Одна фраза создаёт много адресов. Карточки переключают индекс внутри выбранного пути. Средства каждого адреса отдельны; фраза открывает доступ ко всем. Названия задаются кнопкой «Переименовать» у выбранного адреса ниже." AutomationProperties.Name="Как устроены адреса кошелька">
             <local:Icon Kind="help" Width="16" Height="16" />
           </Button>
         </StackPanel>
@@ -56,7 +56,7 @@
               <TextBlock Text="Параметры деривации" FontWeight="SemiBold" />
             </DockPanel>
             <TextBlock Classes="caption prose" Text="Сеть выбирается в настройках источника и не является уровнем пути. Здесь меняются только ключи и адреса внутри одной фразы. Пока редактор открыт, получение отключено: примените параметры или закройте редактор." />
-            <StackPanel Orientation="Horizontal" Spacing="8">
+            <StackPanel Classes="phoneStack" Orientation="Horizontal" Spacing="8">
               <TextBlock Text="Сеть:" Classes="caption" VerticalAlignment="Center" />
               <TextBlock Text="{Binding NetworkName}" Classes="caption" VerticalAlignment="Center" />
               <Button Content="Сменить источник" Classes="link" Command="{Binding ChooseSource}" />

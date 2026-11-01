@@ -8,7 +8,7 @@
     <StackPanel Margin="32,28,32,32" Spacing="18" MaxWidth="640" DataContext="{Binding Tokens}" x:DataType="local:TokensViewModel">
       <StackPanel Spacing="4">
         <TextBlock Text="Токены" Classes="h1" />
-        <TextBlock Classes="muted prose" Text="Свой токен в сети Minter: создайте его, выпускайте и сжигайте, откройте для него пул, чтобы его можно было обменивать." />
+        <TextBlock Classes="muted prose mobileIntro" Text="Свой токен в сети Minter: создайте его, выпускайте и сжигайте, откройте для него пул, чтобы его можно было обменивать." />
       </StackPanel>
       <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Токены: мои, создать или пул">
         <ListBoxItem Content="Мои токены" />
@@ -79,14 +79,14 @@
               <Button DockPanel.Dock="Right" Classes="link" Content="Отмена" Command="{Binding CancelRecreate}" IsVisible="{Binding Recreating}" />
               <TextBlock Text="{Binding CreateTitle}" Classes="h2" />
             </DockPanel>
-            <Grid ColumnDefinitions="*,2*" ColumnSpacing="12">
+            <Grid Classes="phoneTokenPair" ColumnDefinitions="*,2*" ColumnSpacing="12">
               <StackPanel><TextBlock Text="Тикер" Classes="label" /><TextBox Text="{Binding Symbol}" Classes="mono" PlaceholderText="MYTOKEN" MaxLength="10" IsReadOnly="{Binding Recreating}" /></StackPanel>
               <StackPanel Grid.Column="1"><TextBlock Text="Название (до 64 байт)" Classes="label" /><TextBox Text="{Binding Name}" PlaceholderText="Например, Мой токен" /></StackPanel>
             </Grid>
             <TextBlock Text="{Binding TickerHint}" Classes="caption prose" />
             <CheckBox IsChecked="{Binding Mintable}"><TextBlock Classes="prose" Text="Можно выпускать ещё (только владелец)" /></CheckBox>
             <CheckBox IsChecked="{Binding Burnable}"><TextBlock Classes="prose" Text="Можно сжигать (любой держатель — свои)" /></CheckBox>
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <Grid Classes="phoneTokenPair" ColumnDefinitions="*,*" ColumnSpacing="12">
               <StackPanel><TextBlock Text="Начальный выпуск" Classes="label" /><TextBox Text="{Binding Initial}" Classes="mono" PlaceholderText="1000000" /></StackPanel>
               <StackPanel Grid.Column="1" IsVisible="{Binding Mintable}"><TextBlock Text="Предел выпуска (необязательно)" Classes="label" /><TextBox Text="{Binding MaxSupply}" Classes="mono" PlaceholderText="1 000 000 000 000 000" /></StackPanel>
             </Grid>
@@ -95,7 +95,7 @@
           </StackPanel>
         </Border>
         <Button Content="{Binding CreateLabel}" Command="{Binding Create}" Classes="accent" HorizontalAlignment="Right" MinWidth="150" />
-        <Border Classes="card">
+        <Border x:Name="TokenRules" Classes="card">
           <StackPanel Spacing="8">
             <TextBlock Text="Правила сети Minter для токенов" Classes="h2" />
             <TextBlock Classes="caption prose" Text="• Тикер — 3–10 заглавных латинских букв и цифр, первая — буква; занятый тикер взять нельзя." />
@@ -114,10 +114,10 @@
 
       <!-- A new pool -->
       <StackPanel Spacing="14" IsVisible="{Binding IsPool}">
-        <TextBlock Classes="muted prose" Text="Пул из двух монет делает их обмениваемыми друг на друга. Вы кладёте обе монеты — их соотношение задаёт начальную цену — и получаете долю пула, которую можно вывести." />
+        <TextBlock Classes="muted prose mobileHint" Text="Пул из двух монет делает их обмениваемыми друг на друга. Вы кладёте обе монеты — их соотношение задаёт начальную цену — и получаете долю пула, которую можно вывести." />
         <Border Classes="card">
           <StackPanel Spacing="14">
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <Grid Classes="phoneFields" ColumnDefinitions="*,*" ColumnSpacing="12">
               <StackPanel Spacing="6">
                 <TextBlock Text="Первая монета" Classes="label" />
                 <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding CoinA}" HorizontalAlignment="Stretch" AutomationProperties.Name="Первая монета">

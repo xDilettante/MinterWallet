@@ -11,7 +11,7 @@ public partial class DerivationPanel : UserControl
         InitializeComponent();
         AddHandler(Button.ClickEvent, (_, e) =>
         {
-            if (e.Source is Button button && button.Classes.Contains("help"))
+            if (e.Source is Button { Flyout: null } button && button.Classes.Contains("help"))
                 ToolTip.SetIsOpen(button, !ToolTip.GetIsOpen(button));
         });
         KeyDown += (_, e) =>

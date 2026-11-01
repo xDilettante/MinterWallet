@@ -43,7 +43,7 @@ public sealed class CoinPickerViewModel : Observable
         }
     }
     public bool HasSelection => Selected != null;
-    public string Title => Selected?.Symbol ?? "Выберите монету";
+    public string Title => Selected?.Symbol ?? "Монета";
     public string Subtitle => Selected?.Caption ?? "";
     public bool Searching { get => searching; private set { Set(ref searching, value); Changed(nameof(EmptyText)); Changed(nameof(HasEmptyText)); } }
     public string EmptyText => Searching ? "Поиск…" : Results.Count > 0 ? ""

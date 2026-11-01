@@ -9,17 +9,17 @@
     <AssemblyName>MinterWallet.Android</AssemblyName>
     <RootNamespace>MinterWallet.Android</RootNamespace>
     <ApplicationId>network.minter.wallet</ApplicationId>
-    <ApplicationVersion>72</ApplicationVersion>
+    <ApplicationVersion>85</ApplicationVersion>
     <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
     <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
     <AndroidUseIntermediateDesignerFile>true</AndroidUseIntermediateDesignerFile>
-    <AndroidKeyStore>true</AndroidKeyStore>
-    <AndroidSigningKeyStore>minterwallet.keystore</AndroidSigningKeyStore>
-    <AndroidSigningKeyAlias>androiddebugkey</AndroidSigningKeyAlias>
-    <AndroidSigningKeyPass>android</AndroidSigningKeyPass>
-    <AndroidSigningStorePass>android</AndroidSigningStorePass>
+    <AndroidKeyStore Condition="'$(Configuration)' == 'Release'">true</AndroidKeyStore>
+    <AndroidSigningKeyStore>$(MINTERWALLET_ANDROID_KEYSTORE)</AndroidSigningKeyStore>
+    <AndroidSigningKeyAlias>$(MINTERWALLET_ANDROID_KEY_ALIAS)</AndroidSigningKeyAlias>
+    <AndroidSigningKeyPass>env:MINTERWALLET_ANDROID_KEY_PASSWORD</AndroidSigningKeyPass>
+    <AndroidSigningStorePass>env:MINTERWALLET_ANDROID_STORE_PASSWORD</AndroidSigningStorePass>
     <LatestSupportedJavaVersion>25.99.0</LatestSupportedJavaVersion>
     <NoWarn>$(NoWarn);ANDAS0000</NoWarn>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -35,4 +35,8 @@
   <ItemGroup>
     <ProjectReference Include="..\MinterWallet.Mobile\MinterWallet.Mobile.csproj" />
   </ItemGroup>
+  <Target Name="RequirePrivateReleaseSigning" BeforeTargets="PrepareForBuild" Condition="'$(Configuration)' == 'Release'">
+    <Error Condition="'$(MINTERWALLET_ANDROID_KEYSTORE)' == '' Or !Exists('$(MINTERWALLET_ANDROID_KEYSTORE)') Or '$(MINTERWALLET_ANDROID_KEY_ALIAS)' == '' Or '$(MINTERWALLET_ANDROID_KEY_PASSWORD)' == '' Or '$(MINTERWALLET_ANDROID_STORE_PASSWORD)' == ''"
+           Text="Private Android release signing is required. Use tools/build-android.ps1 or configure MINTERWALLET_ANDROID_KEYSTORE, KEY_ALIAS, KEY_PASSWORD and STORE_PASSWORD. The old public signing key must not be used." />
+  </Target>
 </Project>

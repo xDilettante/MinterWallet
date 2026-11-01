@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:MinterWallet"
+             xmlns:input="using:Avalonia.Input.TextInput"
              xmlns:views="using:MinterWallet.Views"
              x:Class="MinterWallet.Views.UnlockView"
              x:DataType="local:UnlockViewModel">
@@ -9,12 +10,12 @@
       <Border Classes="logo large" HorizontalAlignment="Center"><TextBlock /></Border>
       <TextBlock Text="Minter Wallet" Classes="h1" HorizontalAlignment="Center" />
       <TextBlock Text="{Binding Version}" Classes="caption" HorizontalAlignment="Center" Foreground="{DynamicResource Muted}" Margin="0,-6,0,0" />
-      <TextBox x:Name="PasswordBox" local:AutoFocus.IsEnabled="True" Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Пароль" Margin="0,8,0,0"
-               AutomationProperties.Name="Пароль" />
+      <TextBox x:Name="PasswordBox" local:AutoFocus.IsEnabled="True" Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="{Binding Credentials.Label}" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" Margin="0,8,0,0"
+               AutomationProperties.Name="{Binding Credentials.Label}" />
       <Button Content="Разблокировать" Command="{Binding Unlock}" IsDefault="True" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
       <ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" />
       <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
-      <Button Content="Забыли пароль?" Classes="link" Command="{Binding Forgot}" HorizontalAlignment="Center" />
+      <Button Content="{Binding ForgotText}" Classes="link" Command="{Binding Forgot}" HorizontalAlignment="Center" />
       <Border Classes="card" IsVisible="{Binding Forgetting}">
         <StackPanel Spacing="12">
           <TextBlock Text="{Binding StartOverText}" Classes="prose" />

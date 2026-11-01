@@ -14,6 +14,7 @@ public sealed class Shell : Observable
 
     public string DataDirectory { get; }
     public WalletSettings Settings { get; }
+    public WalletCredentials Credentials { get; }
     public CoinRegistry Coins { get; }
     public AddressBook AddressBook { get; }
     public Keystore? Store { get; private set; }
@@ -82,6 +83,7 @@ public sealed class Shell : Observable
             await usage.PingAsync(Settings.InstallId, Program.Version, UsageClient.Os, Localization.English ? "en" : "ru", network);
             succeeded = true;
             UsageStatus = $"Гейт подтвердил статистику: {DateTime.Now:HH:mm:ss}.";
+            if (Page is MainViewModel main) await main.UsageAsync();
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
         { UsageStatus = $"Статистика не отправлена: {ScreenModel.Describe(e)}"; }
@@ -148,6 +150,7 @@ public sealed class Shell : Observable
     {
         DataDirectory = WalletPaths.DataDirectory(dataDirectory);
         Settings = WalletSettings.Load(DataDirectory);
+        Credentials = new WalletCredentials(this);
         Coins = new CoinRegistry(Path.Combine(DataDirectory, "coins.json"));
         AddressBook = new AddressBook(DataDirectory);
         var path = Keystore.DefaultPath(DataDirectory);
@@ -180,6 +183,7 @@ public sealed class Shell : Observable
         File.Move(KeystorePath, aside);
         if (File.Exists(KeystorePath + ".bak")) File.Move(KeystorePath + ".bak", aside + ".bak");
         Store = null;
+        Credentials.StartOver();
         ShowWelcome();
         return Path.GetFileName(aside);
     }

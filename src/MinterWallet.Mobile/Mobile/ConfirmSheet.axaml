@@ -2,39 +2,51 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:MinterWallet"
              x:Class="MinterWallet.Mobile.ConfirmSheet">
-  <!-- The desktop's ConfirmWindow as a sheet from the bottom of the screen: what will be signed, then the password. -->
+  <!-- The desktop's ConfirmWindow as a compact sheet from the bottom of the screen: what will be signed, then password or fingerprint. -->
   <Grid RowDefinitions="*,Auto">
     <Border Grid.RowSpan="2" Background="#99000000" PointerPressed="OnBackdrop" />
     <Border Grid.Row="1" x:Name="Card" Background="{DynamicResource Card}" CornerRadius="20,20,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-      <DockPanel Margin="20,10,20,20">
-        <Border DockPanel.Dock="Top" Width="40" Height="4" CornerRadius="2" Background="{DynamicResource LineStrong}" HorizontalAlignment="Center" Margin="0,0,0,14" />
-        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+      <DockPanel Margin="16,8,16,16">
+        <Border DockPanel.Dock="Top" Width="36" Height="4" CornerRadius="2" Background="{DynamicResource LineStrong}" HorizontalAlignment="Center" Margin="0,0,0,10" />
+        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,10">
           <TextBlock x:Name="TitleText" Classes="h1" TextWrapping="Wrap" />
-          <TextBlock Text="Проверьте всё ниже: подписанное уже не отменить." Classes="muted" TextWrapping="Wrap" />
+          <TextBlock Text="Проверьте всё ниже: подписанное уже не отменить." Classes="caption" TextWrapping="Wrap" />
         </StackPanel>
-        <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,14,0,0">
-          <TextBlock Text="Пароль кошелька" Classes="label" Margin="0" />
-          <TextBox x:Name="PasswordBox" PasswordChar="•" Classes="revealPasswordButton" AutomationProperties.Name="Пароль кошелька" />
-          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="0,8,0,0">
-            <Button Content="Отмена" Click="OnCancel" MinWidth="110" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,10,0,0">
+          <StackPanel x:Name="BiometricArea" Spacing="6" IsVisible="False">
+            <TextBlock Text="Подтвердите операцию биометрией" Classes="label" />
+            <Button x:Name="FallbackButton" Content="PIN-код / пароль" Click="OnFallback" />
+          </StackPanel>
+          <TextBlock x:Name="AuthStatus" Classes="caption prose" />
+          <Grid x:Name="PasswordArea" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBox x:Name="PasswordBox" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Пароль кошелька" AutomationProperties.Name="Пароль кошелька" />
+            <Button Grid.Column="1" x:Name="BioButton" Click="OnBiometric" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <local:Icon Kind="key" Width="16" Height="16" />
+                <TextBlock Text="Биометрия" />
+              </StackPanel>
+            </Button>
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,4,0,0">
+            <Button Content="Отмена" Click="OnCancel" MinWidth="100" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
             <Button Grid.Column="1" x:Name="ConfirmButton" Click="OnConfirm" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
           </Grid>
         </StackPanel>
         <ScrollViewer>
-          <StackPanel Spacing="10">
+          <StackPanel Spacing="8">
             <ItemsControl x:Name="Warnings">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="x:String">
-                  <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
+                  <Border Background="{DynamicResource WarningSubtle}" CornerRadius="8" Padding="10,8" Margin="0,0,0,6">
                     <Grid ColumnDefinitions="Auto,*">
-                      <local:Icon Kind="alert" Foreground="{DynamicResource Warning}" VerticalAlignment="Top" Margin="0,1,10,0" />
-                      <TextBlock Grid.Column="1" local:AddressMarks.Text="{Binding}" Classes="prose" />
+                      <local:Icon Kind="alert" Foreground="{DynamicResource Warning}" VerticalAlignment="Top" Margin="0,1,8,0" />
+                      <TextBlock Grid.Column="1" local:AddressMarks.Text="{Binding}" Classes="prose" FontSize="13" />
                     </Grid>
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Border Classes="card" Padding="14,4">
+            <Border Classes="card" Padding="12,4">
               <StackPanel x:Name="Rows" />
             </Border>
           </StackPanel>

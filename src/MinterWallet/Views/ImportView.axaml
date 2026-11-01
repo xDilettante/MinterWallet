@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:MinterWallet"
+             xmlns:input="using:Avalonia.Input.TextInput"
              xmlns:views="using:MinterWallet.Views"
              x:Class="MinterWallet.Views.ImportView"
              x:DataType="local:ImportViewModel">
@@ -29,9 +30,10 @@
           </StackPanel>
           <StackPanel><TextBlock Text="Название счёта" Classes="label" /><TextBox Text="{Binding Name}" /></StackPanel>
           <Border Classes="divider" />
-          <TextBlock Classes="caption prose" Text="Пароль шифрует ключи на этом устройстве и спрашивается при входе и перед каждой подписью." />
-          <StackPanel><TextBlock Text="Пароль кошелька" Classes="label" /><TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
-          <StackPanel><TextBlock Text="Пароль ещё раз" Classes="label" /><TextBox Text="{Binding Repeat}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
+          <TextBlock Classes="caption prose" Text="{Binding Credentials.Description}" />
+          <ListBox Classes="segmented" IsVisible="{Binding Credentials.CanChoose}" SelectedIndex="{Binding Credentials.ModeIndex}" AutomationProperties.Name="Способ защиты"><ListBoxItem Content="PIN-код" /><ListBoxItem Content="Пароль" /></ListBox>
+          <StackPanel><TextBlock Text="{Binding Credentials.Label}" Classes="label" /><TextBox Text="{Binding Password}" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
+          <StackPanel><TextBlock Text="{Binding Credentials.RepeatLabel}" Classes="label" /><TextBox Text="{Binding Repeat}" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" PasswordChar="•" Classes="revealPasswordButton" /></StackPanel>
           <TextBlock Text="{Binding PasswordHint}" Classes="caption" />
         </StackPanel>
       </Border>

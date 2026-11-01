@@ -50,9 +50,18 @@ public static class TelemetryScenario
             var until = DateTime.UtcNow.AddSeconds(5);
             while (!b.UsageStatus.StartsWith("Гейт подтвердил", StringComparison.Ordinal) && DateTime.UtcNow < until) await Task.Delay(20);
             Check(server.Clients.Count == 2 && b.Settings.InstallId != id, "independent fresh client registered separately");
+            b.AutoRefresh = false; b.Settings.CheckUpdates = false;
+            var (store, activeSession) = Keystore.Create(Keystore.DefaultPath(second), "test-only-password", new(8192, 1, 1, System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)));
+            using var ownedSession = activeSession;
+            b.Opened(store, activeSession);
+            var main = (MainViewModel)b.Page;
+            main.UsageOnline = "0";
+            await b.PingUsageAsync();
+            Check(main.UsageOnline == "2", $"acknowledged heartbeat refreshes the visible online count immediately: {main.UsageOnline}; {b.UsageStatus}; {main.UsageTip}");
             b.UsageEndpoint = new Uri("http://127.0.0.1:1/");
             await b.PingUsageAsync();
             Check(b.UsageStatus.StartsWith("Статистика не отправлена", StringComparison.Ordinal), "transport failure is visible");
+            main.Stop(); b.StopTimers();
             Console.WriteLine("PASS telemetry client: opt-out, durable independent ids, restart deduplication, acknowledgement and visible errors");
             return 0;
         }
@@ -86,14 +95,20 @@ public static class TelemetryScenario
                     while (await reader.ReadLineAsync(stop.Token) is { Length: > 0 } line)
                         if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)) length = int.Parse(line[15..].Trim());
                     var body = new char[length];
-                    Check(await reader.ReadBlockAsync(body, stop.Token) == length, "complete request body");
+                    Check(length == 0 || await reader.ReadBlockAsync(body, stop.Token) == length, "complete request body");
                     if (request?.StartsWith("POST /gate/v1/ping ", StringComparison.Ordinal) == true)
                     {
                         using var json = JsonDocument.Parse(new string(body));
                         Check(json.RootElement.EnumerateObject().Count() == 5, "payload has only the five anonymous fields");
                         Clients.Add(json.RootElement.GetProperty("id").GetString()!);
                     }
-                    await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), stop.Token);
+                    if (request?.StartsWith("GET /gate/v1/stats ", StringComparison.Ordinal) == true)
+                    {
+                        var stats = JsonSerializer.SerializeToUtf8Bytes(new { online = Clients.Count, day = Clients.Count, month = Clients.Count, total = Clients.Count, versions = Array.Empty<object>(), systems = Array.Empty<object>() });
+                        await stream.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {stats.Length}\r\nConnection: close\r\n\r\n"), stop.Token);
+                        await stream.WriteAsync(stats, stop.Token);
+                    }
+                    else await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), stop.Token);
                 }
             }
             catch (Exception) when (stop.IsCancellationRequested) { }

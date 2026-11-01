@@ -50,6 +50,8 @@ public sealed partial class Keystore
     private readonly Dictionary<string, string> secretNames = [];
     public IReadOnlyList<WalletAccount> Accounts => accounts;
     public string Path => path;
+    // Stored atomically with the ciphertext. Android PINs are device-bound derived credentials, never raw digits.
+    public string CredentialKind { get; private set; } = "password";
 
     private Keystore(string path, KdfParameters kdf, Sealed verifier) { this.path = path; this.kdf = kdf; this.verifier = verifier; }
 
@@ -57,13 +59,14 @@ public sealed partial class Keystore
     public static bool Exists(string path) => File.Exists(path);
 
     // A new store with its first account from a mnemonic (index 0), a private key, or only an address.
-    public static (Keystore Store, KeystoreSession Session) Create(string path, string password, KdfParameters? kdf = null)
+    public static (Keystore Store, KeystoreSession Session) Create(string path, string password, KdfParameters? kdf = null, string credentialKind = "password")
     {
         if (File.Exists(path)) throw new IOException($"{path} already exists.");
         ValidatePassword(password);
         kdf ??= KdfParameters.Default();
         var key = DeriveKey(password, kdf);
-        var store = new Keystore(path, kdf, Seal(key, VerifierText, "verifier"));
+        ValidateCredentialKind(credentialKind);
+        var store = new Keystore(path, kdf, Seal(key, VerifierText, "verifier")) { CredentialKind = credentialKind };
         store.Save();
         return (store, new KeystoreSession(store, key));
     }
@@ -77,6 +80,8 @@ public sealed partial class Keystore
         var kdf = new KdfParameters((int)k["memoryKiB"]!, (int)k["iterations"]!, (int)k["parallelism"]!, Convert.FromBase64String((string)k["salt"]!));
         if (kdf.MemoryKiB < 8 * 1024 || kdf.Iterations < 1 || kdf.Parallelism < 1 || kdf.Salt.Length < 16) throw new InvalidDataException("Key derivation parameters are too weak.");
         var store = new Keystore(path, kdf, ReadSealed(root["verifier"]!)) { legacyLoaded = (int?)root["version"] == 1 };
+        store.CredentialKind = (string?)root["credentialKind"] ?? "password";
+        ValidateCredentialKind(store.CredentialKind);
         foreach (var s in root["secrets"]!.AsArray())
         {
             store.secrets.Add(new SecretRecord((string)s!["id"]!, Enum.Parse<SecretKind>((string)s["kind"]!), ReadSealed(s)));
@@ -187,36 +192,69 @@ public sealed partial class Keystore
     // The whole account: every address of the secret, and the secret itself.
     internal void RemoveSecret(string secretId)
     {
-        accounts.RemoveAll(a => a.SecretId == secretId);
-        secrets.RemoveAll(x => x.Id == secretId);
-        secretNames.Remove(secretId);
-        Save();
+        SaveRemoval(() =>
+        {
+            accounts.RemoveAll(a => a.SecretId == secretId);
+            secrets.RemoveAll(x => x.Id == secretId);
+            secretNames.Remove(secretId);
+        });
     }
 
     internal void Remove(string accountId)
     {
         var account = accounts.Single(a => a.Id == accountId);
-        accounts.Remove(account);
-        if (account.SecretId != null && accounts.All(a => a.SecretId != account.SecretId)) { secrets.RemoveAll(s => s.Id == account.SecretId); secretNames.Remove(account.SecretId); }
-        Save();
+        SaveRemoval(() =>
+        {
+            accounts.Remove(account);
+            if (account.SecretId != null && accounts.All(a => a.SecretId != account.SecretId)) { secrets.RemoveAll(s => s.Id == account.SecretId); secretNames.Remove(account.SecretId); }
+        });
     }
 
-    internal byte[] ChangePassword(byte[] oldKey, string newPassword)
+    private void SaveRemoval(Action remove)
+    {
+        var previousAccounts = accounts.ToArray(); var previousSecrets = secrets.ToArray();
+        var previousNames = new Dictionary<string, string>(secretNames);
+        try { remove(); Save(); }
+        catch
+        {
+            accounts.Clear(); accounts.AddRange(previousAccounts);
+            secrets.Clear(); secrets.AddRange(previousSecrets);
+            secretNames.Clear(); foreach (var pair in previousNames) secretNames.Add(pair.Key, pair.Value);
+            throw;
+        }
+    }
+
+    internal byte[] ChangePassword(byte[] oldKey, string newPassword, string? credentialKind = null)
     {
         ValidatePassword(newPassword);
+        credentialKind ??= CredentialKind;
+        ValidateCredentialKind(credentialKind);
         var newKdf = KdfParameters.Default();
         var newKey = DeriveKey(newPassword, newKdf);
-        var reopened = secrets.Select(s => (s, Plain: Open(oldKey, s.Box, Aad(s.Id, s.Kind)))).ToList();
-        secrets.Clear();
-        foreach (var (s, plain) in reopened)
+        var previous = (kdf, verifier, CredentialKind, Records: secrets.ToArray());
+        try
         {
-            secrets.Add(s with { Box = Seal(newKey, plain, Aad(s.Id, s.Kind)) });
-            CryptographicOperations.ZeroMemory(plain);
+            var replaced = new List<SecretRecord>();
+            foreach (var s in previous.Records)
+            {
+                var plain = Open(oldKey, s.Box, Aad(s.Id, s.Kind));
+                try { replaced.Add(s with { Box = Seal(newKey, plain, Aad(s.Id, s.Kind)) }); }
+                finally { CryptographicOperations.ZeroMemory(plain); }
+            }
+            secrets.Clear(); secrets.AddRange(replaced);
+            kdf = newKdf;
+            verifier = Seal(newKey, VerifierText, "verifier");
+            CredentialKind = credentialKind;
+            Save();
+            return newKey;
         }
-        kdf = newKdf;
-        verifier = Seal(newKey, VerifierText, "verifier");
-        Save();
-        return newKey;
+        catch
+        {
+            (kdf, verifier, CredentialKind) = (previous.kdf, previous.verifier, previous.CredentialKind);
+            secrets.Clear(); secrets.AddRange(previous.Records);
+            CryptographicOperations.ZeroMemory(newKey);
+            throw;
+        }
     }
 
     // The signing key of an account: decrypted, re-derived and checked against the stored address.
@@ -250,6 +288,7 @@ public sealed partial class Keystore
         var root = new JsonObject
         {
             ["format"] = Format, ["version"] = 2,
+            ["credentialKind"] = CredentialKind,
             ["kdf"] = new JsonObject { ["algorithm"] = "argon2id", ["version"] = 19, ["memoryKiB"] = kdf.MemoryKiB, ["iterations"] = kdf.Iterations, ["parallelism"] = kdf.Parallelism, ["salt"] = Convert.ToBase64String(kdf.Salt) },
             ["verifier"] = WriteSealed(verifier),
             ["secrets"] = new JsonArray(secrets.Select(s => (JsonNode)new JsonObject { ["id"] = s.Id, ["kind"] = s.Kind.ToString(), ["name"] = NameOf(s.Id), ["nonce"] = s.Box.Nonce, ["ciphertext"] = s.Box.Ciphertext, ["tag"] = s.Box.Tag }).ToArray()),
@@ -283,6 +322,11 @@ public sealed partial class Keystore
     public static void ValidatePassword(string password)
     {
         if (password.Length < 8) throw new ArgumentException("Пароль должен быть не короче 8 символов.");
+    }
+
+    private static void ValidateCredentialKind(string kind)
+    {
+        if (kind is not ("password" or "android-pin-v1")) throw new InvalidDataException("Unsupported wallet credential type.");
     }
 
     private WalletAccount AddAccount(WalletAccount account)
@@ -361,10 +405,10 @@ public sealed class KeystoreSession : IDisposable
     public string RevealMnemonic(string secretId) => Store.RevealMnemonic(Key, secretId);
     public PrivateKey OpenKey(WalletAccount account) => Store.OpenKey(Key, account);
 
-    public void ChangePassword(string currentPassword, string newPassword)
+    public void ChangePassword(string currentPassword, string newPassword, string? credentialKind = null)
     {
         using (Store.Unlock(currentPassword)) { }   // proves the current password
-        var newKey = Store.ChangePassword(Key, newPassword);
+        var newKey = Store.ChangePassword(Key, newPassword, credentialKind);
         CryptographicOperations.ZeroMemory(Key);
         key = newKey;
     }

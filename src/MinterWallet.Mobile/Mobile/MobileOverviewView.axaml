@@ -1,0 +1,106 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Mobile.MobileOverviewView" x:DataType="local:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="12,4,12,16" Spacing="12">
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+      <Button Content="{Binding UpdateText}" Command="{Binding OpenUpdate}" IsVisible="{Binding HasUpdate}" HorizontalAlignment="Stretch" />
+      <views:DerivationPanel DataContext="{Binding Derivation}" />
+      <Border Classes="card" IsVisible="{Binding !Derivation.Wallets.Count}"><StackPanel Spacing="12"><TextBlock Text="Добавьте кошелёк" Classes="h2" /><TextBlock Text="Создайте новый кошелёк или восстановите его по сохранённой фразе, ключу либо адресу для просмотра." Classes="caption prose" /><Button Content="Добавить кошелёк" Command="{Binding AddAddress}" Classes="accent" /></StackPanel></Border>
+      <views:NoticeBar Text="{Binding Derivation.Status}" Tone="{Binding Derivation.Tone}" />
+      <views:DerivationProtection IsVisible="{Binding Derivation.NeedsProtection}" />
+      <StackPanel Spacing="12" IsVisible="{Binding !!Derivation.Wallets.Count}">
+      <Border Classes="card mobileBalanceCard" IsVisible="{Binding !!Derivation.Wallets.Count}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Derivation.CurrentName}" FontWeight="SemiBold" FontSize="16" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="только просмотр — подписи недоступны" Classes="caption" IsVisible="{Binding IsWatchOnly}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1" Classes="icon" MinWidth="44" Command="{Binding Derivation.Rename}" AutomationProperties.Name="Переименовать"><local:Icon Kind="edit" Width="18" Height="18" /></Button>
+            <Button Grid.Column="2" Classes="icon" Command="{Binding CopyAddress}" IsEnabled="{Binding CanReceive}" AutomationProperties.Name="Скопировать адрес целиком"><StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="copy" Width="14" Height="14" /><TextBlock Text="{Binding CopyLabel}" FontSize="11" /></StackPanel></Button>
+          </Grid>
+          <StackPanel Spacing="8" IsVisible="{Binding Renaming}" DataContext="{Binding Derivation}" x:DataType="local:DerivationViewModel">
+            <TextBox Text="{Binding RenameTo}" MaxLength="64" PlaceholderText="Например, «Личные платежи»" AutomationProperties.Name="Название адреса" />
+            <TextBlock Text="Название видно только вам. Пустое поле вернёт номер адреса; ключи и средства не изменятся." Classes="caption prose" />
+            <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Сохранить" Command="{Binding SaveName}" Classes="accent" /><Button Content="Отмена" Command="{Binding CancelName}" /></StackPanel>
+          </StackPanel>
+          <StackPanel Spacing="6">
+            <Viewbox x:Name="AddressFit" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left"><TextBlock x:Name="SelectedAddress" Background="Transparent" local:AddressMarks.Text="{Binding AddressText}" local:AddressMarks.Full="True" Classes="addressLine" FontSize="14" TextWrapping="NoWrap" /></Viewbox>
+            <TextBlock local:PathMarks.Text="{Binding Derivation.CurrentPath}" Classes="mono caption" FontSize="11" TextWrapping="Wrap" IsVisible="{Binding Derivation.IsHd}" />
+          </StackPanel>
+          <StackPanel Spacing="4">
+            <TextBlock Text="Баланс адреса" Classes="caption" />
+            <StackPanel Spacing="4" IsVisible="{Binding HasUsd}">
+              <WrapPanel ItemSpacing="8" LineSpacing="4"><TextBlock Text="{Binding TotalUsdLarge}" FontSize="30" FontWeight="SemiBold" /><TextBlock Text="{Binding TotalRub}" Classes="caption" VerticalAlignment="Bottom" Margin="0,0,0,5" IsVisible="{Binding HasRub}" /></WrapPanel>
+              <TextBlock Text="{Binding TotalBipSubtitle}" Classes="caption" ToolTip.Tip="{Binding TotalExact}" />
+            </StackPanel>
+            <WrapPanel IsVisible="{Binding !HasUsd}" ItemSpacing="6"><TextBlock Text="{Binding TotalText}" FontSize="30" FontWeight="SemiBold" ToolTip.Tip="{Binding TotalExact}" /><TextBlock Text="{Binding BaseSymbol}" Classes="muted" VerticalAlignment="Bottom" Margin="0,0,0,4" /></WrapPanel>
+          </StackPanel>
+          <UniformGrid Rows="1" ColumnSpacing="4" Margin="-8,4,-8,0">
+            <Button Classes="mobileQuickAction" Command="{Binding ToggleReceive}" IsEnabled="{Binding CanReceive}"><StackPanel Spacing="8"><Border Classes="mobileActionIcon"><local:Icon Kind="receive" /></Border><TextBlock Text="Получить" /></StackPanel></Button>
+            <Button Classes="mobileQuickAction" Command="{Binding OpenSend}" IsVisible="{Binding CanSign}"><StackPanel Spacing="8"><Border Classes="mobileActionIcon"><local:Icon Kind="send" /></Border><TextBlock Text="Отправить" /></StackPanel></Button>
+            <Button Classes="mobileQuickAction" Command="{Binding OpenSwap}" IsVisible="{Binding CanSign}"><StackPanel Spacing="8"><Border Classes="mobileActionIcon"><local:Icon Kind="swap" /></Border><TextBlock Text="Обмен" /></StackPanel></Button>
+            <Button Classes="mobileQuickAction" Click="OnBridge" IsVisible="{Binding CanSign}"><StackPanel Spacing="8"><Border Classes="mobileActionIcon"><local:Icon Kind="bridge" /></Border><TextBlock Text="Мост" /></StackPanel></Button>
+          </UniformGrid>
+        </StackPanel>
+      </Border>
+      <views:ReceivePanel IsVisible="{Binding ShowReceive}" />
+      <Border Classes="well" IsVisible="{Binding !Derivation.IsHd}"><TextBlock Text="{Binding Derivation.KindExplanation}" Classes="caption prose" /></Border>
+      <StackPanel Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Монеты" Classes="h2" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Делегировать" Classes="link" Command="{Binding OpenStaking}" IsVisible="{Binding CanSign}" /></Grid>
+        <ItemsControl x:Name="Assets" ItemsSource="{Binding Balances}" IsVisible="{Binding HasBalances}">
+          <ItemsControl.ItemTemplate><DataTemplate x:DataType="local:BalanceItem">
+            <Border Classes="mobileAssetRow">
+              <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="12">
+                <local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="36" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center"><TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /><SelectableTextBlock Text="{Binding AmountShort}" Classes="caption" ToolTip.Tip="{Binding Amount}" TextTrimming="CharacterEllipsis" /></StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Usd}" FontWeight="Medium" HorizontalAlignment="Right" IsVisible="{Binding HasUsd}" />
+                  <TextBlock Text="{Binding Rub}" Classes="caption" HorizontalAlignment="Right" IsVisible="{Binding HasRub}" />
+                  <TextBlock Text="{Binding BipText}" Classes="caption" TextWrapping="Wrap" TextAlignment="Right" IsVisible="{Binding !HasUsd}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Border Classes="well" IsVisible="{Binding HasNoBalances}"><StackPanel Spacing="8"><TextBlock Text="Монет на счёте пока нет. Чтобы пополнить его, скопируйте адрес выше и отправьте на него монеты с другого кошелька или биржи." Classes="caption prose" /><Button Content="Получить" Command="{Binding ToggleReceive}" IsEnabled="{Binding CanReceive}" HorizontalAlignment="Left" /></StackPanel></Border>
+      </StackPanel>
+      <Expander Header="Итог по адресам" IsVisible="{Binding Derivation.IsHd}" HorizontalAlignment="Stretch">
+        <StackPanel Spacing="8"><TextBlock Text="{Binding Derivation.Summary}" Classes="caption prose" /><TextBlock Text="{Binding Derivation.ScanText}" Classes="caption prose" /><TextBlock Text="{Binding Derivation.CheckedAt}" Classes="caption prose" /><Button Content="Обновить сводку" Classes="link" Command="{Binding Derivation.Scan}" /></StackPanel>
+      </Expander>
+      <StackPanel Spacing="8" IsVisible="{Binding HasDelegations}">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="В стейкинге" Classes="h2" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Стейкинг" Classes="link" Command="{Binding OpenStaking}" /></Grid>
+        <ItemsControl ItemsSource="{Binding Delegations}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="local:DelegationItem">
+          <Border Classes="mobileAssetRow"><Grid ColumnDefinitions="Auto,*" ColumnSpacing="12"><local:CoinBadge Symbol="{Binding Symbol}" CoinId="{Binding CoinId}" Size="32" VerticalAlignment="Center" /><StackPanel Grid.Column="1" Spacing="4"><Grid ColumnDefinitions="*,*"><TextBlock Text="{Binding Symbol}" FontWeight="SemiBold" /><SelectableTextBlock Grid.Column="1" Text="{Binding AmountShort}" HorizontalAlignment="Right" ToolTip.Tip="{Binding Amount}" /></Grid><TextBlock Text="{Binding BipText}" Classes="caption" TextWrapping="Wrap" TextAlignment="Right" /></StackPanel></Grid></Border>
+        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      </StackPanel>
+      <StackPanel Spacing="8" IsVisible="{Binding HasFrozen}">
+        <TextBlock Text="Заморожено" Classes="h2" />
+        <TextBlock Text="Выведенный стейк и блокировки: вернутся на счёт сами, когда сеть дойдёт до указанного блока." Classes="caption prose" />
+        <ItemsControl ItemsSource="{Binding Frozen}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="local:FrozenItem"><Border Classes="well"><StackPanel Spacing="4"><SelectableTextBlock Text="{Binding AmountShort}" FontWeight="Medium" ToolTip.Tip="{Binding Amount}" /><TextBlock Text="{Binding Caption}" Classes="caption prose" /></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      </StackPanel>
+      <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Операции" Classes="h2" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Вся история" Command="{Binding OpenHistory}" Classes="link" /></Grid>
+        <TextBlock Text="{Binding RecentText}" Classes="caption prose" IsVisible="{Binding !Recent.Count}" />
+        <ItemsControl ItemsSource="{Binding Recent}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="local:HistoryItem">
+          <Button Classes="mobileRecentRow" Click="OnHistory" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" AutomationProperties.Name="{Binding Title}">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <Border Classes="avatar" Classes.success="{Binding Incoming}" Classes.danger="{Binding Failed}" Width="36" Height="36" VerticalAlignment="Top"><local:Icon Kind="{Binding Glyph}" Width="18" Height="18" /></Border>
+              <StackPanel Grid.Column="1" Spacing="4">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock local:AddressMarks.Text="{Binding PartiesLine}" Classes="caption" IsVisible="{Binding HasPartiesLine}" TextTrimming="CharacterEllipsis" />
+                <ItemsControl ItemsSource="{Binding Moves}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="local:MoveItem"><TextBlock Text="{Binding Text}" Classes.up="{Binding Up}" Classes.down="{Binding Down}" FontWeight="SemiBold" TextWrapping="Wrap" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                <TextBlock Text="{Binding FailedText}" Foreground="{DynamicResource Danger}" Classes="caption prose" IsVisible="{Binding Failed}" />
+                <TextBlock Text="{Binding Payload}" Classes="caption prose" IsVisible="{Binding HasPayload}" />
+                <TextBlock Text="{Binding CommissionText}" Classes="caption" IsVisible="{Binding HasCommission}" />
+                <TextBlock Text="{Binding OverviewTimeAndHeight}" Classes="caption" TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+          </Button>
+        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

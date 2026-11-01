@@ -5,17 +5,31 @@
              xmlns:mobile="using:MinterWallet.Mobile"
              x:Class="MinterWallet.Mobile.MobileRoot"
              x:DataType="local:Shell"
+             TopLevel.AutoSafeAreaPadding="False"
              Background="{DynamicResource Bg}">
   <!-- The phone's single view: the shell's page (first run, unlock or the wallet) and, over it, the confirmation sheet. -->
   <UserControl.DataTemplates>
-    <DataTemplate DataType="local:WelcomeViewModel"><views:WelcomeView /></DataTemplate>
-    <DataTemplate DataType="local:CreateWalletViewModel"><views:CreateWalletView /></DataTemplate>
-    <DataTemplate DataType="local:ImportViewModel"><views:ImportView /></DataTemplate>
-    <DataTemplate DataType="local:UnlockViewModel"><views:UnlockView /></DataTemplate>
+    <DataTemplate DataType="local:WelcomeViewModel"><mobile:MobileWelcomeView /></DataTemplate>
+    <DataTemplate DataType="local:CreateWalletViewModel"><mobile:MobileCreateView /></DataTemplate>
+    <DataTemplate DataType="local:ImportViewModel"><mobile:MobileImportView /></DataTemplate>
+    <DataTemplate DataType="local:UnlockViewModel"><mobile:MobileUnlockView /></DataTemplate>
     <DataTemplate DataType="local:MainViewModel"><mobile:MobileMainView /></DataTemplate>
   </UserControl.DataTemplates>
   <Panel x:Name="SafeArea">
     <ContentControl Content="{Binding Page}" Classes="mobilePage" />
+    <Border x:Name="CopyNotice" IsVisible="False" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Success}" BorderThickness="1" CornerRadius="8" Padding="16,10" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="12,0,12,72" IsHitTestVisible="False"><TextBlock Text="Адрес скопирован." /></Border>
     <mobile:ConfirmSheet x:Name="Sheet" IsVisible="False" />
+    <Border x:Name="BiometricSetup" Background="#99000000" IsVisible="False">
+      <Border Classes="card" MaxWidth="380" Margin="16" Padding="20" VerticalAlignment="Center">
+        <StackPanel Spacing="14" x:DataType="mobile:MobileSecurity">
+          <TextBlock Text="Включить биометрию?" Classes="h1" TextWrapping="Wrap" />
+          <TextBlock Text="Входите и подтверждайте операции отпечатком пальца или распознаванием лица. PIN-код или пароль останется запасным способом." Classes="prose" />
+          <TextBlock Text="Настройку можно изменить в разделе «Настройки → Безопасность»." Classes="caption prose" />
+          <TextBlock Text="{Binding Status}" Classes="caption prose" />
+          <Button Content="Включить биометрию" Command="{Binding Enable}" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <Button Content="Не сейчас" Command="{Binding Later}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Border>
   </Panel>
 </UserControl>

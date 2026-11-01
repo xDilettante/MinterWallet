@@ -11,12 +11,13 @@ public sealed class Icon : Control
     public static readonly StyledProperty<string?> KindProperty = AvaloniaProperty.Register<Icon, string?>(nameof(Kind));
     public static readonly StyledProperty<IBrush?> ForegroundProperty = TextElement.ForegroundProperty.AddOwner<Icon>();
 
+    // wallet / coin / bridge / hub: Tabler Icons (MIT), see Assets/Licenses/Tabler.txt.
     internal static readonly Dictionary<string, Geometry> Shapes = new()
     {
-        ["wallet"] = Geometry.Parse("M3 7 H19 A2 2 0 0 1 21 9 V18 A2 2 0 0 1 19 20 H5 A2 2 0 0 1 3 18 Z M3 7 V6 A2 2 0 0 1 5 4 H16 M16 13.5 H17"),
+        ["wallet"] = Geometry.Parse("M17 8v-3a1 1 0 0 0 -1 -1h-10a2 2 0 0 0 0 4h12a1 1 0 0 1 1 1v3m0 4v3a1 1 0 0 1 -1 1h-12a2 2 0 0 1 -2 -2v-12 M20 12v4h-4a2 2 0 0 1 0 -4h4"),
         ["send"] = Geometry.Parse("M7 17 L17 7 M9 7 H17 V15"),
         ["receive"] = Geometry.Parse("M17 7 L7 17 M15 17 H7 V9"),
-        ["bridge"] = Geometry.Parse("M3 17 H21 M3 9 H21 M5 9 V17 M19 9 V17 M5 9 C8 13 16 13 19 9"),
+        ["bridge"] = Geometry.Parse("M6 5l0 14 M18 5l0 14 M2 15l20 0 M3 8a7.5 7.5 0 0 0 3 -2a6.5 6.5 0 0 0 12 0a7.5 7.5 0 0 0 3 2 M12 10l0 5"),
         ["swap"] = Geometry.Parse("M4 8 H18 M14 4 L18 8 L14 12 M20 16 H6 M10 12 L6 16 L10 20"),
         ["stake"] = Geometry.Parse("M12 3 L21 8 L12 13 L3 8 Z M3 12.5 L12 17.5 L21 12.5 M3 16.5 L12 21.5 L21 16.5"),
         ["history"] = Geometry.Parse("M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 Z M12 7 V12 L15.5 14"),
@@ -26,8 +27,9 @@ public sealed class Icon : Control
         ["paste"] = Geometry.Parse("M8 5 H6 A1 1 0 0 0 5 6 V20 A1 1 0 0 0 6 21 H18 A1 1 0 0 0 19 20 V6 A1 1 0 0 0 18 5 H16 M9 3 H15 V7 H9 Z"),
         ["refresh"] = Geometry.Parse("M20 12 A8 8 0 1 1 17.7 6.3 M20 4 V9 H15"),
         ["download"] = Geometry.Parse("M12 4 V15 M7 10 L12 15 L17 10 M5 20 H19"),
-        ["coin"] = Geometry.Parse("M21 12 A9 9 0 1 1 3 12 A9 9 0 1 1 21 12 M12 7 V17 M9 9.5 H15 M9 14.5 H15"),
+        ["coin"] = Geometry.Parse("M9 14c0 1.657 2.686 3 6 3s6 -1.343 6 -3s-2.686 -3 -6 -3s-6 1.343 -6 3 M9 14v4c0 1.656 2.686 3 6 3s6 -1.344 6 -3v-4 M3 6c0 1.072 1.144 2.062 3 2.598s4.144 .536 6 0c1.856 -.536 3 -1.526 3 -2.598c0 -1.072 -1.144 -2.062 -3 -2.598s-4.144 -.536 -6 0c-1.856 .536 -3 1.526 -3 2.598 M3 6v10c0 .888 .772 1.45 2 2 M3 11c0 .888 .772 1.45 2 2"),
         ["plus"] = Geometry.Parse("M12 5 V19 M5 12 H19"),
+        ["trash"] = Geometry.Parse("M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"),
         ["check"] = Geometry.Parse("M5 12.5 L10 17.5 L19 7"),
         ["close"] = Geometry.Parse("M6 6 L18 18 M18 6 L6 18"),
         ["back"] = Geometry.Parse("M19 12 H5 M11 6 L5 12 L11 18"),
@@ -58,7 +60,7 @@ public sealed class Icon : Control
         ["ton"] = Geometry.Parse("M12 3 L20 8.5 L16 20.5 L12 18 L8 20.5 L4 8.5 Z M12 3 L8 8.5 L12 18 L16 8.5 Z M4 8.5 H20"),
         ["doge"] = Geometry.Parse("M8 4 H14 A7 7 0 0 1 14 18 H8 V4 Z M5 11 H13"),
         ["dot"] = Geometry.Parse("M12 6.5 A5.5 5.5 0 1 0 12 17.5 A5.5 5.5 0 1 0 12 6.5 Z M12 20 A1.5 1.5 0 1 0 12 23 A1.5 1.5 0 1 0 12 20 Z"),
-        ["hub"] = Geometry.Parse("M3 17 H21 M3 9 H21 M5 9 V17 M19 9 V17 M5 9 C8 13 16 13 19 9"),
+        ["hub"] = Geometry.Parse("M6 5l0 14 M18 5l0 14 M2 15l20 0 M3 8a7.5 7.5 0 0 0 3 -2a6.5 6.5 0 0 0 12 0a7.5 7.5 0 0 0 3 2 M12 10l0 5"),
         ["dai"] = Geometry.Parse("M7 5 H13 A6 6 0 0 1 13 19 H7 Z M5 10 H15 M5 14 H15"),
         ["sol"] = Geometry.Parse("M4 7 L7 4 H20 L17 7 Z M4 13.5 L7 10.5 H20 L17 13.5 Z M4 20 L7 17 H20 L17 20 Z"),
     };

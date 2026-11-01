@@ -8,7 +8,8 @@
     <StackPanel Spacing="10">
       <StackPanel Spacing="4">
         <TextBlock Text="Стейкинг" Classes="h1" />
-        <TextBlock Classes="muted prose" Text="Делегируйте монеты валидатору и получайте долю наград. Выведенный стейк возвращается примерно через 30 дней." />
+        <TextBlock Classes="muted prose mobileIntro" Text="Делегируйте монеты валидатору и получайте долю наград. Выведенный стейк возвращается примерно через 30 дней." />
+        <TextBlock Classes="caption prose mobileOnly" IsVisible="False" Text="Вывод стейка — примерно 30 дней." />
       </StackPanel>
       <ListBox Classes="segmented" SelectedIndex="{Binding ModeIndex}" AutomationProperties.Name="Делегирование или свой валидатор" HorizontalAlignment="Left">
         <ListBoxItem Content="Делегирование" />

@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" x:Class="MinterWallet.Mobile.MobileWelcomeView" x:DataType="local:WelcomeViewModel" Classes="mobileOnboarding">
+  <ScrollViewer>
+    <StackPanel MaxWidth="520" Margin="20,32,20,24" Spacing="24" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="12" Margin="0,12,0,8">
+        <Border Classes="logo large" HorizontalAlignment="Left"><TextBlock /></Border>
+        <TextBlock Text="Minter Wallet" Classes="h1" />
+        <TextBlock Text="Ваши монеты. Ваши ключи." Classes="h2" />
+        <TextBlock Text="Отправляйте, обменивайте и делегируйте монеты. Доступ к средствам остаётся у вас." Classes="prose muted" />
+      </StackPanel>
+      <Button Command="{Binding Create}" Classes="option primary mobileAction">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+          <local:Icon Kind="plus" Width="24" Height="24" />
+          <StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="Создать кошелёк" FontWeight="SemiBold" /><TextBlock Text="Получить новую фразу восстановления" FontSize="13" Opacity="0.85" TextWrapping="Wrap" /></StackPanel>
+        </Grid>
+      </Button>
+      <StackPanel Spacing="10">
+        <TextBlock Text="Уже есть кошелёк" Classes="label" />
+        <Button Command="{Binding Restore}" Classes="option mobileAction">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14"><local:Icon Kind="phrase" /><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="Восстановить по фразе" FontWeight="SemiBold" /><TextBlock Text="12 или 24 сохранённых слова" Classes="caption" /></StackPanel><TextBlock Grid.Column="2" Text="›" FontSize="24" VerticalAlignment="Center" /></Grid>
+        </Button>
+        <Button Command="{Binding ImportKey}" Classes="option mobileAction">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14"><local:Icon Kind="key" /><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="Импорт приватного ключа" FontWeight="SemiBold" /><TextBlock Text="Для одного адреса" Classes="caption" /></StackPanel><TextBlock Grid.Column="2" Text="›" FontSize="24" VerticalAlignment="Center" /></Grid>
+        </Button>
+        <Button Command="{Binding Watch}" Classes="option mobileAction">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14"><local:Icon Kind="eye" /><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="Только просмотр" FontWeight="SemiBold" /><TextBlock Text="Баланс и история без доступа к ключам" Classes="caption prose" /></StackPanel><TextBlock Grid.Column="2" Text="›" FontSize="24" VerticalAlignment="Center" /></Grid>
+        </Button>
+      </StackPanel>
+      <Expander Header="Данные и конфиденциальность" HorizontalAlignment="Stretch">
+        <TextBlock Text="Ключи шифруются на этом устройстве и не отправляются на сервер. Анонимную статистику установок можно выключить в настройках." Classes="caption prose" />
+      </Expander>
+      <TextBlock Text="{Binding Version}" Classes="caption" HorizontalAlignment="Center" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

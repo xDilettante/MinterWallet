@@ -58,7 +58,29 @@ public sealed class UsageClient : IDisposable
     {
         using var _ = SourceRequestHandler.EnterBackground();
         using var reply = await http.PostAsync("gate/v1/ping", new StringContent(Body(id, version, os, language, network), Encoding.UTF8, "application/json"), ct);
+        // Gates before Android support reject this category before storing the ping. Only that explicit validation
+        // error permits a compatibility request; the same installation id prevents a second installation entry.
+        if (os == "android" && reply.StatusCode == HttpStatusCode.BadRequest && await LegacyOsRejectionAsync(reply, ct))
+        {
+            using var compatible = await http.PostAsync("gate/v1/ping", new StringContent(Body(id, version, "other", language, network), Encoding.UTF8, "application/json"), ct);
+            compatible.EnsureSuccessStatusCode();
+            return;
+        }
         reply.EnsureSuccessStatusCode();
+    }
+
+    private static async Task<bool> LegacyOsRejectionAsync(HttpResponseMessage reply, CancellationToken ct)
+    {
+        var body = await reply.Content.ReadAsStringAsync(ct);
+        if (body.Length > 4096) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var message)
+                && message.ValueKind == JsonValueKind.String && message.GetString() == "os: windows, linux, macos or other";
+        }
+        catch (JsonException) { return false; }
     }
 
     public async Task<UsageStats> StatsAsync(CancellationToken ct = default)

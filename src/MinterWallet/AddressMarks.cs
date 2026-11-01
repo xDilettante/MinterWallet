@@ -13,9 +13,15 @@ namespace MinterWallet;
 public static partial class AddressMarks
 {
     public static readonly AttachedProperty<string?> TextProperty = AvaloniaProperty.RegisterAttached<TextBlock, string?>("Text", typeof(AddressMarks));
+    public static readonly AttachedProperty<bool> FullProperty = AvaloniaProperty.RegisterAttached<TextBlock, bool>("Full", typeof(AddressMarks));
+    public static bool GetFull(TextBlock block) => block.GetValue(FullProperty);
+    public static void SetFull(TextBlock block, bool value) => block.SetValue(FullProperty, value);
     private static readonly AttachedProperty<List<IDisposable>?> BindingsProperty = AvaloniaProperty.RegisterAttached<TextBlock, List<IDisposable>?>("Bindings", typeof(AddressMarks));
     private static readonly AttachedProperty<bool> MarkedProperty = AvaloniaProperty.RegisterAttached<TextBlock, bool>("Marked", typeof(AddressMarks));
+    private static readonly AttachedProperty<string?> OriginalTextProperty = AvaloniaProperty.RegisterAttached<TextBlock, string?>("OriginalText", typeof(AddressMarks));
+    public static string? GetOriginalText(TextBlock block) => block.GetValue(OriginalTextProperty) ?? GetText(block) ?? block.Text;
     private static bool attached;
+    public static bool CompactOnMobile { get; set; }
 
     static AddressMarks() => TextProperty.Changed.AddClassHandler<TextBlock>((block, _) => Fill(block, Localization.Text(GetText(block) ?? "")));
 
@@ -39,6 +45,13 @@ public static partial class AddressMarks
     private static void Fill(TextBlock block, string text)
     {
         Release(block);
+        block.SetValue(OriginalTextProperty, text);
+        var compact = CompactOnMobile && !GetFull(block);
+        if (compact && !block.Classes.Contains("prose"))
+        {
+            block.TextWrapping = TextWrapping.NoWrap;
+            block.TextTrimming = TextTrimming.CharacterEllipsis;
+        }
         var bindings = new List<IDisposable>();
         block.SetValue(BindingsProperty, bindings);
         var inlines = new InlineCollection();
@@ -50,10 +63,24 @@ public static partial class AddressMarks
             inlines.Add(Colored(block, value[..2], "Prefix", bindings));
             if (IsFullAddress(value))
             {
-                var (head, tail) = Edges(value);
-                inlines.Add(Colored(block, value[2..head], "Accent", bindings));
-                inlines.Add(new Run(value[head..tail]));
-                inlines.Add(Colored(block, value[tail..], "Accent", bindings));
+                if (compact)
+                {
+                    var hex = new string(value[2..].Where(Uri.IsHexDigit).ToArray());
+                    inlines.Add(Colored(block, hex[..4], "Accent", bindings));
+                    inlines.Add(new Run($"{hex[4..6]}…{hex[34..36]}"));
+                    inlines.Add(Colored(block, hex[36..], "Accent", bindings));
+                }
+                else
+                {
+                    var (head, tail) = Edges(value);
+                    inlines.Add(Colored(block, value[2..head], "Accent", bindings));
+                    inlines.Add(new Run(value[head..tail]));
+                    inlines.Add(Colored(block, value[tail..], "Accent", bindings));
+                }
+            }
+            else if (compact && value.Length > 24 && !value.Contains('…'))
+            {
+                inlines.Add(new Run($"{value[2..8]}…{value[^6..]}"));
             }
             else inlines.Add(new Run(value[2..]));
             at = match.Index + match.Length;
@@ -65,6 +92,7 @@ public static partial class AddressMarks
 
     private static void Release(TextBlock block)
     {
+        block.ClearValue(OriginalTextProperty);
         if (block.GetValue(BindingsProperty) is { } old) foreach (var binding in old) binding.Dispose();
         block.SetValue(BindingsProperty, null);
     }

@@ -4,6 +4,11 @@
 *.user
 *.log
 artifacts/
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.signing.xml
 tools/oracle/oracle.exe
 tools/oracle/oracle
 tools/js-oracle/node_modules/

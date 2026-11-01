@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:mobile="using:MinterWallet.Mobile" xmlns:views="using:MinterWallet.Views"
+             xmlns:input="using:Avalonia.Input.TextInput" x:Class="MinterWallet.Mobile.MobileImportView" x:DataType="local:ImportViewModel" Classes="mobileOnboarding">
+  <Grid RowDefinitions="Auto,*,Auto" MaxWidth="560">
+    <Button Content="← Назад" Command="{Binding Back}" Classes="link" HorizontalAlignment="Left" Margin="16,8" />
+    <ScrollViewer Grid.Row="1"><StackPanel Margin="16,12,16,24" Spacing="20" IsEnabled="{Binding !Busy}">
+      <StackPanel Spacing="8"><TextBlock Text="{Binding Title}" Classes="h1" TextWrapping="Wrap" /><TextBlock Text="{Binding StorageHint}" Classes="prose muted" /></StackPanel>
+      <Border Classes="card"><StackPanel Spacing="16">
+        <DockPanel><Button DockPanel.Dock="Right" Content="Вставить" Command="{Binding Paste}" Classes="link" /><TextBlock Text="{Binding SecretLabel}" Classes="label" VerticalAlignment="Center" /></DockPanel>
+        <TextBox Text="{Binding Secret}" PlaceholderText="{Binding SecretPlaceholder}" Classes="mono" AcceptsReturn="{Binding IsPhrase}" TextWrapping="Wrap" MinHeight="{Binding SecretHeight}" IsVisible="{Binding !HidesSecret}" />
+        <TextBox Text="{Binding Secret}" PlaceholderText="{Binding SecretPlaceholder}" PasswordChar="•" Classes="mono revealPasswordButton" IsVisible="{Binding HidesSecret}" />
+        <views:NoticeBar Text="{Binding SecretCheck}" Tone="{Binding SecretTone}" />
+        <StackPanel><TextBlock Text="Название кошелька" Classes="label" /><TextBox Text="{Binding Name}" /></StackPanel>
+      </StackPanel></Border>
+      <mobile:CredentialPicker DataContext="{Binding Credentials}" />
+      <Border Classes="card"><StackPanel Spacing="16"><StackPanel><TextBlock Text="{Binding Credentials.Label}" Classes="label" /><TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" /></StackPanel><StackPanel><TextBlock Text="{Binding Credentials.RepeatLabel}" Classes="label" /><TextBox Text="{Binding Repeat}" PasswordChar="•" Classes="revealPasswordButton" input:TextInputOptions.ContentType="{Binding Credentials.InputType}" /></StackPanel><TextBlock Text="{Binding PasswordHint}" Classes="caption prose" /></StackPanel></Border>
+      <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+    </StackPanel></ScrollViewer>
+    <Border Grid.Row="2" Classes="mobileFooter"><StackPanel Spacing="8"><ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" Height="3" /><Button Content="Открыть кошелёк" Command="{Binding Finish}" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" /></StackPanel></Border>
+  </Grid>
+</UserControl>

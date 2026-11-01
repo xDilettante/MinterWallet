@@ -12,7 +12,7 @@
       </StackPanel>
       <StackPanel Spacing="4">
         <TextBlock Text="История" Classes="h1" />
-        <TextBlock Text="Кошелёк расшифровывает транзакции сам, из исходных байтов. Нажмите на транзакцию — откроются подробности." Classes="muted prose" />
+        <TextBlock Text="Кошелёк расшифровывает транзакции сам, из исходных байтов. Нажмите на транзакцию — откроются подробности." Classes="muted prose mobileIntro" />
       </StackPanel>
     </DockPanel>
     <StackPanel Grid.Row="1" Spacing="8">
@@ -63,7 +63,7 @@
                             Classes.neutral="{Binding IsNeutralCategory}">
                       <TextBlock Text="{Binding BadgeText}" />
                     </Border>
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding HasDistinctTitle}" />
                   </WrapPanel>
                   <StackPanel Spacing="2" IsVisible="{Binding HasSwapSummary}">
                     <TextBlock Text="{Binding SwapSummaryLine}" FontWeight="Medium" FontSize="13" TextWrapping="Wrap" />

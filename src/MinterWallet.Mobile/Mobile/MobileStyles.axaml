@@ -6,16 +6,14 @@
 
   <!-- Bars -->
   <Style Selector="Border.mobileTopBar">
-    <Setter Property="Background" Value="{DynamicResource Sidebar}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
-    <Setter Property="BorderThickness" Value="0,0,0,1" />
-    <Setter Property="Padding" Value="10,6,4,6" />
+    <Setter Property="Background" Value="{DynamicResource Bg}" />
+    <Setter Property="Padding" Value="12,4,8,4" />
   </Style>
   <Style Selector="Border.mobileNavBar">
     <Setter Property="Background" Value="{DynamicResource Sidebar}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     <Setter Property="BorderThickness" Value="0,1,0,0" />
-    <Setter Property="Padding" Value="2,2,2,4" />
+    <Setter Property="Padding" Value="2,2,2,2" />
   </Style>
   <Style Selector="Button.mobileBarButton">
     <Setter Property="MinWidth" Value="44" />
@@ -23,8 +21,12 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
+  <Style Selector="Button.mobileHeaderWallet">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="4,0" /><Setter Property="MinHeight" Value="44" />
+  </Style>
   <Style Selector="ComboBox.mobileWallet">
-    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="MinHeight" Value="38" />
     <Setter Property="Margin" Value="0,0,4,0" />
   </Style>
 
@@ -34,14 +36,14 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
-    <Setter Property="Padding" Value="0,8,0,6" />
+    <Setter Property="Padding" Value="0,8,0,7" />
     <Setter Property="MinHeight" Value="56" />
     <Setter Property="CornerRadius" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource Muted}" />
   </Style>
   <Style Selector="Button.mobileNav local|Icon">
-    <Setter Property="Width" Value="22" />
-    <Setter Property="Height" Value="22" />
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
     <Setter Property="HorizontalAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.mobileNav TextBlock">
@@ -55,6 +57,7 @@
   </Style>
   <Style Selector="Button.mobileNav.selected">
     <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSubtle}" />
   </Style>
   <Style Selector="Button.mobileNav.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.mobileNav.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Foreground" Value="{DynamicResource Accent}" />
@@ -66,35 +69,161 @@
   <!-- «Ещё» -->
   <Style Selector="Button.mobileMenuItem">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
-    <Setter Property="Padding" Value="14,13" />
-    <Setter Property="FontSize" Value="15" />
+    <Setter Property="Padding" Value="10,12" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="MinHeight" Value="60" />
+    <Setter Property="Background" Value="{DynamicResource Well}" />
     <Setter Property="Foreground" Value="{DynamicResource Text}" />
   </Style>
+  <Style Selector="Button.mobileMenuItem TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+  <Style Selector="Button.mobileMenuItem local|Icon"><Setter Property="Width" Value="18" /><Setter Property="Height" Value="18" /></Style>
 
-  <!-- Finger-sized controls in the shared pages -->
+  <!-- Compact containers and typography for one-screen mobile layout -->
+  <Style Selector="Border.card">
+    <Setter Property="Padding" Value="16" />
+  </Style>
+  <Style Selector="Border.well">
+    <Setter Property="Padding" Value="12" />
+  </Style>
+  <Style Selector="Border.row">
+    <Setter Property="Padding" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.display">
+    <Setter Property="FontSize" Value="26" />
+  </Style>
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="24" />
+  </Style>
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="18" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="Margin" Value="0,0,0,6" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <!-- Compact finger-sized controls in the shared pages -->
   <Style Selector="Button:not(.link):not(.mobileNav)">
-    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="Padding" Value="12,9" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.option TextBlock">
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style Selector="TextBox">
-    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="MinHeight" Value="48" />
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="FontSize" Value="15" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="TextBox[AcceptsReturn=True]">
     <Setter Property="VerticalContentAlignment" Value="Top" />
   </Style>
   <Style Selector="ComboBox">
-    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="MinHeight" Value="48" />
+    <Setter Property="Padding" Value="12,8" />
   </Style>
   <Style Selector="CheckBox">
-    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="MinHeight" Value="44" />
   </Style>
   <Style Selector="ListBox.segmented">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="ItemsPanel">
-      <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" ItemSpacing="2" LineSpacing="2" /></ItemsPanelTemplate>
+      <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
     </Setter>
+  </Style>
+  <Style Selector="ListBox.segmented > ListBoxItem">
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="MinHeight" Value="44" />
+    <Setter Property="Padding" Value="8" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="ListBox.segmented.mobileWrap">
+    <Setter Property="ItemsPanel"><ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate></Setter>
+  </Style>
+  <Style Selector="ListBox.segmented TextBlock, ListBox.segmented AccessText">
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ListBox.credentialPicker">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ItemsPanel"><ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate></Setter>
+  </Style>
+  <Style Selector="ListBox.credentialPicker > ListBoxItem">
+    <Setter Property="Background" Value="{DynamicResource Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="MinHeight" Value="76" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="ListBox.credentialPicker > ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource AccentSubtle}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    <Setter Property="Foreground" Value="{DynamicResource Text}" />
+  </Style>
+  <Style Selector="Border.mobileFooter">
+    <Setter Property="Background" Value="{DynamicResource Sidebar}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="16,12" />
+  </Style>
+  <Style Selector="Button.mobileAction">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="MinHeight" Value="72" />
+  </Style>
+  <Style Selector="Button.link">
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="4,8" />
+  </Style>
+  <Style Selector="Button.icon">
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Button.help">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="32" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Border.mobileBalanceCard">
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="16,12" />
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}" />
+  </Style>
+  <Style Selector="Border.mobileActionIcon">
+    <Setter Property="Width" Value="40" /><Setter Property="Height" Value="40" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Background" Value="{DynamicResource Well}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.mobileActionIcon local|Icon">
+    <Setter Property="Width" Value="20" /><Setter Property="Height" Value="20" />
+    <Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+  </Style>
+  <Style Selector="Button.mobileQuickAction">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
+    <Setter Property="MinWidth" Value="0" /><Setter Property="Padding" Value="0,4" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="MinHeight" Value="72" />
+  </Style>
+  <Style Selector="Button.mobileQuickAction TextBlock">
+    <Setter Property="FontSize" Value="11" /><Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.mobileAssetRow">
+    <Setter Property="Padding" Value="0,14" /><Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+  </Style>
+  <Style Selector="Button.mobileRecentRow">
+    <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="Padding" Value="0,12" />
   </Style>
 </Styles>

@@ -56,6 +56,10 @@ public sealed class WalletSettings
     public Dictionary<string, string> WalletCoordinates { get; set; } = [];
     public bool DerivationCollapsed { get; set; }
     public int DerivationPageSize { get; set; } = 5;
+    public bool MobileBiometricsEnabled { get; set; }
+    public bool MobileBiometricsAsked { get; set; }
+    public int MobileAuthFailures { get; set; }
+    public DateTimeOffset MobileAuthBlockedUntil { get; set; }
 
     [JsonIgnore] public SourceSettings Source => Sources[Math.Clamp(SelectedSource, 0, Sources.Count - 1)];
 
