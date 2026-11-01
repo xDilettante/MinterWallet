@@ -67,7 +67,7 @@ jobs:
           dotnet build src/MinterWallet.Android/MinterWallet.Android.csproj -c Release -nologo
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
-          cp src/MinterWallet.Android/bin/Release/*/android-arm64/*-Signed.apk "dist/MinterWallet-${version}-android-arm64.apk"
+          cp "$(find src/MinterWallet.Android/bin/Release -name '*-Signed.apk' | head -n 1)" "dist/MinterWallet-${version}-android-arm64.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: android
