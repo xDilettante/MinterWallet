@@ -40,6 +40,7 @@ public sealed class Shell : Observable
     public Func<ConfirmRequest, Task<string?>>? Confirm { get; set; }
     public Func<string, Task>? CopyText { get; set; }
     public Func<Task<string?>>? PasteText { get; set; }
+    public Func<Task<string?>>? ScanQr { get; set; }
     public Func<Uri, Task>? OpenUrl { get; set; }
     // Saves a text file the user names (suggested name, contents); false when they cancel.
     public Func<string, string, Task<bool>>? SaveText { get; set; }
@@ -160,6 +161,24 @@ public sealed class Shell : Observable
 
     public string KeystorePath => Keystore.DefaultPath(DataDirectory);
 
+    private MinterLink? pendingPayment;
+    public bool OpenPaymentLink(string text)
+    {
+        if (PaymentLinks.Parse(text) is not { } link) return false;
+        if (Page is MainViewModel { Send.SendNow.IsRunning: true }) return false;
+        pendingPayment = link;
+        ApplyPaymentLink();
+        return true;
+    }
+
+    private void ApplyPaymentLink()
+    {
+        if (pendingPayment is not { } link || Page is not MainViewModel main) return;
+        pendingPayment = null;
+        main.Section = Section.Send;
+        main.Send.OpenLink(link);
+    }
+
     public void Show(object next) => Page = next;
 
     // The views of the current page built again (another language): the page's model and its state stay.
@@ -192,6 +211,7 @@ public sealed class Shell : Observable
     {
         Store = store; Session = session;
         Page = new MainViewModel(this);
+        ApplyPaymentLink();
     }
 
     public void Lock()

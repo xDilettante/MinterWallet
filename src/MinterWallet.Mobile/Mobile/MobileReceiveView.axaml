@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Mobile.MobileReceiveView" x:DataType="local:MainViewModel">
+  <Grid Background="#99000000" PointerPressed="OnBackdrop">
+    <Border x:Name="ReceiveCard" Background="{DynamicResource Card}" BorderBrush="{DynamicResource LineStrong}"
+            BorderThickness="1" CornerRadius="20,20,0,0" Padding="16" VerticalAlignment="Bottom">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="12">
+          <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="2"><TextBlock Text="Получить" Classes="h1" /><TextBlock Text="{Binding AccountName}" Classes="caption" TextTrimming="CharacterEllipsis" /></StackPanel><Button Grid.Column="1" Classes="icon" Width="44" Height="44" Command="{Binding ToggleReceive}" AutomationProperties.Name="Закрыть QR"><local:Icon Kind="close" /></Button></Grid>
+          <Grid Height="224">
+            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" IsVisible="{Binding Request.HasQr}"><local:QrView x:Name="ReceiveQr" Text="{Binding Request.QrText}" Width="224" Height="224" /></Viewbox>
+            <Border Background="{DynamicResource Well}" CornerRadius="8" Width="224" IsVisible="{Binding !Request.HasQr}"><TextBlock Text="Заполните поля запроса" Classes="caption" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16" /></Border>
+          </Grid>
+          <TextBlock Text="{Binding Request.QrCaption}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontWeight="SemiBold" />
+          <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center"><TextBlock local:AddressMarks.Text="{Binding AddressText}" local:AddressMarks.Full="True" FontSize="13" Background="Transparent" /></Viewbox>
+          <TextBlock local:PathMarks.Text="{Binding Derivation.CurrentPath}" FontSize="11" HorizontalAlignment="Center" IsVisible="{Binding Derivation.IsHd}" />
+          <Button Command="{Binding CopyAddress}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" IsVisible="{Binding !Request.IsRequest}"><StackPanel Orientation="Horizontal" Spacing="8"><local:Icon Kind="copy" Width="18" Height="18" /><TextBlock Text="{Binding CopyLabel}" /></StackPanel></Button>
+          <views:PaymentRequestEditor DataContext="{Binding Request}" />
+          <Expander Header="Погасить чек" HorizontalAlignment="Stretch" IsExpanded="{Binding !!RedeemCheck.Text}">
+            <StackPanel DataContext="{Binding RedeemCheck}" x:DataType="local:CheckRedeemViewModel" Spacing="8">
+              <TextBox Text="{Binding Text}" PlaceholderText="Mc…" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="90" AutomationProperties.Name="Чек" />
+              <views:NoticeBar Text="{Binding Info}" Tone="{Binding InfoTone}" />
+              <TextBox Text="{Binding Password}" PasswordChar="•" Classes="revealPasswordButton" PlaceholderText="Пароль чека" AutomationProperties.Name="Пароль чека" />
+              <Button Content="Вставить" Command="{Binding Paste}" />
+              <Button Content="Погасить" Command="{Binding Redeem}" Classes="accent" />
+              <views:NoticeBar Text="{Binding Status}" Tone="{Binding Tone}" />
+            </StackPanel>
+          </Expander>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

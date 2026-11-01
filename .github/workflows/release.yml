@@ -1,6 +1,7 @@
 # A tag v<version> builds the release from that commit: MinterWallet-<version>-win-x64.exe, the Linux file, its
 # AppImage and .deb, and SHA256SUMS.txt, then publishes them as a GitHub release with the notes of
-# .github/release-notes.md. APKs use private signing secrets; desktop binaries are not Authenticode signed.
+# .github/release-notes.md. New releases stay draft until their assets have been verified and explicitly published.
+# APKs use private signing secrets; desktop binaries are not Authenticode signed.
 name: release
 on:
   push:
@@ -110,5 +111,5 @@ jobs:
             gh release edit "$GITHUB_REF_NAME" --title "Minter Wallet $version" --notes-file notes.md
             gh release upload "$GITHUB_REF_NAME" --clobber dist/*
           else
-            gh release create "$GITHUB_REF_NAME" --title "Minter Wallet $version" --notes-file notes.md dist/*
+            gh release create "$GITHUB_REF_NAME" --draft --title "Minter Wallet $version" --notes-file notes.md dist/*
           fi

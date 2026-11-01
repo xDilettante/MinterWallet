@@ -39,7 +39,7 @@ public partial class MobileMainView : UserControl
         if (this.GetLogicalDescendants().OfType<Button>().FirstOrDefault(b => b.Flyout?.IsOpen == true) is { } popup)
         { popup.Flyout!.Hide(); return true; }
         if (More.IsVisible) { More.IsVisible = false; return true; }
-        if (model.IsOverview && pages.TryGetValue(Section.Overview, out var ov) && model.ShowReceive)
+        if (model.ShowReceive)
         {
             model.ShowReceive = false;
             return true;

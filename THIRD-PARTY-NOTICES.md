@@ -15,4 +15,5 @@ dependencies as Go modules, `tools/js-oracle` uses the Minter JavaScript librari
 
 Libraries used as NuGet packages keep their own licences: Avalonia with SkiaSharp and HarfBuzzSharp (MIT),
 Avalonia.Fonts.Inter (MIT; the Inter typeface in it is under the SIL Open Font License 1.1),
-BouncyCastle.Cryptography (MIT).
+BouncyCastle.Cryptography (MIT), QRCoder (MIT), ZXing.Net (Apache-2.0).
+Android camera scanning uses AndroidX CameraX (Apache-2.0) through the .NET Android bindings (MIT).

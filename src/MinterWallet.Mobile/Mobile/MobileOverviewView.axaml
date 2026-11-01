@@ -45,7 +45,6 @@
           </UniformGrid>
         </StackPanel>
       </Border>
-      <views:ReceivePanel IsVisible="{Binding ShowReceive}" />
       <Border Classes="well" IsVisible="{Binding !Derivation.IsHd}"><TextBlock Text="{Binding Derivation.KindExplanation}" Classes="caption prose" /></Border>
       <StackPanel Spacing="4">
         <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Монеты" Classes="h2" VerticalAlignment="Center" /><Button Grid.Column="1" Content="Делегировать" Classes="link" Command="{Binding OpenStaking}" IsVisible="{Binding CanSign}" /></Grid>

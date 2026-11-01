@@ -155,7 +155,11 @@
               <TextBlock Text="Отдаю" Classes="label" Margin="0" />
             </DockPanel>
             <Grid ColumnDefinitions="*,190" ColumnSpacing="12">
-              <TextBox Text="{Binding Amount}" Classes="mono" FontSize="16" PlaceholderText="0.0" AutomationProperties.Name="{Binding AmountLabel}" />
+              <TextBox x:Name="SellAmount" Text="{Binding Amount}" IsVisible="{Binding ExactInput}" Classes="mono" FontSize="16" PlaceholderText="0.0" AutomationProperties.Name="{Binding AmountLabel}" />
+              <Panel IsVisible="{Binding !ExactInput}">
+                <SelectableTextBlock Text="{Binding QuoteExpected}" Classes="mono" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding HasQuote}" />
+                <TextBlock Text="—" Classes="muted mono" FontSize="16" VerticalAlignment="Center" IsVisible="{Binding !HasQuote}" />
+              </Panel>
               <ComboBox Grid.Column="1" ItemsSource="{Binding Coins}" SelectedItem="{Binding Sell}" HorizontalAlignment="Stretch" AutomationProperties.Name="Отдаю">
                 <ComboBox.ItemTemplate>
                   <DataTemplate x:DataType="local:BalanceItem">
@@ -170,7 +174,7 @@
                 </ComboBox.ItemTemplate>
               </ComboBox>
             </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" Margin="0,2,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" Margin="0,2,0,0" IsVisible="{Binding ExactInput}">
               <Button Content="25 %" Command="{Binding Percent25}" />
               <Button Content="50 %" Command="{Binding Percent50}" />
               <Button Content="75 %" Command="{Binding Percent75}" />
@@ -190,12 +194,14 @@
         <Border Classes="card">
           <StackPanel Spacing="10">
             <DockPanel>
-              <TextBlock DockPanel.Dock="Right" Text="{Binding QuoteExpected}" Classes="mono" FontWeight="SemiBold" IsVisible="{Binding HasQuote}" VerticalAlignment="Center" />
               <TextBlock Text="Получаю" Classes="label" Margin="0" />
             </DockPanel>
             <Grid ColumnDefinitions="*,190" ColumnSpacing="12">
-              <SelectableTextBlock Text="{Binding QuoteExpected}" Classes="mono" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding HasQuote}" />
-              <TextBlock Text="—" Classes="muted mono" FontSize="16" VerticalAlignment="Center" IsVisible="{Binding !HasQuote}" />
+              <TextBox x:Name="BuyAmount" Text="{Binding Amount}" IsVisible="{Binding !ExactInput}" Classes="mono" FontSize="16" PlaceholderText="0.0" AutomationProperties.Name="{Binding AmountLabel}" />
+              <Panel IsVisible="{Binding ExactInput}">
+                <SelectableTextBlock Text="{Binding QuoteExpected}" Classes="mono" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding HasQuote}" />
+                <TextBlock Text="—" Classes="muted mono" FontSize="16" VerticalAlignment="Center" IsVisible="{Binding !HasQuote}" />
+              </Panel>
               <views:CoinPicker Grid.Column="1" DataContext="{Binding Buy}" />
             </Grid>
           </StackPanel>

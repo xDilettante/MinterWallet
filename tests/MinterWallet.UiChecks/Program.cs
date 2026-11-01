@@ -17,6 +17,14 @@ using MinterWallet.Core;
 // the quote by itself, delegation, multisend, sources in the settings, wrong password, both themes, lock and unlock.
 // --mainnet URL: read-only, against a real MinterGate: a public mainnet address to watch, its balances in dollars, its
 // history with the older part from the Minter explorer, the gate's coin list for a swap. Nothing is signed.
+if (args is ["--swap"])
+{
+    Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
+    var swapSession = HeadlessUnitTestSession.StartNew(typeof(UiChecksApp));
+    var swapCode = await swapSession.Dispatch(SwapScenario.Run, CancellationToken.None);
+    Environment.Exit(swapCode);
+    return swapCode;
+}
 if (args is ["--derivation"])
 {
     Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
@@ -49,7 +57,7 @@ if (args is ["--startup", var startupUrl])
     Environment.Exit(result);
     return result;
 }
-if (args is not ["--devnet" or "--mainnet" or "--english", var url]) { Console.WriteLine("Usage: MinterWallet.UiChecks --derivation | --english URL | --devnet URL | --mainnet URL"); return 2; }
+if (args is not ["--devnet" or "--mainnet" or "--english", var url]) { Console.WriteLine("Usage: MinterWallet.UiChecks --swap | --derivation | --english URL | --devnet URL | --mainnet URL"); return 2; }
 var mainnet = args[0] == "--mainnet";
 // The checks' wallets send no usage pings to the project's gate.
 Environment.SetEnvironmentVariable("MINTERWALLET_USAGE_URL", "off");
@@ -475,6 +483,7 @@ public static class UiScenario
         Check(main.ShowReceive, "receive panel");
         Shot("receive");
         // Ask for 2.5 MNT with a message: a Minter Link in the QR code, and the same link opened in the send form.
+        main.Request.ModeIndex = 1;
         main.Request.Amount = "2,5"; main.Request.Message = "счёт 7";
         var request = MinterLink.Parse(main.Request.Link);
         Check(main.Request.QrText == main.Request.Link && request?.DecodeData() is SendData { Coin: 0 } asked && asked.To == main.Selected!.Account.Address
@@ -484,7 +493,7 @@ public static class UiScenario
         Dispatcher.UIThread.RunJobs();
         Check(main.Send.Recipient == main.Address && main.Send.Amount == "2.5" && main.Send.Payload == "счёт 7" && main.Send.Coin?.Coin.Id == 0, "the link fills the send form");
         main.Send.Recipient = ""; main.Send.Amount = ""; main.Send.Payload = "";
-        main.Request.Amount = ""; main.Request.Message = "";
+        main.Request.ModeIndex = 0; main.Request.Amount = ""; main.Request.Message = "";
         Check(main.Request.QrText == main.Address, "the bare address again without an amount");
         main.ToggleReceive.Execute(null);
 
@@ -837,7 +846,7 @@ public static class UiScenario
         var instanceDir = Directory.CreateTempSubdirectory("minterwallet-instance-").FullName;
         var firstInstance = SingleInstance.Claim(instanceDir)!;
         var shown = false;
-        firstInstance.Listen(() => shown = true);
+        firstInstance.Listen(_ => shown = true);
         SingleInstance? secondInstance = null;
         var launch = new Thread(() => secondInstance = SingleInstance.Claim(instanceDir));
         launch.Start();

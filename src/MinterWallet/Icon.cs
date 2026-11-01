@@ -29,6 +29,7 @@ public sealed class Icon : Control
         ["download"] = Geometry.Parse("M12 4 V15 M7 10 L12 15 L17 10 M5 20 H19"),
         ["coin"] = Geometry.Parse("M9 14c0 1.657 2.686 3 6 3s6 -1.343 6 -3s-2.686 -3 -6 -3s-6 1.343 -6 3 M9 14v4c0 1.656 2.686 3 6 3s6 -1.344 6 -3v-4 M3 6c0 1.072 1.144 2.062 3 2.598s4.144 .536 6 0c1.856 -.536 3 -1.526 3 -2.598c0 -1.072 -1.144 -2.062 -3 -2.598s-4.144 -.536 -6 0c-1.856 .536 -3 1.526 -3 2.598 M3 6v10c0 .888 .772 1.45 2 2 M3 11c0 .888 .772 1.45 2 2"),
         ["plus"] = Geometry.Parse("M12 5 V19 M5 12 H19"),
+        ["scan"] = Geometry.Parse("M8 3 H4 A1 1 0 0 0 3 4 V8 M16 3 H20 A1 1 0 0 1 21 4 V8 M3 16 V20 A1 1 0 0 0 4 21 H8 M16 21 H20 A1 1 0 0 0 21 20 V16 M7 7 H10 V10 H7 Z M14 7 H17 V10 H14 Z M7 14 H10 V17 H7 Z M14 14 H17 V17 H14 Z"),
         ["trash"] = Geometry.Parse("M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 21 H17 L18 7 M10 11 V17 M14 11 V17"),
         ["check"] = Geometry.Parse("M5 12.5 L10 17.5 L19 7"),
         ["close"] = Geometry.Parse("M6 6 L18 18 M18 6 L6 18"),

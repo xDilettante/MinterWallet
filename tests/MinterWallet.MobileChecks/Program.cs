@@ -43,6 +43,10 @@ internal sealed class FakeMobilePlatform : IMobilePlatform
     public int ReadCalls { get; private set; }
     public int EnableCalls { get; private set; }
     public TaskCompletionSource<string?>? DeferredRead { get; set; }
+    public bool CanScanQr => true;
+    public TaskCompletionSource<string?>? DeferredScan { get; set; }
+    public Task<string?> ScanQrAsync() => DeferredScan?.Task ?? Task.FromResult<string?>(null);
+    public void CancelQrScan() => DeferredScan?.TrySetResult(null);
 
     public void Notify(string title, string text) => Notifications.Add((title, text));
     public void SetSecure(bool secure) => Secure = secure;
@@ -86,6 +90,7 @@ public static class MobileScenario
         {
             Check(MobileRoot.KeyboardOverlap(new Size(412, 915), new Rect(0, 615, 412, 300)) == 300, "overlay keyboard reserves its actual overlap");
             Check(MobileRoot.KeyboardOverlap(new Size(412, 615), new Rect(0, 615, 412, 300)) == 0, "resized viewport does not reserve the keyboard twice");
+            VerifyQrDecoder();
             await LatePlatformFlowAsync();
             MobileHost.Platform = platform;
             await OfflineFlowAsync(data, platform, liveUrl);
@@ -239,12 +244,88 @@ public static class MobileScenario
         main.Derivation.Toggle.Execute(null);
 
         main.ShowReceive = true;
+        main.Request.Amount = "150";
+        main.Request.Message = "Оплата заказа";
+        Check(main.Request.QrText == main.Address, "address mode ignores stored request fields until the user chooses a payment request");
+        main.Request.Amount = ""; main.Request.Message = "";
         VerifyScreen("receive-qr");
+        var receiveQr = root.FindDescendantOfType<MobileReceiveView>()!.FindControl<QrView>("ReceiveQr")!;
+        Check(receiveQr.Text == main.AddressText && receiveQr.Bounds.Width >= 200, "receive sheet shows a readable QR for the selected address");
+        var receiveEditor = root.FindDescendantOfType<MinterWallet.Views.PaymentRequestEditor>()!;
+        var receiveMode = receiveEditor.FindControl<ListBox>("ReceiveMode")!;
+        Check(!receiveEditor.FindControl<StackPanel>("RequestFields")!.IsVisible, "address-only mode keeps the form compact");
+        receiveMode.SelectedIndex = 1; Pump();
+        Check(main.Request.IsRequest && !main.Request.HasQr && receiveQr.Text == "", "empty payment request shows no misleading address QR");
+        main.Request.Amount = "150,5"; main.Request.Coin = main.Request.Coins.Last(); main.Request.Message = "Заказ 7";
+        VerifyScreen("receive-request");
+        var decodedRequest = MinterLink.Parse(receiveQr.Text!);
+        Check(decodedRequest?.DecodeData() is SendData asked && asked.To == main.Selected!.Account.Address && asked.Coin == main.Request.Coin.Id
+            && asked.Value == Units.ParseCoins("150.5") && Encoding.UTF8.GetString(decodedRequest.Payload) == "Заказ 7", "receive QR includes the selected address, coin, exact amount and comment");
+        Check(main.Request.QrCaption == $"Запрос на 150.5 {main.Request.Coin.Symbol}", "QR caption states the amount and coin");
+        await main.Request.Copy.RunAsync();
+        Check(copiedAddress == main.Request.Link, "request copy shares the same payment data as QR");
+        main.Request.Amount = "-1"; Pump();
+        copiedAddress = null;
+        await main.Request.Copy.RunAsync();
+        Check(!main.Request.HasQr && receiveQr.Text == "" && copiedAddress == null && main.Request.Problem.Length > 0, "invalid request hides QR and cannot be copied");
+        main.Request.Amount = "150,5";
+        main.Request.Message = new string('я', Transaction.MaxPayload / 2 + 1);
+        Check(!main.Request.HasQr && main.Request.Problem.Length > 0, "oversized UTF-8 comment cannot produce a request QR");
+        main.Request.Message = "Заказ 7";
+        receiveMode.SelectedIndex = 0; Pump();
+        Check(receiveQr.Text == main.Address && !main.Request.HasLink && main.Request.Message == "Заказ 7" && main.Request.Amount == "150,5", "switching to address restores a plain QR and preserves the draft");
+        receiveMode.SelectedIndex = 1; Pump();
+        Check(receiveQr.Text == main.Request.Link && main.Request.HasQr, "switching back restores the populated request");
+        main.Request.ModeIndex = 0; main.Request.Amount = ""; main.Request.Message = "";
+        Check(Back() && !main.ShowReceive, "back closes the receive sheet");
         main.ShowReceive = false;
 
         // 5. Send: single, multisend rows, check issue with QR
         main.Section = Section.Send;
         VerifyScreen("send-single");
+        var qrRecipient = "Mx37980a12b1be0855384b8d4f24b2d7957f680149";
+        Check(main.Send.ApplyQr(qrRecipient) && main.Send.Recipient == qrRecipient, "plain address QR fills recipient");
+        var paymentQr = MinterLink.Of(new SendData(0, Address.Parse(qrRecipient), Units.ParseCoins("1.25")), Encoding.UTF8.GetBytes("QR request")).ToString();
+        Check(main.Send.ApplyQr(paymentQr) && main.Send.Amount == "1.25" && main.Send.Payload == "QR request", "payment QR fills amount, coin and message without sending");
+        var unavailableCoinQr = MinterLink.Of(new SendData(uint.MaxValue, Address.Parse(qrRecipient), Units.ParseCoins("1.25"))).ToString();
+        Check(main.Send.ApplyQr(unavailableCoinQr) && main.Send.Coin == null, "request for a missing coin leaves the transfer coin unselected");
+        main.Send.BalancesChanged(); main.Send.BalancesChanged();
+        Check(main.Send.Coin == null, "balance refresh cannot replace an unavailable requested coin with another currency");
+        main.Send.Coin = main.Send.Coins.First();
+        main.Send.BalancesChanged();
+        Check(main.Send.Coin?.Coin.Id == 0, "sender can explicitly choose a different currency");
+        main.Send.ApplyQr(paymentQr);
+        Check(root.FindDescendantOfType<MinterWallet.Views.SendPage>()!.FindControl<Button>("ScanQrButton")!.IsVisible, "QR scanner is available on camera-equipped mobile platforms");
+        var cancelledScan = (main.Send.Recipient, main.Send.Amount, main.Send.Payload);
+        await main.Send.ScanQr.RunAsync();
+        Check(cancelledScan == (main.Send.Recipient, main.Send.Amount, main.Send.Payload), "cancelled scan preserves the payment draft");
+        platform.DeferredScan = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scan = main.Send.ScanQr.RunAsync();
+        main.Send.Amount = "2.5";
+        platform.DeferredScan.SetResult(paymentQr);
+        await scan;
+        Check(main.Send.Amount == "2.5", "late scan cannot overwrite a modified draft");
+        platform.DeferredScan = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        scan = main.Send.ScanQr.RunAsync();
+        main.Section = Section.Overview;
+        platform.DeferredScan.SetResult(paymentQr);
+        await scan;
+        Check(main.IsOverview && main.Send.Amount == "2.5", "late scan cannot navigate back or fill another screen");
+        main.Section = Section.Send;
+        platform.DeferredScan = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        scan = main.Send.ScanQr.RunAsync();
+        platform.DeferredScan.SetResult(paymentQr);
+        await scan;
+        platform.DeferredScan = null;
+        Check(main.Send.Amount == "1.25", "camera result fills a current unchanged transfer draft");
+        var qrDraft = (main.Send.Recipient, main.Send.Amount, main.Send.Payload, main.Send.Coin);
+        foreach (var invalidQr in new[] { "https://example.com", "0x" + new string('1', 40), new string('x', 9000), new MinterLink(TxType.Delegate, [], []).ToString(),
+            MinterLink.Of(new SendData(0, Address.Parse(qrRecipient), 0)).ToString(),
+            MinterLink.Of(new SendData(0, Address.Parse(qrRecipient), 1), [0xff]).ToString(),
+            MinterLink.Of(new SendData(0, Address.Parse(qrRecipient), 1), new byte[Transaction.MaxPayload + 1]).ToString() })
+            Check(!main.Send.ApplyQr(invalidQr) && qrDraft == (main.Send.Recipient, main.Send.Amount, main.Send.Payload, main.Send.Coin), "unsupported QR preserves the payment draft");
+        main.Send.Say("");
+
         var sendPrimary = root.FindDescendantOfType<MinterWallet.Views.SendPage>()!.FindControl<Button>("SendPrimary")!;
         Check(sendPrimary.TranslatePoint(new Point(0, sendPrimary.Bounds.Height), root)?.Y <= PhoneHeight - 58, "basic transfer action fits above bottom navigation without scrolling");
         main.Send.ModeIndex = 1;
@@ -259,6 +340,17 @@ public static class MobileScenario
         // 6. Swap: swap now, limit orders, liquidity
         main.Section = Section.Swap;
         VerifyScreen("swap-now");
+        main.Swap.ExactInput = false;
+        main.Swap.Amount = "10";
+        main.Swap.Buy.Selected = new CoinOption(3494, "USDTBSC", "", 0, "");
+        VerifyScreen("swap-buy");
+        var swapPage = root.FindDescendantOfType<MinterWallet.Views.SwapPage>()!;
+        Check(swapPage.FindControl<TextBox>("BuyAmount")!.IsEffectivelyVisible && !swapPage.FindControl<TextBox>("SellAmount")!.IsEffectivelyVisible,
+            "mobile buy mode edits the destination amount instead of the payment amount");
+        main.Swap.ExactInput = true; main.Swap.Amount = "";
+        Pump();
+        Check(swapPage.FindControl<TextBox>("SellAmount")!.IsEffectivelyVisible && !swapPage.FindControl<TextBox>("BuyAmount")!.IsEffectivelyVisible,
+            "mobile sell mode edits only the payment amount");
         var coinPicker = root!.GetVisualDescendants().OfType<MinterWallet.Views.CoinPicker>().First(p => p.IsEffectivelyVisible);
         var coinButton = coinPicker.FindControl<Button>("Open")!;
         coinButton.Flyout!.ShowAt(coinButton);
@@ -372,7 +464,20 @@ public static class MobileScenario
         platform.AutoApproveBiometrics = false;
 
         // 16. Lock & Unlock screen (including fingerprint unlock button)
+        main.Section = Section.Send;
+        var balancesBeforeSourceChange = main.Balances.ToArray();
+        main.Send.ApplyQr(unavailableCoinQr);
+        main.Disconnect();
+        foreach (var balance in balancesBeforeSourceChange) main.Balances.Add(balance);
+        main.Send.BalancesChanged();
+        Check(main.Send.Coin == null, "changing the source cannot replace the currency of a prepared payment request");
+        main.Send.ApplyQr(paymentQr);
+        platform.DeferredScan = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scanAtLock = main.Send.ScanQr.RunAsync();
         main.LockNow.Execute(null);
+        await scanAtLock;
+        Check(platform.DeferredScan.Task.IsCompleted && main.Send.Amount == "1.25", "locking cancels the native scanner without changing the draft");
+        platform.DeferredScan = null;
         Check(shell.Page is UnlockViewModel, "wallet locked");
         var unlock = (UnlockViewModel)shell.Page;
         unlock.Forgot.Execute(null);
@@ -412,6 +517,7 @@ public static class MobileScenario
         root!.Security.Later.Execute(null);
         PopulateSampleData(main);
         main.ShowReceive = true;
+        main.Request.ModeIndex = 1; main.Request.Amount = "150";
         ScanEnglish("en-overview");
         Shot("en-overview");
 
@@ -484,6 +590,7 @@ public static class MobileScenario
         main.TotalUsdLarge = "$264.30";
         main.TotalRub = "24 580 ₽";
         main.TotalBipSubtitle = "≈ 220 253.5 BIP";
+        main.Request.BalancesChanged();
         // Re-evaluate count-based visibility after injecting offline gallery data, just as a completed refresh does.
         main.Shell.Redraw();
     }
@@ -780,6 +887,33 @@ public static class MobileScenario
         Pump();
         try { window?.CaptureRenderedFrame()?.Save(Path.Combine(output, $"{++step:00}-{name}.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions()); }
         catch (ObjectDisposedException) { }
+    }
+
+    private static void VerifyQrDecoder()
+    {
+        var address = "Mx37980a12b1be0855384b8d4f24b2d7957f680149";
+        File.WriteAllBytes(Path.Combine(output, "scan-fixture.png"), QRCoder.PngByteQRCodeHelper.GetQRCode(address, QRCoder.QRCodeGenerator.ECCLevel.M, 10));
+        foreach (var text in new[] { address, MinterLink.Of(new SendData(0, Address.Parse(address), Units.ParseCoins("1.25")), Encoding.UTF8.GetBytes("Оплата QR")).ToString() })
+        {
+            using var qr = QRCoder.QRCodeGenerator.GenerateQrCode(text, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var n = qr.ModuleMatrix.Count;
+            var width = n * 5;
+            var pixels = new byte[width * width];
+            for (var y = 0; y < width; y++)
+                for (var x = 0; x < width; x++)
+                    pixels[y * width + x] = qr.ModuleMatrix[y / 5][x / 5] ? (byte)0 : (byte)255;
+            for (var turn = 0; turn < 4; turn++)
+            {
+                Check(QrDecoder.Decode(pixels, width, width) == text, "camera decoder reads wallet QR in every orientation");
+                Check(QrDecoder.Decode(pixels.Select(b => (byte)(255 - b)).ToArray(), width, width) == text, "camera decoder reads inverted QR");
+                var rotated = new byte[pixels.Length];
+                for (var y = 0; y < width; y++)
+                    for (var x = 0; x < width; x++) rotated[x * width + width - y - 1] = pixels[y * width + x];
+                pixels = rotated;
+            }
+        }
+        Check(QrDecoder.Decode([], 0, 0) == null && QrDecoder.Decode([0], 2, 2) == null, "decoder rejects invalid frame dimensions");
+        Check(QrDecoder.Decode(new byte[320 * 240], 320, 240) == null, "empty camera frame produces no result");
     }
 
     private static void Check(bool condition, string what) { if (!condition) throw new InvalidOperationException(what); }

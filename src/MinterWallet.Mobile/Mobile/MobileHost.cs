@@ -16,6 +16,9 @@ public interface IMobilePlatform
     // Keeps the OS from capturing the screen (recents thumbnails, screenshots) while secrets may be shown.
     void SetSecure(bool secure);
     bool ShowsClipboardConfirmation => false;
+    bool CanScanQr => false;
+    Task<string?> ScanQrAsync() => Task.FromResult<string?>(null);
+    void CancelQrScan() { }
     // Hardware-backed biometric unlock & signing (Android KeyStore + BiometricPrompt).
     bool CanUseBiometrics => false;
     bool HasBiometricSecret => false;
@@ -30,6 +33,24 @@ public interface IMobilePlatform
 
 public static class MobileHost
 {
+    private static Shell? shell;
+    private static string? pendingPayment;
+    public static void AttachShell(Shell value)
+    {
+        shell = value;
+        if (pendingPayment is { } link) { pendingPayment = null; shell.OpenPaymentLink(link); }
+    }
+
+    public static void OpenPaymentLink(string text)
+    {
+        if (PaymentLinks.Parse(text) == null) return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (shell == null) pendingPayment = text;
+            else shell.OpenPaymentLink(text);
+        });
+    }
+
     public static string? DataDirectory { get => Program.DataDirectory; set => Program.DataDirectory = value; }
     private static IMobilePlatform? platform;
     public static event Action? PlatformChanged;

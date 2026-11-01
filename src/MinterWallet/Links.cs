@@ -11,13 +11,14 @@ public sealed record CoinChoice(uint Id, string Symbol)
     public override string ToString() => Symbol;
 }
 
-// "Попросить сумму" in the receive panel: a Minter Link (https://bip.to/tx/…) asking for a transfer of this amount of
-// this coin to the account, with an optional message; the QR code shows the link instead of the bare address.
+// The receive panel explicitly chooses a bare address or a Minter Link payment request. Draft fields survive
+// switching modes; an invalid request never silently falls back to a bare-address QR.
 public sealed class PaymentRequestViewModel : Observable
 {
     private readonly MainViewModel main;
-    private string amount = "", message = "", copyLabel = "Копировать";
+    private string amount = "", message = "", copyLabel = "Копировать запрос";
     private CoinChoice? coin;
+    private int modeIndex;
 
     public PaymentRequestViewModel(MainViewModel main)
     {
@@ -26,6 +27,12 @@ public sealed class PaymentRequestViewModel : Observable
     }
 
     public ObservableCollection<CoinChoice> Coins { get; } = [];
+    public int ModeIndex
+    {
+        get => modeIndex;
+        set { if (value is 0 or 1 && Set(ref modeIndex, value)) { Changed(nameof(IsRequest)); Update(); } }
+    }
+    public bool IsRequest => ModeIndex == 1;
     public string Amount { get => amount; set { if (Set(ref amount, value)) Update(); } }
     public CoinChoice? Coin { get => coin; set { if (Set(ref coin, value)) Update(); } }
     public string Message { get => message; set { if (Set(ref message, value)) Update(); } }
@@ -36,7 +43,7 @@ public sealed class PaymentRequestViewModel : Observable
     {
         get
         {
-            if (!main.CanReceive || main.Selected == null || Coin == null || Amount.Trim().Length == 0) return "";
+            if (!IsRequest || !main.CanReceive || main.Selected == null || Coin == null || Amount.Trim().Length == 0) return "";
             BigInteger value;
             try { value = Units.ParseCoins(Amount.Trim().Replace(',', '.')); } catch (FormatException) { return ""; }
             if (value.Sign <= 0) return "";
@@ -45,12 +52,17 @@ public sealed class PaymentRequestViewModel : Observable
         }
     }
     public bool HasLink => Link.Length > 0;
-    public string QrText => !main.CanReceive ? "" : HasLink ? Link : main.Address;
+    public string QrText => !main.CanReceive ? "" : IsRequest ? Link : main.Address;
+    public bool HasQr => QrText.Length > 0;
+    public string QrCaption => !IsRequest ? "QR содержит только адрес" : HasLink
+        ? $"Запрос на {Units.FormatCoins(Units.ParseCoins(Amount.Trim().Replace(',', '.')))} {Coin!.Symbol}"
+        : "Заполните поля запроса";
     public string Problem
     {
         get
         {
-            if (Amount.Trim().Length == 0) return "";
+            if (!IsRequest || Amount.Trim().Length == 0) return "";
+            if (Coin == null) return "Выберите монету.";
             try { if (Units.ParseCoins(Amount.Trim().Replace(',', '.')).Sign <= 0) return "Сумма должна быть больше нуля."; }
             catch (FormatException) { return "Проверьте число: цифры и точка, не больше 18 знаков после неё."; }
             return Encoding.UTF8.GetByteCount(Message.Trim()) > Transaction.MaxPayload ? $"Сообщение — не больше {Transaction.MaxPayload} байт." : "";
@@ -70,7 +82,8 @@ public sealed class PaymentRequestViewModel : Observable
 
     public void Update()
     {
-        foreach (var name in new[] { nameof(Link), nameof(HasLink), nameof(QrText), nameof(Problem) }) Changed(name);
+        CopyLabel = "Копировать запрос";
+        foreach (var name in new[] { nameof(Link), nameof(HasLink), nameof(QrText), nameof(HasQr), nameof(QrCaption), nameof(Problem) }) Changed(name);
     }
 
     private async Task CopyAsync()
@@ -78,6 +91,6 @@ public sealed class PaymentRequestViewModel : Observable
         if (!HasLink || main.Shell.CopyText == null || !main.Derivation.PrepareReceive()) return;
         await main.Shell.CopyText(Link);
         CopyLabel = "Скопировано";
-        DispatcherTimer.RunOnce(() => CopyLabel = "Копировать", TimeSpan.FromSeconds(2));
+        DispatcherTimer.RunOnce(() => CopyLabel = "Копировать запрос", TimeSpan.FromSeconds(2));
     }
 }

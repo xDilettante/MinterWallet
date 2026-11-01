@@ -21,7 +21,9 @@ public partial class App : Application
             var window = new MainWindow();
             desktop.MainWindow = window;
             var tray = new TrayHost(this, desktop, window, (Shell)window.DataContext!);
-            Program.Instance?.Listen(tray.Show);
+            var shell = (Shell)window.DataContext!;
+            if (Program.InitialPaymentLink is { } link) shell.OpenPaymentLink(link);
+            Program.Instance?.Listen(link => { tray.Show(); if (link != null) shell.OpenPaymentLink(link); });
         }
         base.OnFrameworkInitializationCompleted();
     }

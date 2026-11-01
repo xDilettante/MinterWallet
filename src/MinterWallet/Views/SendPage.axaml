@@ -19,6 +19,7 @@
           <StackPanel Spacing="16">
             <StackPanel>
               <DockPanel Margin="0,0,0,6">
+                <Button x:Name="ScanQrButton" DockPanel.Dock="Right" Classes="link" Command="{Binding ScanQr}" IsVisible="{Binding CanScanQr}" AutomationProperties.Name="Сканировать QR"><local:Icon Kind="scan" Width="20" Height="20" /></Button>
                 <Button DockPanel.Dock="Right" Classes="link" Command="{Binding Paste}" AutomationProperties.Name="Вставить">
                   <StackPanel Orientation="Horizontal" Spacing="6"><local:Icon Kind="paste" Width="16" Height="16" /><TextBlock Text="Вставить" /></StackPanel>
                 </Button>

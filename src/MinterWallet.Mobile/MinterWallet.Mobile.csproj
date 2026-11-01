@@ -6,6 +6,7 @@
        Platform heads (src/MinterWallet.Android) and tests/MinterWallet.MobileChecks reference this library. -->
   <PropertyGroup>
     <AssemblyName>MinterWallet</AssemblyName>
+    <Version>0.8.6</Version>
     <RootNamespace>MinterWallet</RootNamespace>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <SatelliteResourceLanguages>en;ru</SatelliteResourceLanguages>
@@ -20,6 +21,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MinterWallet.Api\MinterWallet.Api.csproj" />

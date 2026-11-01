@@ -53,9 +53,12 @@ public sealed class WalletAndroidApplication : AvaloniaAndroidApplication<App>
     Icon = "@mipmap/ic_launcher",
     RoundIcon = "@mipmap/ic_launcher_round",
     MainLauncher = true,
+    Exported = true,
     LaunchMode = LaunchMode.SingleTop,
     WindowSoftInputMode = SoftInput.AdjustResize,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
+[IntentFilter([Intent.ActionView], Categories = [Intent.CategoryDefault, Intent.CategoryBrowsable],
+    DataScheme = "minterwallet", DataHost = "pay", DataPathPrefix = "/tx/")]
 public sealed class MainActivity : AvaloniaMainActivity, IMobilePlatform
 {
     private const string ChannelId = "minter_arrivals";
@@ -72,12 +75,27 @@ public sealed class MainActivity : AvaloniaMainActivity, IMobilePlatform
         catch { global::Android.Util.Log.Warn("MinterWallet", "Legacy biometric cache cleanup will be retried at the next launch."); }
         base.OnCreate(savedInstanceState);
         EnsureChannel();
+        OpenPayment(Intent);
+    }
+
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        OpenPayment(intent);
+    }
+
+    private static void OpenPayment(Intent? intent)
+    {
+        if (intent?.Action == Intent.ActionView && intent.DataString is { } text) MobileHost.OpenPaymentLink(text);
     }
 
     public bool CanUseBiometrics => Credentials.Available;
     public bool HasBiometricSecret => Credentials.HasSecret;
     public bool CanUsePin => true;
     public bool ShowsClipboardConfirmation => OperatingSystem.IsAndroidVersionAtLeast(33);
+    public bool CanScanQr => PackageManager?.HasSystemFeature(global::Android.Content.PM.PackageManager.FeatureCameraAny) == true;
+    public Task<string?> ScanQrAsync() => QrScanActivity.ScanAsync(this);
+    public void CancelQrScan() => QrScanActivity.Cancel();
     public string BiometricError => Credentials.Error;
     public string DerivePinCredential(string pin) => Credentials.DerivePin(pin);
     public Task<bool> EnableBiometricsAsync(string verifiedSecret) => Credentials.EnableAsync(verifiedSecret);

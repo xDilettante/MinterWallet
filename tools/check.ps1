@@ -30,6 +30,9 @@ try {
     dotnet run -c Release --no-build --project tests/MinterWallet.UiChecks -- --telemetry
     if ($LASTEXITCODE -ne 0) { throw 'UI telemetry checks failed' }
 
+    dotnet run -c Release --no-build --project tests/MinterWallet.UiChecks -- --swap
+    if ($LASTEXITCODE -ne 0) { throw 'UI swap checks failed' }
+
     dotnet run -c Release --no-build --project tests/MinterWallet.MobileChecks
     if ($LASTEXITCODE -ne 0) { throw 'mobile UI checks failed' }
 

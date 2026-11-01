@@ -102,5 +102,6 @@
         </Button>
       </UniformGrid>
     </Border>
+    <mobile:MobileReceiveView Grid.RowSpan="3" IsVisible="{Binding ShowReceive}" />
   </Grid>
 </UserControl>

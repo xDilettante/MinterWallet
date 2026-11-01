@@ -32,6 +32,9 @@ public static class DerivationScenario
             var handler = new WalletHandler();
             var backend = new NodeApiClient(new Uri("http://wallet.test/"), handler: handler);
             shell = new Shell(directory) { AutoRefresh = false };
+            var payment = MinterLink.Of(new SendData(0, Address.Parse("Mx37980a12b1be0855384b8d4f24b2d7957f680149"), Units.ParseCoins("1.25"))).ToString()
+                .Replace("https://bip.to/", "minterwallet://pay/", StringComparison.Ordinal);
+            Check(shell.OpenPaymentLink(payment) && shell.Page is UnlockViewModel, "payment link waits for unlock");
             Set(shell, nameof(Shell.Backend), backend);
             Set(shell, nameof(Shell.Status), new ChainStatus("minter-test-network", "test", 100, DateTimeOffset.UtcNow));
             Set(shell, nameof(Shell.Wallet), new WalletService(backend, session, ChainId.Testnet));
@@ -41,6 +44,18 @@ public static class DerivationScenario
             window.Show();
             var hd = main.Derivation;
             await Wait(() => !hd.Loading && main.State != null);
+            Check(main.Section == Section.Send && main.Send.Recipient == "Mx37980a12b1be0855384b8d4f24b2d7957f680149"
+                && main.Send.Amount == "1.25" && main.Send.Payload == "", "external payment only fills the form after unlock");
+            Check(!shell.OpenPaymentLink("minterwallet://pay/tx/not-rlp") && !shell.OpenPaymentLink(payment + "?p=secret")
+                && !shell.OpenPaymentLink(payment.Replace("//pay/", "//other/", StringComparison.Ordinal)), "malformed and unexpected payment links rejected");
+            main.Send.Recipient = ""; main.Send.Amount = ""; main.Section = Section.Overview;
+            var instance = SingleInstance.Claim(Path.Combine(directory, "link-instance"))!;
+            string? forwarded = null;
+            instance.Listen(link => forwarded = link);
+            Check(await Task.Run(() => SingleInstance.Claim(Path.Combine(directory, "link-instance"), payment)) == null,
+                "external link uses the already running wallet");
+            await Wait(() => forwarded != null);
+            Check(forwarded == payment, "payment survives same-user IPC unchanged");
             Check(hd.Wallets.Count == 2, "sidebar has roots only");
             Check(hd.Cards.Count == 5, "five address cards");
             Check(main.AddressText.Replace(" ", "").Length == 42, "selected address is full");
@@ -80,6 +95,7 @@ public static class DerivationScenario
             MainViewModel.SyncList(testCol, ["A", "D"]);
             Check(!resetFired && testCol.Count == 2 && testCol[1] == "D", "SyncList updates and trims without reset");
             Shot(window, output, "overview-dark");
+            VerifyReceive(main, output);
             hd.Toggle.Execute(null);
             Check(hd.Collapsed && main.Selected.Account.Index == 1, "collapse keeps selected address");
             Shot(window, output, "collapsed");
@@ -171,6 +187,40 @@ public static class DerivationScenario
         catch (Exception e) { Console.WriteLine("FAIL derivation UI: " + e); return 1; }
         finally { window?.Close(); shell?.Lock(); try { Directory.Delete(directory, true); } catch (IOException) { } }
     }
+    private static void VerifyReceive(MainViewModel main, string output)
+    {
+        main.ShowReceive = true;
+        var panel = new MinterWallet.Views.ReceivePanel { DataContext = main };
+        var preview = new Window { Width = 900, Height = 700, Content = panel };
+        try
+        {
+            preview.Show();
+            Dispatcher.UIThread.RunJobs();
+            var mode = panel.FindDescendantOfType<MinterWallet.Views.PaymentRequestEditor>()!.FindControl<ListBox>("ReceiveMode")!;
+            var qr = panel.FindControl<QrView>("ReceiveQr")!;
+            Check(mode.SelectedIndex == 0 && qr.Text == main.Address, "desktop receive defaults to a plain address");
+            Shot(preview, output, "receive-address-dark");
+            mode.SelectedIndex = 1;
+            main.Request.Amount = "2,5"; main.Request.Message = "Заказ 7";
+            Dispatcher.UIThread.RunJobs();
+            Check(main.Request.IsRequest && MinterLink.Parse(qr.Text!)?.DecodeData() is SendData send
+                && send.To == main.Selected!.Account.Address && send.Value == Units.ParseCoins("2.5"), "desktop controls generate a payment request QR");
+            Shot(preview, output, "receive-request-dark");
+            App.ApplyTheme("light"); Shot(preview, output, "receive-request-light");
+            main.Request.Amount = "oops";
+            Dispatcher.UIThread.RunJobs();
+            Check(!qr.IsVisible && main.Request.QrText.Length == 0, "desktop invalid request hides QR instead of falling back to an address");
+            mode.SelectedIndex = 0;
+            Dispatcher.UIThread.RunJobs();
+            Check(qr.IsVisible && qr.Text == main.Address && main.Request.Amount == "oops", "desktop address mode retains but ignores request fields");
+        }
+        finally
+        {
+            preview.Close(); App.ApplyTheme("dark");
+            main.Request.ModeIndex = 0; main.Request.Amount = ""; main.Request.Message = ""; main.ShowReceive = false;
+        }
+    }
+
     private static void Set(Shell shell, string name, object value) => typeof(Shell).GetProperty(name)!.SetValue(shell, value);
     private static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static async Task Wait(Func<bool> condition)

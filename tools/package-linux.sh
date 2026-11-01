@@ -13,7 +13,7 @@ mkdir -p "$out"; out="$(cd "$out" && pwd)"
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 icon="$root/packaging/minter-wallet.png"
 desktop() {
-  printf '[Desktop Entry]\nType=Application\nName=Minter Wallet\nComment=Кошелёк для сети Minter\nExec=%s\nIcon=minter-wallet\nCategories=Office;Finance;\nTerminal=false\n' "$1"
+  printf '[Desktop Entry]\nType=Application\nName=Minter Wallet\nComment=Кошелёк для сети Minter\nExec=%s %%u\nIcon=minter-wallet\nCategories=Office;Finance;\nMimeType=x-scheme-handler/minterwallet;\nTerminal=false\n' "$1"
 }
 
 install -m 755 "$bin" "$out/MinterWallet-$version-linux-x64"

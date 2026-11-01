@@ -29,6 +29,7 @@ public partial class MobileRoot : UserControl
     public MobileRoot(Shell shell)
     {
         Shell = shell;
+        MobileHost.AttachShell(shell);
         shell.Credentials.Mobile = true;
         ConfigurePlatform();
         MobileHost.PlatformChanged += ConfigurePlatform;
@@ -125,6 +126,7 @@ public partial class MobileRoot : UserControl
         Sheet.Cancel();
         Security.Dismiss();
         MobileHost.Platform?.CancelBiometrics();
+        MobileHost.Platform?.CancelQrScan();
         top = null;
         base.OnDetachedFromVisualTree(e);
     }
@@ -152,7 +154,12 @@ public partial class MobileRoot : UserControl
     private void Touch() { if (Shell.Page is MainViewModel main) main.LastActivity = DateTime.UtcNow; }
 
     // Avalonia can create its root during Application.OnCreate, before MainActivity publishes Android services.
-    private void ConfigurePlatform() => Shell.Credentials.DerivePin = MobileHost.Platform is { CanUsePin: true } platform ? platform.DerivePinCredential : null;
+    private void ConfigurePlatform()
+    {
+        Shell.Credentials.DerivePin = MobileHost.Platform is { CanUsePin: true } platform ? platform.DerivePinCredential : null;
+        Shell.ScanQr = MobileHost.Platform is { CanScanQr: true } scanner ? scanner.ScanQrAsync : null;
+        if (Shell.Page is MainViewModel main) main.Send.ScannerChanged();
+    }
 
     private void WatchPage()
     {
@@ -163,7 +170,7 @@ public partial class MobileRoot : UserControl
                 Dispatcher.UIThread.Post(() => _ = PromptBiometricUnlockAsync(unlock), DispatcherPriority.Background);
             else unlock.Say("Биометрия недоступна. Введите PIN-код или пароль.", Tone.Warning);
         }
-        if (Shell.Page is not MainViewModel) { Sheet.Cancel(); Security.Dismiss(); MobileHost.Platform?.CancelBiometrics(); }
+        if (Shell.Page is not MainViewModel) { Sheet.Cancel(); Security.Dismiss(); MobileHost.Platform?.CancelBiometrics(); MobileHost.Platform?.CancelQrScan(); }
         if (Shell.Page is MainViewModel main)
         {
             main.PropertyChanged += (_, _) => UpdateSecure();

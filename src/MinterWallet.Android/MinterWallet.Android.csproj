@@ -9,7 +9,8 @@
     <AssemblyName>MinterWallet.Android</AssemblyName>
     <RootNamespace>MinterWallet.Android</RootNamespace>
     <ApplicationId>network.minter.wallet</ApplicationId>
-    <ApplicationVersion>85</ApplicationVersion>
+    <ApplicationVersion>88</ApplicationVersion>
+    <Version>0.8.6</Version>
     <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
@@ -31,6 +32,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" Version="12.1.2" />
+    <PackageReference Include="Xamarin.AndroidX.Camera.Camera2" Version="1.5.3.1" />
+    <PackageReference Include="Xamarin.AndroidX.Camera.View" Version="1.5.3.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MinterWallet.Mobile\MinterWallet.Mobile.csproj" />

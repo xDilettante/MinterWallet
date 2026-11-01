@@ -1048,6 +1048,7 @@ public sealed class SendViewModel : ScreenModel
     private string recipient = "", amount = "", payload = "", recipientName = "";
     private BalanceItem? coin, gasCoin;
     private int modeIndex;
+    private uint? requestedCoin;
 
     public SendViewModel(MainViewModel main)
     {
@@ -1058,6 +1059,7 @@ public sealed class SendViewModel : ScreenModel
         Percent50 = new Command(() => SetPercent(50));
         Percent75 = new Command(() => SetPercent(75));
         Paste = new AsyncCommand(PasteAsync, Fail);
+        ScanQr = new AsyncCommand(ScanQrAsync, Fail);
         PickContact = new RelayCommand(item => { if (item is ContactItem c) Recipient = c.Address; });
         main.Contacts.CollectionChanged += (_, _) => Changed(nameof(HasContacts));
     }
@@ -1082,7 +1084,15 @@ public sealed class SendViewModel : ScreenModel
             if (MinterLink.Parse(value) is { } link) Dispatcher.UIThread.Post(() => OpenLink(link));
         }
     }
-    public BalanceItem? Coin { get => coin; set { Set(ref coin, value); Changed(nameof(Available)); } }
+    public BalanceItem? Coin
+    {
+        get => coin;
+        set
+        {
+            if (value != null && requestedCoin is { } request && request != value.Coin.Id) requestedCoin = null;
+            Set(ref coin, value); Changed(nameof(Available));
+        }
+    }
     public BalanceItem? GasCoin { get => gasCoin; set => Set(ref gasCoin, value); }
     public string Amount { get => amount; set => Set(ref amount, value); }
     public string Payload { get => payload; set => Set(ref payload, value); }
@@ -1093,6 +1103,51 @@ public sealed class SendViewModel : ScreenModel
     public Command Percent50 { get; }
     public Command Percent75 { get; }
     public AsyncCommand Paste { get; }
+
+    public AsyncCommand ScanQr { get; }
+    public bool CanScanQr => main.Shell.ScanQr != null;
+    internal void ScannerChanged() => Changed(nameof(CanScanQr));
+
+    private async Task ScanQrAsync()
+    {
+        if (main.Shell.ScanQr is not { } scan) return;
+        var context = main.ContextVersion;
+        var draft = (Recipient, Amount, Payload, Coin?.Coin.Id, GasCoin?.Coin.Id, ModeIndex);
+        var text = await scan();
+        if (text == null || !ReferenceEquals(main.Shell.Page, main) || main.Shell.Session?.IsLocked != false
+            || !main.IsSend || context != main.ContextVersion
+            || draft != (Recipient, Amount, Payload, Coin?.Coin.Id, GasCoin?.Coin.Id, ModeIndex)) return;
+        ApplyQr(text);
+    }
+
+    // QR data only fills a draft. Never open arbitrary URLs, import secrets or execute another transaction type.
+    public bool ApplyQr(string text)
+    {
+        if (text.Length <= 4096)
+        {
+            var input = text.Trim();
+            if (Minter.Protocol.Address.TryParse(input, out var address))
+            {
+                Recipient = address.ToString();
+                Say("Адрес из QR заполнен. Проверьте получателя перед отправкой.", Tone.Info);
+                return true;
+            }
+            try
+            {
+                if (MinterLink.Parse(input) is { Type: TxType.Send } link
+                    && link.Payload.Length <= Transaction.MaxPayload
+                    && link.DecodeData() is SendData { Value.Sign: > 0 })
+                {
+                    _ = new UTF8Encoding(false, true).GetString(link.Payload);
+                    OpenLink(link);
+                    return true;
+                }
+            }
+            catch (Exception e) when (e is FormatException or ArgumentException or OverflowException or IndexOutOfRangeException) { }
+        }
+        Say("QR не содержит адрес Minter или корректный запрос перевода. Форма не изменена.", Tone.Warning);
+        return false;
+    }
 
     private void SetPercent(int percent)
     {
@@ -1114,7 +1169,9 @@ public sealed class SendViewModel : ScreenModel
     {
         var keep = Coin?.Coin.Id; var keepGas = GasCoin?.Coin.Id;
         MainViewModel.SyncList(Coins, main.Balances);
-        Coin = Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
+        // A payment request fixes the currency even when its balance is absent. Only an explicit choice may change it.
+        Coin = requestedCoin is { } requested ? Coins.FirstOrDefault(c => c.Coin.Id == requested)
+            : Coins.FirstOrDefault(c => c.Coin.Id == keep) ?? Coins.FirstOrDefault();
         GasCoin = Coins.FirstOrDefault(c => c.Coin.Id == keepGas) ?? Coins.FirstOrDefault(c => c.Coin.Id == 0) ?? Coins.FirstOrDefault();
     }
 
@@ -1132,6 +1189,7 @@ public sealed class SendViewModel : ScreenModel
         {
             ModeIndex = 0;
             Recipient = send.To.ToString();
+            requestedCoin = send.Coin;
             Coin = Coins.FirstOrDefault(c => c.Coin.Id == send.Coin);
             Amount = Units.FormatCoins(send.Value);
             Payload = Encoding.UTF8.GetString(link.Payload);

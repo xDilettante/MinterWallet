@@ -75,7 +75,7 @@ public sealed class SingleInstance
 
     private SingleInstance(Mutex mutex, string name) { this.mutex = mutex; this.name = name; }
 
-    public static SingleInstance? Claim(string? dataDirectory)
+    public static SingleInstance? Claim(string? dataDirectory, string? paymentLink = null)
     {
         var path = Path.GetFullPath(WalletPaths.DataDirectory(dataDirectory));
         var name = "MinterWallet-" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(OperatingSystem.IsWindows() ? path.ToLowerInvariant() : path)))[..20];
@@ -84,13 +84,13 @@ public sealed class SingleInstance
         try { owned = mutex.WaitOne(0); }
         catch (AbandonedMutexException) { owned = true; }
         if (owned) return new SingleInstance(mutex, name);
-        for (var attempt = 0; attempt < 5 && !Signal(name); attempt++) Thread.Sleep(400);
+        for (var attempt = 0; attempt < 5 && !Signal(name, paymentLink); attempt++) Thread.Sleep(400);
         mutex.Dispose();
         return null;
     }
 
-    // Each connection to the pipe is one "show".
-    public void Listen(Action show) => _ = Task.Run(async () =>
+    // Same-user launches may also carry a bounded, validated payment request.
+    public void Listen(Action<string?> show) => _ = Task.Run(async () =>
     {
         while (true)
         {
@@ -98,18 +98,32 @@ public sealed class SingleInstance
             {
                 await using var server = new NamedPipeServerStream(name, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 await server.WaitForConnectionAsync();
-                Dispatcher.UIThread.Post(show);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var reader = new StreamReader(server, Encoding.UTF8);
+                var buffer = new char[1025];
+                var count = 0;
+                while (count < buffer.Length)
+                {
+                    var n = await reader.ReadAsync(buffer.AsMemory(count), timeout.Token);
+                    if (n == 0) break;
+                    count += n;
+                }
+                var text = new string(buffer, 0, count).TrimEnd('\n', '\r');
+                var link = PaymentLinks.Parse(text) != null ? text : null;
+                Dispatcher.UIThread.Post(() => show(link));
             }
-            catch (IOException) { await Task.Delay(500); }
+            catch (Exception e) when (e is IOException or OperationCanceledException) { await Task.Delay(500); }
         }
     });
 
-    private static bool Signal(string name)
+    private static bool Signal(string name, string? paymentLink)
     {
         try
         {
             using var client = new NamedPipeClientStream(".", name, PipeDirection.Out);
             client.Connect(1500);
+            using var writer = new StreamWriter(client, Encoding.UTF8);
+            writer.Write(paymentLink ?? "");
             return true;
         }
         catch (Exception e) when (e is TimeoutException or IOException) { return false; }

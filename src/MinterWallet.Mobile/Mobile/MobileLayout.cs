@@ -98,6 +98,12 @@ public static class MobileLayout
 
     private static void CompactSend(SendPage page)
     {
+        if (page.FindControl<Button>("ContactsButton")?.Parent is DockPanel recipientHeader)
+            foreach (var button in recipientHeader.Children.OfType<Button>())
+            {
+                if (button.Name != "ScanQrButton") button.Content = new Icon { Kind = button.Flyout != null ? "users" : "paste", Width = 20, Height = 20 };
+                button.Width = button.MinWidth = 44; button.MinHeight = 44; button.Padding = new Thickness(0); button.Margin = new Thickness(0);
+            }
         if (page.FindControl<StackPanel>("SendCoinField") is not { Parent: Panel parent } coin
             || page.FindControl<StackPanel>("SendAmountField") is not { } amount
             || coin.Children.Count != 2 || amount.Children.Count < 2) return;

@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MinterWallet" xmlns:views="using:MinterWallet.Views"
+             x:Class="MinterWallet.Views.PaymentRequestEditor" x:DataType="local:PaymentRequestViewModel">
+  <StackPanel Spacing="12">
+    <ListBox x:Name="ReceiveMode" Classes="segmented" SelectedIndex="{Binding ModeIndex}"
+             HorizontalAlignment="Stretch" AutomationProperties.Name="Содержимое QR">
+      <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+      <ListBoxItem HorizontalContentAlignment="Center"><TextBlock Text="Только адрес" TextWrapping="Wrap" TextAlignment="Center" /></ListBoxItem>
+      <ListBoxItem HorizontalContentAlignment="Center"><TextBlock Text="Запросить перевод" TextWrapping="Wrap" TextAlignment="Center" /></ListBoxItem>
+    </ListBox>
+    <StackPanel x:Name="RequestFields" Spacing="10" IsVisible="{Binding IsRequest}">
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+        <StackPanel Spacing="4">
+          <TextBlock Text="Монета" Classes="label" Margin="0" />
+          <ComboBox ItemsSource="{Binding Coins}" SelectedItem="{Binding Coin}" HorizontalAlignment="Stretch" AutomationProperties.Name="Монета запроса" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock Text="Сумма" Classes="label" Margin="0" />
+          <TextBox Text="{Binding Amount}" PlaceholderText="0.00" MaxLength="128" AutomationProperties.Name="Сумма запроса" />
+        </StackPanel>
+      </Grid>
+      <StackPanel Spacing="4">
+        <TextBlock Text="Комментарий" Classes="label" Margin="0" />
+        <TextBox Text="{Binding Message}" PlaceholderText="Необязательно" AutomationProperties.Name="Комментарий запроса" />
+      </StackPanel>
+      <views:NoticeBar Text="{Binding Problem}" Tone="Warning" />
+      <Button Content="{Binding CopyLabel}" Command="{Binding Copy}" IsEnabled="{Binding HasLink}"
+              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>
